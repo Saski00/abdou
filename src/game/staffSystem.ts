@@ -1,5 +1,12 @@
 import { WorldColliders } from '../engine/WorldBuilder';
 import {
+  formatTemplate,
+  getTranslations,
+  tProfession,
+  tResourceName,
+  tSurvivor,
+} from '../i18n';
+import {
   clamp,
   resolveCircleAABB,
   resolveCircleCircle,
@@ -7,9 +14,9 @@ import {
   resolveCircleSegment,
 } from './collision';
 import { getCustomerSurfaceHeight, isCustomerPointBlocked } from './customerAI';
-import { SHOP_ITEM_PRICES, ShopEconomySystem, formatMoney } from './economy';
+import { ShopEconomySystem, formatMoney } from './economy';
 import { getSurvivorStoryRemark } from './missionSystem';
-import { RESOURCE_DEFINITIONS, RESOURCE_ORDER, consumeInventoryResource } from './resources';
+import { RESOURCE_ORDER, consumeInventoryResource } from './resources';
 import { SavedStaffState } from './saveSystem';
 import {
   EmployeeProfession,
@@ -232,6 +239,17 @@ export const WORLD_SURVIVOR_SPAWNS: Omit<WorldSurvivorEntity, 'y' | 'recruited' 
   },
 ];
 
+export type EmployeeTaskKey =
+  | 'default'
+  | 'recovering'
+  | 'engaging'
+  | 'unpaid'
+  | 'storage_full'
+  | 'scavenging'
+  | 'stocked_shelf'
+  | 'stored_excess'
+  | 'collector_stored';
+
 export interface EmployeeAgent {
   id: string;
   survivorId: string;
@@ -241,6 +259,11 @@ export interface EmployeeAgent {
   status: EmployeeStatus;
   statusLabel: string;
   taskLabel: string;
+  taskKey?: EmployeeTaskKey;
+  taskResourceId?: ResourceId;
+  taskQty?: number;
+  taskSec?: number;
+  unpaidAmount?: number;
   health: number;
   maxHealth: number;
   salary: number;
@@ -314,11 +337,10 @@ export function formatRecruitmentCostSummary(survivor: Pick<WorldSurvivorSummary
   for (const id of RESOURCE_ORDER) {
     const qty = survivor.costResources[id] ?? 0;
     if (qty > 0) {
-      const def = RESOURCE_DEFINITIONS[id];
-      parts.push(`${qty} ${qty === 1 ? def.name : def.pluralName}`);
+      parts.push(`${qty} ${tResourceName(id, qty)}`);
     }
   }
-  return parts.length > 0 ? parts.join(' + ') : 'Free';
+  return parts.length > 0 ? parts.join(' + ') : getTranslations().common.free;
 }
 
 export function canRecruitSurvivor(
@@ -331,25 +353,35 @@ export function canRecruitSurvivor(
   activeGuardCount: number,
   maxGuards: number
 ): RecruitValidationResult {
+  const staffMsg = getTranslations().gameMessages.staff;
   if (survivor.recruited) {
-    return { ok: false, reason: 'Already recruited into your shop' };
+    return { ok: false, reason: staffMsg.alreadyRecruited };
   }
   if (currentEmployeeCount >= employeeCapacity) {
     return {
       ok: false,
-      reason: `Staff limit reached (${currentEmployeeCount}/${employeeCapacity}). Upgrade shop level.`,
+      reason: formatTemplate(staffMsg.staffLimitReached, {
+        count: currentEmployeeCount,
+        cap: employeeCapacity,
+      }),
     };
   }
   if (profession === 'guard' && activeGuardCount >= maxGuards) {
     return {
       ok: false,
-      reason: `Active guard limit reached (${activeGuardCount}/${maxGuards}). Pick another role.`,
+      reason: formatTemplate(staffMsg.guardLimitReached, {
+        count: activeGuardCount,
+        max: maxGuards,
+      }),
     };
   }
   if (money < survivor.costMoney) {
     return {
       ok: false,
-      reason: `Need ${formatMoney(survivor.costMoney)} (have ${formatMoney(money)})`,
+      reason: formatTemplate(staffMsg.needMoneyToRecruit, {
+        need: formatMoney(survivor.costMoney),
+        have: formatMoney(money),
+      }),
     };
   }
   for (const id of RESOURCE_ORDER) {
@@ -359,7 +391,11 @@ export function canRecruitSurvivor(
     if (have < req) {
       return {
         ok: false,
-        reason: `Need ${req} ${RESOURCE_DEFINITIONS[id].name} (have ${have})`,
+        reason: formatTemplate(staffMsg.needResourceToRecruit, {
+          qty: req,
+          item: tResourceName(id, req),
+          have,
+        }),
       };
     }
   }
@@ -510,6 +546,11 @@ export class StaffSystem {
 
   private nextEmployeeSeq = 1;
   private storageWarningCooldown = 0;
+  private lastSalaryNoticeMeta:
+    | { kind: 'paidUnpaidCount' | 'stillUnpaidCount'; count: number }
+    | { kind: 'unpaidWagesNotice'; unpaid: number; paid: number }
+    | { kind: 'payrollPaidNotice'; amount: number; count: number }
+    | null = null;
 
   constructor(config: Partial<StaffSystemConfig> = {}) {
     this.config = { ...DEFAULT_STAFF_CONFIG, ...config };
@@ -521,6 +562,7 @@ export class StaffSystem {
     this.nextEmployeeSeq = 1;
     this.nextSalaryInSeconds = this.config.salaryIntervalSeconds;
     this.lastSalaryNotice = null;
+    this.lastSalaryNoticeMeta = null;
     this.storageWarningCooldown = 0;
 
     this.worldSurvivors = WORLD_SURVIVOR_SPAWNS.map((s, idx) => ({
@@ -563,9 +605,12 @@ export class StaffSystem {
     economy: ShopEconomySystem,
     colliders: WorldColliders
   ): { ok: boolean; nextInventory: InventoryState; message: string; employee?: EmployeeAgent } {
+    const tr = getTranslations();
+    const staffMsg = tr.gameMessages.staff;
+    const econMsg = tr.gameMessages.economy;
     const surv = this.getSurvivorById(survivorId);
     if (!surv) {
-      return { ok: false, nextInventory: inventory, message: 'Survivor not found' };
+      return { ok: false, nextInventory: inventory, message: staffMsg.survivorNotFound };
     }
 
     const check = canRecruitSurvivor(
@@ -582,17 +627,23 @@ export class StaffSystem {
       return {
         ok: false,
         nextInventory: inventory,
-        message: check.reason || 'Cannot recruit survivor',
+        message: check.reason || staffMsg.cannotRecruit,
       };
     }
 
+    const survName = tSurvivor(surv.id).name;
+    const profLoc = tProfession(profession);
+
     if (surv.costMoney > 0) {
-      const feeRes = economy.payRecruitmentFee(surv.name, surv.costMoney, timeLabel);
+      const feeRes = economy.payRecruitmentFee(survName, surv.costMoney, timeLabel);
       if (!feeRes.ok) {
         return { ok: false, nextInventory: inventory, message: feeRes.record.message };
       }
     } else {
-      economy.recordStaffNotice(`Recruited ${surv.name} as ${PROFESSION_CONFIGS[profession].label}`, timeLabel);
+      economy.recordStaffNotice(
+        formatTemplate(econMsg.recruitedAsLog, { name: survName, role: profLoc.label }),
+        timeLabel
+      );
     }
 
     let nextInv = inventory;
@@ -607,20 +658,23 @@ export class StaffSystem {
 
     const profCfg = PROFESSION_CONFIGS[profession];
     const spawnPt = this.getInitialWorkstation(profession, this.employees.length);
+    const status: EmployeeStatus =
+      profession === 'guard'
+        ? 'patrolling'
+        : profession === 'resource_collector'
+          ? 'gathering'
+          : 'working';
+
     const emp: EmployeeAgent = {
       id: `emp_${this.nextEmployeeSeq++}`,
       survivorId: surv.id,
       name: surv.name,
       variant: surv.variant,
       profession,
-      status: profession === 'guard' ? 'patrolling' : profession === 'resource_collector' ? 'gathering' : 'working',
-      statusLabel:
-        profession === 'guard'
-          ? 'Patrolling'
-          : profession === 'resource_collector'
-            ? 'Gathering'
-            : 'Working',
-      taskLabel: profCfg.defaultTaskLabel,
+      status,
+      statusLabel: staffMsg.statusLabels[status],
+      taskLabel: profLoc.defaultTaskLabel,
+      taskKey: 'default',
       health: this.config.guardMaxHealth,
       maxHealth: this.config.guardMaxHealth,
       salary: profCfg.salary,
@@ -653,7 +707,11 @@ export class StaffSystem {
     return {
       ok: true,
       nextInventory: nextInv,
-      message: `${emp.name} joined as ${profCfg.label} (${formatMoney(emp.salary)}/cycle)`,
+      message: formatTemplate(staffMsg.joinedShopMsg, {
+        name: survName,
+        role: profLoc.label,
+        salary: formatMoney(emp.salary),
+      }),
       employee: emp,
     };
   }
@@ -664,17 +722,29 @@ export class StaffSystem {
     economy: ShopEconomySystem,
     timeLabel: string
   ): { ok: boolean; message: string } {
+    const staffMsg = getTranslations().gameMessages.staff;
     const emp = this.employees.find((e) => e.id === employeeId);
     if (!emp) {
-      return { ok: false, message: 'Employee not found' };
+      return { ok: false, message: staffMsg.employeeNotFound };
     }
+    const empName = tSurvivor(emp.survivorId).name || emp.name;
+    const nextProfLoc = tProfession(nextProfession);
     if (emp.profession === nextProfession) {
-      return { ok: true, message: `${emp.name} is already assigned as ${PROFESSION_CONFIGS[nextProfession].label}` };
+      return {
+        ok: true,
+        message: formatTemplate(staffMsg.alreadyAssigned, {
+          name: empName,
+          role: nextProfLoc.label,
+        }),
+      };
     }
     if (nextProfession === 'guard' && this.getTotalGuardCount() >= this.config.maxGuards) {
       return {
         ok: false,
-        message: `Active guard limit reached (${this.config.maxGuards} max)`,
+        message: formatTemplate(staffMsg.guardLimitReached, {
+          count: this.getTotalGuardCount(),
+          max: this.config.maxGuards,
+        }),
       };
     }
 
@@ -692,22 +762,23 @@ export class StaffSystem {
           : 0;
 
     if (emp.status !== 'unpaid') {
-      emp.status =
+      const nextStatus: EmployeeStatus =
         nextProfession === 'guard'
           ? 'patrolling'
           : nextProfession === 'resource_collector'
             ? 'gathering'
             : 'working';
-      emp.statusLabel =
-        nextProfession === 'guard'
-          ? 'Patrolling'
-          : nextProfession === 'resource_collector'
-            ? 'Gathering'
-            : 'Working';
-      emp.taskLabel = profCfg.defaultTaskLabel;
+      emp.status = nextStatus;
+      emp.statusLabel = staffMsg.statusLabels[nextStatus];
+      emp.taskKey = 'default';
+      emp.taskLabel = nextProfLoc.defaultTaskLabel;
     }
 
-    const msg = `Reassigned ${emp.name} to ${profCfg.label} (${formatMoney(profCfg.salary)}/cycle)`;
+    const msg = formatTemplate(staffMsg.reassignedMsg, {
+      name: empName,
+      role: nextProfLoc.label,
+      salary: formatMoney(profCfg.salary),
+    });
     economy.recordStaffNotice(msg, timeLabel);
     return { ok: true, message: msg };
   }
@@ -717,12 +788,14 @@ export class StaffSystem {
     economy: ShopEconomySystem,
     timeLabel: string
   ): { ok: boolean; message: string } {
+    const staffMsg = getTranslations().gameMessages.staff;
     const idx = this.employees.findIndex((e) => e.id === employeeId);
     if (idx === -1) {
-      return { ok: false, message: 'Employee not found' };
+      return { ok: false, message: staffMsg.employeeNotFound };
     }
     const [removed] = this.employees.splice(idx, 1);
-    const msg = `Dismissed ${removed.name} from shop staff`;
+    const empName = tSurvivor(removed.survivorId).name || removed.name;
+    const msg = formatTemplate(staffMsg.dismissedMsg, { name: empName });
     economy.recordStaffNotice(msg, timeLabel);
     return { ok: true, message: msg };
   }
@@ -731,14 +804,16 @@ export class StaffSystem {
     economy: ShopEconomySystem,
     timeLabel: string
   ): { paidCount: number; remainingUnpaid: number; message: string } {
+    const staffMsg = getTranslations().gameMessages.staff;
     const unpaid = this.employees.filter((e) => e.status === 'unpaid');
     if (unpaid.length === 0) {
-      return { paidCount: 0, remainingUnpaid: 0, message: 'All employee wages are already paid' };
+      return { paidCount: 0, remainingUnpaid: 0, message: staffMsg.allWagesPaid };
     }
 
     let paidCount = 0;
     for (const emp of unpaid) {
-      const res = economy.payEmployeeSalary(emp.name, emp.salary, timeLabel);
+      const empName = tSurvivor(emp.survivorId).name || emp.name;
+      const res = economy.payEmployeeSalary(empName, emp.salary, timeLabel);
       if (res.ok) {
         paidCount += 1;
         this.restoreActiveStatus(emp);
@@ -747,33 +822,33 @@ export class StaffSystem {
 
     const remainingUnpaid = this.employees.filter((e) => e.status === 'unpaid').length;
     if (paidCount > 0 && remainingUnpaid === 0) {
-      this.lastSalaryNotice = `Paid ${paidCount} unpaid staff member(s). Everyone is back on duty.`;
+      this.lastSalaryNoticeMeta = { kind: 'paidUnpaidCount', count: paidCount };
+      this.lastSalaryNotice = formatTemplate(staffMsg.paidUnpaidCount, { count: paidCount });
     } else if (remainingUnpaid > 0) {
-      this.lastSalaryNotice = `Insufficient funds for ${remainingUnpaid} staff member(s) — work paused.`;
+      this.lastSalaryNoticeMeta = { kind: 'stillUnpaidCount', count: remainingUnpaid };
+      this.lastSalaryNotice = formatTemplate(staffMsg.stillUnpaidCount, { count: remainingUnpaid });
     }
     return {
       paidCount,
       remainingUnpaid,
-      message: this.lastSalaryNotice || 'Wages checked',
+      message: this.lastSalaryNotice || staffMsg.wagesChecked,
     };
   }
 
   private restoreActiveStatus(emp: EmployeeAgent): void {
-    const cfg = PROFESSION_CONFIGS[emp.profession];
+    const staffMsg = getTranslations().gameMessages.staff;
+    const profLoc = tProfession(emp.profession);
     emp.unpaidReason = null;
+    emp.unpaidAmount = undefined;
     emp.status =
       emp.profession === 'guard'
         ? 'patrolling'
         : emp.profession === 'resource_collector'
           ? 'gathering'
           : 'working';
-    emp.statusLabel =
-      emp.profession === 'guard'
-        ? 'Patrolling'
-        : emp.profession === 'resource_collector'
-          ? 'Gathering'
-          : 'Working';
-    emp.taskLabel = cfg.defaultTaskLabel;
+    emp.statusLabel = staffMsg.statusLabels[emp.status];
+    emp.taskKey = 'default';
+    emp.taskLabel = profLoc.defaultTaskLabel;
   }
 
   private getInitialWorkstation(profession: EmployeeProfession, offsetIdx: number): { x: number; z: number } {
@@ -836,8 +911,12 @@ export class StaffSystem {
       let totalPaid = 0;
       let unpaidCount = 0;
 
+      const tr = getTranslations();
+      const staffMsg = tr.gameMessages.staff;
+      const toastsMsg = tr.gameMessages.toasts;
       for (const emp of this.employees) {
-        const payRes = economy.payEmployeeSalary(emp.name, emp.salary, timeLabel);
+        const empName = tSurvivor(emp.survivorId).name || emp.name;
+        const payRes = economy.payEmployeeSalary(empName, emp.salary, timeLabel);
         if (payRes.ok) {
           paidCount += 1;
           totalPaid += emp.salary;
@@ -847,20 +926,32 @@ export class StaffSystem {
         } else {
           unpaidCount += 1;
           emp.status = 'unpaid';
-          emp.statusLabel = 'Unpaid (Paused)';
-          emp.unpaidReason = `Needs ${formatMoney(emp.salary)} salary`;
-          emp.taskLabel = 'Paused — waiting for overdue wages';
+          emp.statusLabel = staffMsg.statusLabels.unpaid;
+          emp.unpaidAmount = emp.salary;
+          emp.unpaidReason = formatTemplate(staffMsg.unpaidReasonNeeds, {
+            amount: formatMoney(emp.salary),
+          });
+          emp.taskKey = 'unpaid';
+          emp.taskLabel = staffMsg.taskUnpaid;
           emp.vx = 0;
           emp.vz = 0;
         }
       }
 
       if (unpaidCount > 0) {
-        const notice = `Insufficient funds for ${unpaidCount} employee salary (${paidCount} paid)`;
+        const notice = formatTemplate(toastsMsg.unpaidWagesNotice, {
+          unpaid: unpaidCount,
+          paid: paidCount,
+        });
+        this.lastSalaryNoticeMeta = { kind: 'unpaidWagesNotice', unpaid: unpaidCount, paid: paidCount };
         this.lastSalaryNotice = notice;
         result.toastNotices.push({ text: notice, tone: 'warning' });
       } else if (paidCount > 0) {
-        const notice = `Staff payroll paid: -${formatMoney(totalPaid)} (${paidCount} staff)`;
+        const notice = formatTemplate(toastsMsg.payrollPaidNotice, {
+          amount: formatMoney(totalPaid),
+          count: paidCount,
+        });
+        this.lastSalaryNoticeMeta = { kind: 'payrollPaidNotice', amount: totalPaid, count: paidCount };
         this.lastSalaryNotice = notice;
         result.toastNotices.push({ text: notice, tone: 'world' });
       }
@@ -947,9 +1038,11 @@ export class StaffSystem {
     result: StaffUpdateResult,
     frontDoorOpen: boolean
   ): void {
+    const staffMsg = getTranslations().gameMessages.staff;
     emp.status = 'working';
-    emp.statusLabel = 'Working';
-    emp.taskLabel = PROFESSION_CONFIGS.shopkeeper.defaultTaskLabel;
+    emp.statusLabel = staffMsg.statusLabels.working;
+    emp.taskKey = 'default';
+    emp.taskLabel = tProfession('shopkeeper').defaultTaskLabel;
 
     const slotOffset = (idx % 2 === 0 ? 0 : 0.85);
     const tx = STAFF_WAYPOINTS.shopkeeperCounter.x + slotOffset;
@@ -987,12 +1080,16 @@ export class StaffSystem {
     result: StaffUpdateResult,
     frontDoorOpen: boolean
   ): void {
+    const tr = getTranslations();
+    const staffMsg = tr.gameMessages.staff;
+    const empName = tSurvivor(emp.survivorId).name || emp.name;
     // Recover softly if knocked low in a fight
     if (emp.recovering) {
       emp.health = Math.min(emp.maxHealth, emp.health + 4.5 * dt);
       emp.status = 'idle';
-      emp.statusLabel = 'Recovering';
-      emp.taskLabel = 'Resting inside shop after defense';
+      emp.statusLabel = staffMsg.statusLabels.idle;
+      emp.taskKey = 'recovering';
+      emp.taskLabel = staffMsg.taskRecovering;
       this.checkFrontDoorNeeded(emp, frontDoorOpen, result);
       moveEmployeeToward(
         emp,
@@ -1032,8 +1129,9 @@ export class StaffSystem {
 
     if (targetZombie) {
       emp.status = 'engaging';
-      emp.statusLabel = 'Engaging Threat';
-      emp.taskLabel = 'Defending shop from infected';
+      emp.statusLabel = staffMsg.statusLabels.engaging;
+      emp.taskKey = 'engaging';
+      emp.taskLabel = staffMsg.taskEngaging;
       emp.targetZombieId = targetZombie.id;
       this.checkFrontDoorNeeded(emp, frontDoorOpen, result);
 
@@ -1082,7 +1180,7 @@ export class StaffSystem {
               result.killedSurgeIds.push(targetZombie.surgeId);
             }
             result.toastNotices.push({
-              text: `${emp.name} defeated an infected near the shop`,
+              text: formatTemplate(tr.gameMessages.toasts.guardDefeatedInfected, { name: empName }),
               tone: 'resource',
             });
           } else if (emp.health > 0) {
@@ -1092,7 +1190,7 @@ export class StaffSystem {
             if (emp.health <= 0) {
               emp.recovering = true;
               result.toastNotices.push({
-                text: `${emp.name} retreated inside to recover`,
+                text: formatTemplate(tr.gameMessages.toasts.guardRetreated, { name: empName }),
                 tone: 'warning',
               });
             }
@@ -1105,8 +1203,9 @@ export class StaffSystem {
     // Safe patrol route around shop entrance
     emp.targetZombieId = null;
     emp.status = 'patrolling';
-    emp.statusLabel = 'Patrolling';
-    emp.taskLabel = PROFESSION_CONFIGS.guard.defaultTaskLabel;
+    emp.statusLabel = staffMsg.statusLabels.patrolling;
+    emp.taskKey = 'default';
+    emp.taskLabel = tProfession('guard').defaultTaskLabel;
     emp.health = Math.min(emp.maxHealth, emp.health + 2.5 * dt);
 
     const wp = STAFF_WAYPOINTS.guardPatrol[emp.waypointIndex % STAFF_WAYPOINTS.guardPatrol.length];
@@ -1139,9 +1238,13 @@ export class StaffSystem {
     backDoorOpen: boolean,
     result: StaffUpdateResult
   ): void {
+    const staffMsg = getTranslations().gameMessages.staff;
     emp.status = 'working';
-    emp.statusLabel = 'Working';
-    emp.taskLabel = PROFESSION_CONFIGS.storage_worker.defaultTaskLabel;
+    emp.statusLabel = staffMsg.statusLabels.working;
+    if (!emp.taskKey || emp.taskKey === 'recovering' || emp.taskKey === 'engaging' || emp.taskKey === 'unpaid') {
+      emp.taskKey = 'default';
+      emp.taskLabel = tProfession('storage_worker').defaultTaskLabel;
+    }
 
     const route = [
       STAFF_WAYPOINTS.frontShelfSpot,
@@ -1186,7 +1289,13 @@ export class StaffSystem {
           if (res.ok) {
             result.stockChanged = true;
             result.storageChanged = true;
-            emp.taskLabel = `Stocked ${moveQty} ${SHOP_ITEM_PRICES[id].displayName} to shelf`;
+            emp.taskKey = 'stocked_shelf';
+            emp.taskResourceId = id;
+            emp.taskQty = moveQty;
+            emp.taskLabel = formatTemplate(staffMsg.taskStockedShelf, {
+              qty: moveQty,
+              item: tResourceName(id, moveQty),
+            });
             organized = true;
             break;
           }
@@ -1202,7 +1311,12 @@ export class StaffSystem {
             if (res.ok) {
               result.stockChanged = true;
               result.storageChanged = true;
-              emp.taskLabel = `Stored excess ${SHOP_ITEM_PRICES[id].displayName}`;
+              emp.taskKey = 'stored_excess';
+              emp.taskResourceId = id;
+              emp.taskQty = 1;
+              emp.taskLabel = formatTemplate(staffMsg.taskStoredExcess, {
+                item: tResourceName(id, 1),
+              });
               break;
             }
           }
@@ -1223,8 +1337,10 @@ export class StaffSystem {
     backDoorOpen: boolean,
     result: StaffUpdateResult
   ): void {
+    const staffMsg = getTranslations().gameMessages.staff;
+    const empName = tSurvivor(emp.survivorId).name || emp.name;
     emp.status = 'gathering';
-    emp.statusLabel = 'Gathering';
+    emp.statusLabel = staffMsg.statusLabels.gathering;
 
     const route = STAFF_WAYPOINTS.collectorRoute;
     const wp = route[emp.waypointIndex % route.length];
@@ -1267,18 +1383,25 @@ export class StaffSystem {
       const depositRes = economy.depositCollectedToStorage(
         picked.resourceId,
         picked.qty,
-        emp.name,
+        empName,
         timeLabel
       );
       if (depositRes.ok) {
         result.storageChanged = true;
-        emp.taskLabel = `Stored ${depositRes.deposited} ${SHOP_ITEM_PRICES[picked.resourceId].displayName}`;
+        emp.taskKey = 'collector_stored';
+        emp.taskResourceId = picked.resourceId;
+        emp.taskQty = depositRes.deposited;
+        emp.taskLabel = formatTemplate(staffMsg.taskCollectorStored, {
+          qty: depositRes.deposited,
+          item: tResourceName(picked.resourceId, depositRes.deposited),
+        });
         result.toastNotices.push({
           text: depositRes.record.message,
           tone: 'resource',
         });
       } else {
-        emp.taskLabel = 'Backroom storage full (waiting)';
+        emp.taskKey = 'storage_full';
+        emp.taskLabel = staffMsg.taskStorageFull;
         if (this.storageWarningCooldown <= 0) {
           this.storageWarningCooldown = 20;
           result.toastNotices.push({
@@ -1288,7 +1411,10 @@ export class StaffSystem {
         }
       }
     } else {
-      emp.taskLabel = `Scavenging (${Math.ceil(emp.workTimer)}s to drop-off)`;
+      const sec = Math.ceil(emp.workTimer);
+      emp.taskKey = 'scavenging';
+      emp.taskSec = sec;
+      emp.taskLabel = formatTemplate(staffMsg.taskScavengingCountdown, { sec });
     }
   }
 
@@ -1336,8 +1462,10 @@ export class StaffSystem {
     this.lastSalaryNotice = typeof raw.lastSalaryNotice === 'string' ? raw.lastSalaryNotice : null;
 
     if (Array.isArray(raw.employees)) {
+      const staffMsg = getTranslations().gameMessages.staff;
       this.employees = raw.employees.map((saved, idx) => {
         const profCfg = PROFESSION_CONFIGS[saved.profession] ?? PROFESSION_CONFIGS.shopkeeper;
+        const profLoc = tProfession(profCfg.id);
         const spawnPt = this.getInitialWorkstation(profCfg.id, idx);
         const y = colliders ? getCustomerSurfaceHeight(spawnPt.x, spawnPt.z, colliders) : 0.16;
         const isUnpaid = saved.status === 'unpaid';
@@ -1348,13 +1476,7 @@ export class StaffSystem {
             : profCfg.id === 'resource_collector'
               ? 'gathering'
               : 'working';
-        const statusLabel = isUnpaid
-          ? 'Unpaid (Paused)'
-          : profCfg.id === 'guard'
-            ? 'Patrolling'
-            : profCfg.id === 'resource_collector'
-              ? 'Gathering'
-              : 'Working';
+        const statusLabel = staffMsg.statusLabels[status];
 
         return {
           id: saved.id || `emp_${idx + 1}`,
@@ -1364,7 +1486,9 @@ export class StaffSystem {
           profession: profCfg.id,
           status,
           statusLabel,
-          taskLabel: isUnpaid ? 'Paused — waiting for overdue wages' : profCfg.defaultTaskLabel,
+          taskLabel: isUnpaid ? staffMsg.taskUnpaid : profLoc.defaultTaskLabel,
+          taskKey: isUnpaid ? 'unpaid' : 'default',
+          unpaidAmount: isUnpaid ? profCfg.salary : undefined,
           health: clamp(typeof saved.health === 'number' ? saved.health : this.config.guardMaxHealth, 10, this.config.guardMaxHealth),
           maxHealth: this.config.guardMaxHealth,
           salary: profCfg.salary,
@@ -1396,38 +1520,122 @@ export class StaffSystem {
     }
   }
 
+  private resolveEmployeeTaskLabel(e: EmployeeAgent): string {
+    const staffMsg = getTranslations().gameMessages.staff;
+    const profLoc = tProfession(e.profession);
+    switch (e.taskKey) {
+      case 'recovering':
+        return staffMsg.taskRecovering;
+      case 'engaging':
+        return staffMsg.taskEngaging;
+      case 'unpaid':
+        return staffMsg.taskUnpaid;
+      case 'storage_full':
+        return staffMsg.taskStorageFull;
+      case 'scavenging':
+        return formatTemplate(staffMsg.taskScavengingCountdown, { sec: e.taskSec ?? 1 });
+      case 'stocked_shelf':
+        if (e.taskResourceId) {
+          const qty = e.taskQty ?? 1;
+          return formatTemplate(staffMsg.taskStockedShelf, {
+            qty,
+            item: tResourceName(e.taskResourceId, qty),
+          });
+        }
+        return profLoc.defaultTaskLabel;
+      case 'stored_excess':
+        if (e.taskResourceId) {
+          return formatTemplate(staffMsg.taskStoredExcess, {
+            item: tResourceName(e.taskResourceId, 1),
+          });
+        }
+        return profLoc.defaultTaskLabel;
+      case 'collector_stored':
+        if (e.taskResourceId) {
+          const qty = e.taskQty ?? 1;
+          return formatTemplate(staffMsg.taskCollectorStored, {
+            qty,
+            item: tResourceName(e.taskResourceId, qty),
+          });
+        }
+        return profLoc.defaultTaskLabel;
+      case 'default':
+        return profLoc.defaultTaskLabel;
+      default:
+        return e.taskLabel || profLoc.defaultTaskLabel;
+    }
+  }
+
+  private resolveLastSalaryNotice(): string | null {
+    const tr = getTranslations();
+    if (!this.lastSalaryNoticeMeta) return this.lastSalaryNotice;
+    if (this.lastSalaryNoticeMeta.kind === 'paidUnpaidCount') {
+      return formatTemplate(tr.gameMessages.staff.paidUnpaidCount, {
+        count: this.lastSalaryNoticeMeta.count,
+      });
+    }
+    if (this.lastSalaryNoticeMeta.kind === 'stillUnpaidCount') {
+      return formatTemplate(tr.gameMessages.staff.stillUnpaidCount, {
+        count: this.lastSalaryNoticeMeta.count,
+      });
+    }
+    if (this.lastSalaryNoticeMeta.kind === 'unpaidWagesNotice') {
+      return formatTemplate(tr.gameMessages.toasts.unpaidWagesNotice, {
+        unpaid: this.lastSalaryNoticeMeta.unpaid,
+        paid: this.lastSalaryNoticeMeta.paid,
+      });
+    }
+    return formatTemplate(tr.gameMessages.toasts.payrollPaidNotice, {
+      amount: formatMoney(this.lastSalaryNoticeMeta.amount),
+      count: this.lastSalaryNoticeMeta.count,
+    });
+  }
+
   public getSnapshot(
     employeeCapacity: number,
     completedMissionIds: ReadonlySet<string> = new Set(),
     endingCompleted = false
   ): StaffSnapshot {
-    const employeeSummaries: EmployeeSummary[] = this.employees.map((e) => ({
-      id: e.id,
-      name: e.name,
-      profession: e.profession,
-      professionLabel: PROFESSION_CONFIGS[e.profession].label,
-      status: e.status,
-      statusLabel: e.statusLabel,
-      health: Math.round(e.health),
-      maxHealth: e.maxHealth,
-      salary: e.salary,
-      taskLabel: e.taskLabel,
-      recruitedDay: e.recruitedDay,
-      unpaidReason: e.unpaidReason,
-    }));
+    const staffMsg = getTranslations().gameMessages.staff;
+    const employeeSummaries: EmployeeSummary[] = this.employees.map((e) => {
+      const survLoc = tSurvivor(e.survivorId);
+      const profLoc = tProfession(e.profession);
+      return {
+        id: e.id,
+        name: survLoc.name || e.name,
+        profession: e.profession,
+        professionLabel: profLoc.label,
+        status: e.status,
+        statusLabel: staffMsg.statusLabels[e.status] ?? e.statusLabel,
+        health: Math.round(e.health),
+        maxHealth: e.maxHealth,
+        salary: e.salary,
+        taskLabel: this.resolveEmployeeTaskLabel(e),
+        recruitedDay: e.recruitedDay,
+        unpaidReason:
+          e.status === 'unpaid'
+            ? formatTemplate(staffMsg.unpaidReasonNeeds, {
+                amount: formatMoney(e.unpaidAmount ?? e.salary),
+              })
+            : e.unpaidReason,
+      };
+    });
 
-    const worldSurvivors: WorldSurvivorSummary[] = this.worldSurvivors.map((s) => ({
-      id: s.id,
-      name: s.name,
-      locationLabel: s.locationLabel,
-      dialogue: s.dialogue,
-      storyRemark: getSurvivorStoryRemark(s.id, completedMissionIds, endingCompleted),
-      needDescription: s.needDescription,
-      preferredProfession: s.preferredProfession,
-      costMoney: s.costMoney,
-      costResources: { ...s.costResources },
-      recruited: s.recruited,
-    }));
+    const worldSurvivors: WorldSurvivorSummary[] = this.worldSurvivors.map((s) => {
+      const survLoc = tSurvivor(s.id);
+      return {
+        id: s.id,
+        name: survLoc.name,
+        locationLabel: survLoc.locationLabel,
+        dialogue: survLoc.dialogue,
+        storyRemark: getSurvivorStoryRemark(s.id, completedMissionIds, endingCompleted),
+        needDescription: survLoc.needDescription,
+        preferredProfession: s.preferredProfession,
+        costMoney: s.costMoney,
+        costResources: { ...s.costResources },
+        recruited: s.recruited,
+      };
+    });
 
     return {
       employees: employeeSummaries,
@@ -1440,7 +1648,7 @@ export class StaffSystem {
       salaryIntervalSeconds: this.config.salaryIntervalSeconds,
       nextSalaryInSeconds: Math.max(0, Math.ceil(this.nextSalaryInSeconds)),
       unpaidCount: this.employees.filter((e) => e.status === 'unpaid').length,
-      lastSalaryNotice: this.lastSalaryNotice,
+      lastSalaryNotice: this.resolveLastSalaryNotice(),
     };
   }
 }
@@ -1448,17 +1656,20 @@ export class StaffSystem {
 export function createInitialStaffSnapshot(employeeCapacity = 1): StaffSnapshot {
   return {
     employees: [],
-    worldSurvivors: WORLD_SURVIVOR_SPAWNS.map((s) => ({
-      id: s.id,
-      name: s.name,
-      locationLabel: s.locationLabel,
-      dialogue: s.dialogue,
-      needDescription: s.needDescription,
-      preferredProfession: s.preferredProfession,
-      costMoney: s.costMoney,
-      costResources: { ...s.costResources },
-      recruited: false,
-    })),
+    worldSurvivors: WORLD_SURVIVOR_SPAWNS.map((s) => {
+      const survLoc = tSurvivor(s.id);
+      return {
+        id: s.id,
+        name: survLoc.name,
+        locationLabel: survLoc.locationLabel,
+        dialogue: survLoc.dialogue,
+        needDescription: survLoc.needDescription,
+        preferredProfession: s.preferredProfession,
+        costMoney: s.costMoney,
+        costResources: { ...s.costResources },
+        recruited: false,
+      };
+    }),
     employeeCapacity,
     activeGuardCount: 0,
     maxGuards: DEFAULT_STAFF_CONFIG.maxGuards,

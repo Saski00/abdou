@@ -3,15 +3,17 @@ import { Compass, KeyRound, MapPin, Navigation, Store, Target, X } from 'lucide-
 import { ENTERABLE_BUILDINGS } from '../assets/maps/buildingLayouts';
 import { NEIGHBORHOOD_MAP } from '../assets/maps/neighborhoodMap';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { HudSnapshot } from '../game/types';
+import { HudSnapshot, WorldRegionId } from '../game/types';
 import {
   LOCATION_BY_ID,
-  REGION_BY_ID,
   WORLD_LOCATIONS,
   WORLD_REGIONS,
   WorldLocationDef,
-  getBearingLabel,
+  getLocalizedBearingLabel,
+  getLocalizedLocation,
+  getLocalizedRegion,
 } from '../game/worldLocations';
+import { formatTpl, tDanger, tMission, useI18n } from '../i18n';
 
 interface MapModalProps {
   hud: HudSnapshot;
@@ -40,24 +42,28 @@ function toMapY(z: number): number {
   return Math.max(4, Math.min(96, toMapPctY(z)));
 }
 
-const REGION_MAP_LABELS = [
-  { id: 'main_street', label: 'Main Street', x: -16, z: 1.5 },
-  { id: 'residential_district', label: 'Residential', x: -30, z: -13.5 },
-  { id: 'commercial_district', label: 'Commercial', x: 15, z: -19.5 },
-  { id: 'industrial_zone', label: 'Industrial', x: 32, z: 22.5 },
-  { id: 'military_checkpoint', label: 'Checkpoint', x: 0, z: -39.5 },
-  { id: 'research_facility', label: 'Research Lab', x: 31, z: -36.5 },
-  { id: 'police_station', label: 'Police', x: -22, z: 39.5 },
-  { id: 'medical_district', label: 'Medical', x: 24, z: 39.5 },
-] as const;
+const REGION_MAP_ANCHORS: { id: WorldRegionId; x: number; z: number }[] = [
+  { id: 'main_street', x: -16, z: 1.5 },
+  { id: 'residential_district', x: -30, z: -13.5 },
+  { id: 'commercial_district', x: 15, z: -19.5 },
+  { id: 'industrial_zone', x: 32, z: 22.5 },
+  { id: 'military_checkpoint', x: 0, z: -39.5 },
+  { id: 'research_facility', x: 31, z: -36.5 },
+  { id: 'police_station', x: -22, z: 39.5 },
+  { id: 'medical_district', x: 24, z: 39.5 },
+];
 
 export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
+  const { dir, t } = useI18n();
+  const mapCopy = t.mapModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const isLandscape = viewport.orientation === 'landscape';
   const discoveredSet = new Set(hud.discoveredLocationIds);
   const discoveredRegionSet = new Set(hud.discoveredRegionIds);
-  const discoveredLocations = WORLD_LOCATIONS.filter((loc) => discoveredSet.has(loc.id));
+  const discoveredLocations = WORLD_LOCATIONS.filter((loc) => discoveredSet.has(loc.id)).map(
+    (loc) => getLocalizedLocation(loc.id) ?? loc
+  );
   const totalCount = WORLD_LOCATIONS.length;
   const undiscoveredCount = Math.max(0, totalCount - discoveredLocations.length);
   const playableBuildings = [
@@ -82,15 +88,21 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
   const playerPctY = toMapY(hud.playerZ);
   const facingDeg = (-hud.playerYaw * 180) / Math.PI;
   const trackedMission = hud.missions.trackedMission;
+  const trackedMissionLoc = trackedMission ? tMission(trackedMission.id) : null;
   const trackedLoc =
     trackedMission?.targetZoneId ? LOCATION_BY_ID[trackedMission.targetZoneId] ?? null : null;
   const trackedDx = trackedLoc ? trackedLoc.x - hud.playerX : 0;
   const trackedDz = trackedLoc ? trackedLoc.z - hud.playerZ : 0;
   const trackedDist = trackedLoc ? Math.round(Math.hypot(trackedDx, trackedDz)) : 0;
-  const trackedBearing = trackedLoc ? getBearingLabel(trackedDx, trackedDz) : '';
+  const trackedBearing = trackedLoc ? getLocalizedBearingLabel(trackedDx, trackedDz) : '';
+
+  const legendShopLabel = mapCopy.compactShop.replace(/[:：]\s*$/, '');
+  const legendChartedLabel = mapCopy.compactCharted.replace(/[:：]\s*$/, '');
+  const legendBlockLabel = mapCopy.compactBlock.replace(/[:：]\s*$/, '');
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="map-modal-title"
@@ -114,11 +126,11 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               <Compass className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
               <h2
                 id="map-modal-title"
-                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate ${
+                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate uppercase ${
                   isCompactLandscape ? 'text-xl' : 'text-2xl sm:text-3xl'
                 }`}
               >
-                DISTRICT 04 MAP
+                {mapCopy.title}
               </h2>
             </div>
             <p className="text-xs text-stone-400 mt-1 truncate">
@@ -130,18 +142,26 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               )}
               <span className="text-stone-200 font-medium">{hud.currentLocationName}</span> ·{' '}
               <span className="font-mono-tabular text-sky-300">
-                {discoveredLocations.length}/{totalCount} Charted
+                {formatTpl(mapCopy.chartedRatio, {
+                  done: discoveredLocations.length,
+                  total: totalCount,
+                })}
               </span>
               <span className="hidden sm:inline text-stone-600"> · </span>
               <span className="hidden sm:inline font-mono-tabular text-stone-300">
-                Day {hud.day} {hud.formattedTime} ({hud.dayPhaseLabel} · {hud.weatherLabel})
+                {formatTpl(mapCopy.dayTimeWeather, {
+                  day: hud.day,
+                  time: hud.formattedTime,
+                  phase: hud.dayPhaseLabel,
+                  weather: hud.weatherLabel,
+                })}
               </span>
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close neighborhood map"
+            aria-label={mapCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -156,8 +176,9 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               : 'overflow-y-auto touch-pan-y p-4 grid grid-cols-1 gap-4'
           }`}
         >
-          {/* Top-down Street, Alley, Parking & Discovered POI Chart */}
+          {/* Top-down Street, Alley, Parking & Discovered POI Chart (always LTR spatial coordinates) */}
           <div
+            dir="ltr"
             className={`relative aspect-[100/102] rounded-lg border border-stone-700/80 bg-[#0b1018] overflow-hidden select-none ${
               isCompactLandscape
                 ? 'h-full w-auto max-w-[48vw]'
@@ -264,47 +285,48 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               className="absolute left-2 -translate-y-1/2 text-[8px] sm:text-[9px] font-mono-tabular uppercase tracking-widest text-stone-300/85 pointer-events-none"
               style={{ top: `${toMapPctY(0)}%` }}
             >
-              Main Blvd
+              {mapCopy.roadLabels.mainBlvd}
             </div>
             <div
               aria-hidden="true"
               className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
               style={{ top: `${toMapPctY(-33)}%` }}
             >
-              North St
+              {mapCopy.roadLabels.northSt}
             </div>
             <div
               aria-hidden="true"
               className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
               style={{ top: `${toMapPctY(34.5)}%` }}
             >
-              South St
+              {mapCopy.roadLabels.southSt}
             </div>
             <div
               aria-hidden="true"
               className="absolute bottom-1.5 -translate-x-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/85 pointer-events-none"
               style={{ left: `${toMapPctX(0)}%` }}
             >
-              Central Ave
+              {mapCopy.roadLabels.centralAve}
             </div>
             <div
               aria-hidden="true"
               className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
               style={{ left: `${toMapPctX(-22.8)}%`, top: `${toMapPctY(27.5)}%` }}
             >
-              Maple Alley
+              {mapCopy.roadLabels.mapleAlley}
             </div>
             <div
               aria-hidden="true"
               className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
               style={{ left: `${toMapPctX(22.8)}%`, top: `${toMapPctY(-17.5)}%` }}
             >
-              Freight Alley
+              {mapCopy.roadLabels.freightAlley}
             </div>
 
             {/* Subtle Region Labels */}
-            {REGION_MAP_LABELS.map((reg) => {
+            {REGION_MAP_ANCHORS.map((reg) => {
               const regionKnown = discoveredRegionSet.has(reg.id);
+              const regLoc = getLocalizedRegion(reg.id);
               return (
                 <div
                   key={reg.id}
@@ -314,7 +336,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                     regionKnown ? 'text-amber-300/80 font-semibold' : 'text-slate-400/60'
                   }`}
                 >
-                  {reg.label}
+                  {regLoc.mapShortLabel ?? regLoc.name}
                 </div>
               );
             })}
@@ -355,10 +377,10 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               );
             })}
 
-            {/* Tracked Objective Signal Lead (without revealing undiscovered place name) */}
+            {/* Tracked Objective Signal Lead */}
             {trackedLoc && (
               <div
-                aria-label="Tracked mission lead"
+                aria-label={mapCopy.trackedLeadAria}
                 style={{ left: `${toMapX(trackedLoc.x)}%`, top: `${toMapY(trackedLoc.z)}%` }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none flex flex-col items-center"
               >
@@ -369,7 +391,10 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                 </div>
                 {!discoveredSet.has(trackedLoc.id) && (
                   <span className="mt-0.5 text-[9px] font-mono-tabular font-semibold text-amber-300 bg-[#0b1018]/90 px-1 rounded whitespace-nowrap">
-                    Lead · {trackedBearing} {trackedDist}m
+                    {formatTpl(mapCopy.leadBearingDist, {
+                      bearing: trackedBearing,
+                      dist: trackedDist,
+                    })}
                   </span>
                 )}
               </div>
@@ -377,7 +402,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
 
             {/* Player Current Position & Heading */}
             <div
-              aria-label="Your current position"
+              aria-label={mapCopy.yourPosAria}
               style={{
                 left: `${playerPctX}%`,
                 top: `${playerPctY}%`,
@@ -392,42 +417,42 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
 
             {/* Compass Rose Label */}
             <div className="absolute top-2 right-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 text-[10px] font-mono-tabular text-stone-300 pointer-events-none">
-              N ↑ · E →
+              {mapCopy.compassLabel}
             </div>
 
             {/* Compact Map Legend */}
             <div className="absolute top-2 left-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 flex items-center gap-2 text-[9px] font-mono-tabular text-stone-300 pointer-events-none">
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 bg-amber-400 inline-block rounded-[1px]" />
-                Shop
+                {legendShopLabel}
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 bg-sky-400 inline-block rounded-[1px]" />
-                Charted
+                {legendChartedLabel}
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 bg-[#1a2232] border border-stone-500 inline-block rounded-[1px]" />
-                Block
+                {legendBlockLabel}
               </span>
             </div>
           </div>
 
-          {/* Right Panel: Selected Location Details, Keys & Discovered List */}
+          {/* Side Panel: Selected Location Details, Keys & Discovered List */}
           <div
             className={`flex flex-col gap-2.5 min-h-0 ${
-              isLandscape ? 'overflow-y-auto touch-pan-y pr-1' : ''
+              isLandscape ? 'overflow-y-auto touch-pan-y pe-1' : ''
             }`}
           >
             {selectedLoc && (
               <div className="rounded-lg border border-stone-700/80 bg-[#141b27] p-3.5 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-mono-tabular uppercase tracking-wider text-amber-400 truncate">
-                    {REGION_BY_ID[selectedLoc.regionId].name} ·{' '}
+                    {getLocalizedRegion(selectedLoc.regionId).name} ·{' '}
                     {selectedLoc.category === 'safe_base'
-                      ? 'Base'
+                      ? mapCopy.catSafeBase
                       : selectedLoc.category === 'building'
-                        ? 'Interior'
-                        : 'Landmark'}
+                        ? mapCopy.catInterior
+                        : mapCopy.catLandmark}
                   </span>
                   <span
                     className={`text-[10px] font-mono-tabular font-semibold shrink-0 ${
@@ -440,13 +465,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                             : 'text-sky-300'
                     }`}
                   >
-                    {selectedLoc.dangerLevel === 'safe'
-                      ? 'Safe Zone'
-                      : selectedLoc.dangerLevel === 'high'
-                        ? 'High Risk'
-                        : selectedLoc.dangerLevel === 'moderate'
-                          ? 'Moderate Risk'
-                          : 'Low Risk'}
+                    {tDanger(selectedLoc.dangerLevel)}
                   </span>
                 </div>
                 <div className="text-base font-bold text-stone-100">{selectedLoc.name}</div>
@@ -459,7 +478,9 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                 </p>
                 {selectedLoc.discoveryReward && (
                   <div className="pt-1 text-[11px] font-mono-tabular text-emerald-300">
-                    Discovery Bonus Claimed: {selectedLoc.discoveryReward.label}
+                    {formatTpl(mapCopy.discoveryBonusClaimed, {
+                      label: selectedLoc.discoveryReward.label,
+                    })}
                   </div>
                 )}
               </div>
@@ -468,19 +489,28 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
             {trackedMission && (
               <div className="rounded-lg border border-stone-800 bg-[#0c1018] px-3.5 py-2.5">
                 <div className="flex items-center justify-between gap-2 text-[10px] font-mono-tabular uppercase tracking-wider text-amber-400">
-                  <span>Tracked Lead · {trackedMission.chapterLabel}</span>
+                  <span>
+                    {formatTpl(mapCopy.trackedLeadHeader, {
+                      chapter: trackedMissionLoc?.chapterLabel ?? trackedMission.chapterLabel,
+                    })}
+                  </span>
                   {trackedLoc && (
                     <span className="text-sky-300">
-                      {trackedBearing} · {trackedDist}m
+                      {trackedBearing} · <bdi dir="ltr">{trackedDist}m</bdi>
                     </span>
                   )}
                 </div>
                 <div className="text-xs font-semibold text-stone-100 mt-0.5">
-                  {trackedMission.title}
+                  {trackedMissionLoc?.title ?? trackedMission.title}
                 </div>
                 <div className="text-[11px] text-stone-400 mt-0.5 leading-snug">
-                  {trackedMission.objectives.find((o) => !o.completed)?.description ??
-                    trackedMission.description}
+                  {(() => {
+                    const nextObj = trackedMission.objectives.find((o) => !o.completed);
+                    if (nextObj) {
+                      return trackedMissionLoc?.objectiveLabels[nextObj.id] ?? nextObj.description;
+                    }
+                    return trackedMissionLoc?.description ?? trackedMission.description;
+                  })()}
                 </div>
               </div>
             )}
@@ -488,10 +518,15 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-2.5 space-y-1.5 flex-1 overflow-y-auto">
               <div className="flex items-center justify-between text-[11px] text-stone-400 px-1">
                 <span>
-                  Areas ({hud.discoveredRegionIds.length}/{WORLD_REGIONS.length} Regions)
+                  {formatTpl(mapCopy.areasHeader, {
+                    done: hud.discoveredRegionIds.length,
+                    total: WORLD_REGIONS.length,
+                  })}
                 </span>
                 <span className="font-mono-tabular">
-                  {undiscoveredCount > 0 ? `${undiscoveredCount} Unexplored` : 'All Mapped'}
+                  {undiscoveredCount > 0
+                    ? formatTpl(mapCopy.unexploredCount, { count: undiscoveredCount })
+                    : mapCopy.allMapped}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-1">
@@ -502,7 +537,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                       key={loc.id}
                       type="button"
                       onClick={() => setSelectedId(loc.id)}
-                      className={`min-h-[40px] px-2.5 py-1.5 rounded-md border text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                      className={`min-h-[40px] px-2.5 py-1.5 rounded-md border text-start flex items-center justify-between gap-2 transition-colors cursor-pointer ${
                         active
                           ? 'bg-[#1a2232] border-amber-500/70 text-stone-100'
                           : 'bg-[#10151f] border-stone-800 text-stone-300 hover:border-stone-600'
@@ -511,11 +546,11 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                       <div className="min-w-0">
                         <div className="text-xs font-semibold truncate">{loc.name}</div>
                         <div className="text-[10px] text-stone-500 truncate">
-                          {REGION_BY_ID[loc.regionId].name} · {loc.lootFocus}
+                          {getLocalizedRegion(loc.regionId).name} · {loc.lootFocus}
                         </div>
                       </div>
                       <span className="text-[10px] text-stone-400 font-mono-tabular shrink-0">
-                        {loc.dangerLevel === 'safe' ? 'Safe' : loc.dangerLevel}
+                        {tDanger(loc.dangerLevel)}
                       </span>
                     </button>
                   );
@@ -533,14 +568,12 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
         >
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-xs text-stone-400 font-mono-tabular truncate">
-              {isTouchMode
-                ? 'Explore streets and buildings to reveal them on your map'
-                : 'Explore to chart new areas · N or Esc to close'}
+              {isTouchMode ? mapCopy.footerTouch : mapCopy.footerDesktop}
             </span>
             {hud.collectedKeyIds.length > 0 && (
               <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono-tabular text-amber-300 shrink-0">
                 <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
-                {hud.collectedKeyIds.length}/3 Keys
+                {formatTpl(mapCopy.keysRatio, { count: hud.collectedKeyIds.length })}
               </span>
             )}
           </div>
@@ -549,11 +582,10 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
             onClick={onClose}
             className="h-10 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-sm transition-colors cursor-pointer shrink-0"
           >
-            Close
+            {mapCopy.closeBtn}
           </button>
         </div>
       </div>
     </div>
   );
 }
-

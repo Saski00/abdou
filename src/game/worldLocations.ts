@@ -1,4 +1,6 @@
 import { ENTERABLE_BUILDINGS } from '../assets/maps/buildingLayouts';
+import { getTranslations, tLocation, tRegion } from '../i18n';
+import { TranslationCatalog } from '../i18n/types';
 import { InventoryState, LocationDangerLevel, WorldRegionId } from './types';
 
 export type LocationCategory = 'safe_base' | 'building' | 'landmark' | 'district';
@@ -172,7 +174,6 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 10.5,
     description:
       'The heart of District 04 where Main Blvd meets Central Ave. Watch for roaming infected near stalled vehicles.',
-    discoveryReward: { money: 10, label: '+$10 Scouted Route' },
   },
   {
     id: 'starlight_diner',
@@ -190,7 +191,7 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 9.5,
     description:
       'A shuttered roadside diner where evacuation buses staged. Enter through the front door to scavenge the counter and kitchen.',
-    discoveryReward: { money: 15, resources: { canned_food: 1 }, label: '+$15 · +1 Canned Food' },
+    discoveryReward: { resources: { canned_food: 1 }, label: '+1 Pantry Ration' },
   },
   {
     id: 'vale_pharmacy',
@@ -208,7 +209,7 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 8.5,
     description:
       'An overrun corner store and back dispensary. Holds medical supplies, canned goods, and Sector B quarantine records.',
-    discoveryReward: { money: 20, resources: { water_bottle: 1 }, label: '+$20 · +1 Water' },
+    discoveryReward: { resources: { water_bottle: 1 }, label: '+1 Bottled Water' },
   },
   {
     id: 'depot_04',
@@ -226,7 +227,7 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 9.0,
     description:
       'A heavy concrete warehouse with a caged contingency tool room, dispatch ledger, scrap metal, and timber.',
-    discoveryReward: { money: 25, resources: { scrap_metal: 1 }, label: '+$25 · +1 Scrap' },
+    discoveryReward: { money: 20, resources: { scrap_metal: 1 }, label: '+$20 · +1 Scrap' },
   },
   {
     id: 'redline_auto',
@@ -244,7 +245,6 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 10.0,
     description:
       'An enterable neighborhood mechanic bay linking Main Boulevard to the rear Industrial Service Bay and salvage yard.',
-    discoveryReward: { money: 20, resources: { scrap_metal: 1 }, label: '+$20 · +1 Scrap' },
   },
   {
     id: 'abandoned_house',
@@ -262,7 +262,6 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 9.0,
     description:
       'A darkened timber house on the southwest block with boarded windows, domestic rooms, and research notes.',
-    discoveryReward: { money: 15, resources: { water_bottle: 1 }, label: '+$15 · +1 Water' },
   },
   {
     id: 'mercer_flats',
@@ -280,7 +279,6 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 11.0,
     description:
       'Brick apartment block west of The Last Shop with makeshift evacuation camp gear and north evac parking nearby.',
-    discoveryReward: { money: 15, label: '+$15 Route Mapped' },
   },
   {
     id: 'vacant_lot',
@@ -296,7 +294,6 @@ export const WORLD_LOCATIONS: WorldLocationDef[] = [
     discoveryRadius: 10.0,
     description:
       'A sheltered tarp camp behind Starlight Diner where fleeing survivors left fire rings and bottled water.',
-    discoveryReward: { money: 15, resources: { wood: 1 }, label: '+$15 · +1 Wood' },
   },
   {
     id: 'north_roadblock',
@@ -409,3 +406,49 @@ export function getBearingLabel(dx: number, dz: number): string {
   return dirs[idx];
 }
 
+export function getLocalizedBearingLabel(dx: number, dz: number): string {
+  const code = getBearingLabel(dx, dz) as keyof TranslationCatalog['bearings'];
+  return getTranslations().bearings[code] ?? code;
+}
+
+export function getLocalizedRegion(id: WorldRegionId): WorldRegionDef {
+  const base = REGION_BY_ID[id];
+  const loc = tRegion(id);
+  if (!base) {
+    return {
+      id,
+      name: loc.name,
+      subtitle: loc.subtitle,
+      dangerTier: 'low',
+      accentColor: '#94a3b8',
+      description: loc.description,
+    };
+  }
+  return {
+    ...base,
+    name: loc.name,
+    subtitle: loc.subtitle,
+    description: loc.description,
+  };
+}
+
+export function getLocalizedLocation(id: string): WorldLocationDef | null {
+  const base = LOCATION_BY_ID[id];
+  if (!base) return null;
+  const loc = tLocation(id);
+  if (!loc) return base;
+  return {
+    ...base,
+    name: loc.name,
+    shortName: loc.shortName,
+    subtitle: loc.subtitle,
+    lootFocus: loc.lootFocus,
+    description: loc.description,
+    discoveryReward: base.discoveryReward
+      ? {
+          ...base.discoveryReward,
+          label: loc.discoveryRewardLabel ?? base.discoveryReward.label,
+        }
+      : undefined,
+  };
+}

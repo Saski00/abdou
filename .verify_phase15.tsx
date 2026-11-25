@@ -5,22 +5,27 @@ import * as THREE from 'three';
 
 import { ENTERABLE_BUILDINGS } from './src/assets/maps/buildingLayouts';
 import { NEIGHBORHOOD_MAP } from './src/assets/maps/neighborhoodMap';
+import { SoundEngine } from './src/assets/audio/soundEngine';
 import { HudOverlay } from './src/components/HudOverlay';
 import { MobileControls } from './src/components/MobileControls';
 import { WorkbenchModal } from './src/components/WorkbenchModal';
 import { InteractionManager } from './src/engine/InteractionManager';
-import type { WorldInteractable } from './src/engine/WorldBuilder';
-import { SoundEngine } from './src/assets/audio/soundEngine';
+import type { WorldColliders, WorldInteractable } from './src/engine/WorldBuilder';
+import type { WorldColliderSegment } from './src/game/collision';
 import {
   WORKBENCH_RECIPES,
   canCraftRecipe,
   craftWorkbenchRecipe,
 } from './src/game/craftingSystem';
-import { DEFAULT_ECONOMY_CONFIG, SHOP_ITEM_PRICES, createInitialShopSnapshot } from './src/game/economy';
+import {
+  DEFAULT_ECONOMY_CONFIG,
+  SHOP_ITEM_PRICES,
+  createInitialShopSnapshot,
+} from './src/game/economy';
 import { createInitialMissionSnapshot } from './src/game/missionSystem';
 import { createInitialInventory } from './src/game/resources';
 import { createInitialStaffSnapshot } from './src/game/staffSystem';
-import type { HudSnapshot, ZombieEntity } from './src/game/types';
+import type { HudSnapshot, InteractionPrompt } from './src/game/types';
 import {
   PROP_EXAMINE_SPECS,
   PROP_SEARCH_SPECS,
@@ -28,8 +33,12 @@ import {
   VEHICLE_INTERACT_SPECS,
   getInteriorFurnitureInteractionSpec,
 } from './src/game/worldObjectCatalog';
-import { hasLineOfSight2D, stepZombiesAI } from './src/game/zombieAI';
-import type { WorldColliderSegment } from './src/game/collision';
+import {
+  createZombieAgent,
+  dispatchNoiseToZombies,
+  hasLineOfSight2D,
+  stepZombiesAI,
+} from './src/game/zombieAI';
 
 function checkCrafting() {
   for (const recipe of WORKBENCH_RECIPES) {
@@ -56,11 +65,9 @@ function checkCrafting() {
   assert.equal(okRes.nextInventory.scrap_metal, 0);
   assert.equal(okRes.nextInventory.medical_supplies, 1);
 
-  // Insufficient materials check
   const failRes = craftWorkbenchRecipe('craft_medkit', okRes.nextInventory, 16);
   assert.equal(failRes.ok, false);
 
-  // Pack capacity check: if packCapacity is strictly lower than netAfter (e.g. cap 0, currently 2 items)
   inv.wood = 2;
   const waterRecipe = WORKBENCH_RECIPES.find((r) => r.id === 'craft_water')!;
   assert.equal(canCraftRecipe(waterRecipe, inv, 2).ok, true);
@@ -88,28 +95,32 @@ function checkCatalogCompleteness() {
     assert.ok(propIds.has(id), `Orphan examine prop spec: ${id}`);
   }
 
-  // Verify every worktable prop in NEIGHBORHOOD_MAP is registered in PROP_WORKBENCH_NAMES
   const worktableProps = NEIGHBORHOOD_MAP.props.filter((p) => p.kind === 'worktable');
   for (const wt of worktableProps) {
     assert.ok(PROP_WORKBENCH_NAMES[wt.id], `Worktable ${wt.id} missing from PROP_WORKBENCH_NAMES`);
   }
 
-  // Verify interior furniture mappings exist against actual ENTERABLE_BUILDINGS indices
+  // Tool-locked container check
+  const milCase = NEIGHBORHOOD_MAP.containers.find((c) => c.id === 'cnt_mil_footlocker');
+  assert.ok(milCase?.requiresToolResource === 'scrap_metal', 'Expected cnt_mil_footlocker tool lock');
+
   let foundInteriorBench = 0;
   let foundInteriorBed = 0;
-  let foundInteriorSink = 0;
+  let foundInteriorExamine = 0;
   for (const layout of ENTERABLE_BUILDINGS) {
     layout.furniture.forEach((f, idx) => {
       const spec = getInteriorFurnitureInteractionSpec(layout.id, f.kind, idx);
       if (spec?.interactKind === 'workbench') foundInteriorBench++;
       if (spec?.interactKind === 'bed') foundInteriorBed++;
-      if (spec?.interactKind === 'examine') foundInteriorSink++;
+      if (spec?.interactKind === 'examine') foundInteriorExamine++;
     });
   }
-  assert.equal(foundInteriorBench, 3, 'Expected 3 interior workbenches');
+  assert.equal(foundInteriorBench, 4, 'Expected 4 interior workbenches');
   assert.equal(foundInteriorBed, 2, 'Expected 2 interior resting beds');
-  assert.equal(foundInteriorSink, 2, 'Expected 2 interior dry sink examine points');
-  console.log('✓ World object catalog completeness passed (11 vehicles, 4 outdoor + 3 interior benches, 15 outdoor searchables, 14+2 examines, 2 beds)');
+  assert.ok(foundInteriorExamine >= 20, `Expected >=20 interior examine points, got ${foundInteriorExamine}`);
+  console.log(
+    `✓ World catalog completeness passed (${vehicleIds.size} vehicles, ${Object.keys(PROP_WORKBENCH_NAMES).length}+${foundInteriorBench} benches, ${Object.keys(PROP_SEARCH_SPECS).length} outdoor searchables, ${Object.keys(PROP_EXAMINE_SPECS).length}+${foundInteriorExamine} examines, ${foundInteriorBed} beds)`
+  );
 }
 
 function checkInteractionManager() {
@@ -123,12 +134,13 @@ function checkInteractionManager() {
 
   const doorPivot = new THREE.Group();
   const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), new THREE.MeshBasicMaterial());
+  const lockedLidMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), new THREE.MeshBasicMaterial());
 
   const interactables: WorldInteractable[] = [
     {
       kind: 'vehicle',
       id: 'v_taxi',
-      name: 'Abandoned Taxi',
+      name: 'Central Cab #412',
       x: 0,
       y: 1,
       z: 0,
@@ -170,7 +182,8 @@ function checkInteractionManager() {
       kind: 'resource',
       id: 'res_on_table',
       resourceId: 'canned_food',
-      amount: 1,
+      amount: 2,
+      defaultAmount: 2,
       x: 10,
       y: 1.05,
       z: 0,
@@ -180,7 +193,7 @@ function checkInteractionManager() {
     {
       kind: 'bed',
       id: 'bed_clinic',
-      name: 'Clinic Cot',
+      name: 'Triage Cot',
       x: 15,
       y: 1,
       z: 0,
@@ -188,9 +201,9 @@ function checkInteractionManager() {
     },
     {
       kind: 'examine',
-      id: 'sign_nw',
-      name: 'Street Sign',
-      actionLabel: 'Read',
+      id: 'p_sign_nw',
+      name: 'North-West Street Sign',
+      actionLabel: 'Read Sign',
       noteTitle: 'District 04 Crossroads',
       noteText: 'North: Quarantine Perimeter.',
       x: 20,
@@ -242,7 +255,28 @@ function checkInteractionManager() {
       isOpen: false,
       inspected: false,
       lootTaken: false,
-      loot: { resourceId: 'water_bottle', amount: 1 },
+      unlocked: true,
+      defaultLoot: { resourceId: 'water_bottle', amount: 2 },
+      loot: { resourceId: 'water_bottle', amount: 2 },
+    },
+    {
+      kind: 'container',
+      id: 'cnt_mil_footlocker',
+      name: 'Military Checkpoint Case',
+      x: 35,
+      y: 1,
+      z: 0,
+      group: new THREE.Group(),
+      lidPivot: lockedLidMesh,
+      animKind: 'lid',
+      isOpen: false,
+      inspected: false,
+      lootTaken: false,
+      requiresToolResource: 'scrap_metal',
+      lockedToolHint: 'Scrap Metal (Pry Bar)',
+      unlocked: false,
+      defaultLoot: { resourceId: 'medical_supplies', amount: 1 },
+      loot: { resourceId: 'medical_supplies', amount: 1 },
     },
   ];
 
@@ -251,7 +285,15 @@ function checkInteractionManager() {
   let examinedTitle = '';
   let restToggles = 0;
   let resting = false;
+  const searchedIds: string[] = [];
+
   mgr.setPackCapacityProvider(() => 16);
+  mgr.setStoryEventCallbacks({
+    onResourceCollected: () => {},
+    onContainerSearched: (id) => searchedIds.push(id),
+    onDoorOpened: () => {},
+    onStoryObjectInteract: () => {},
+  });
   mgr.setEnvironmentCallbacks({
     onWorkbenchOpened: (name) => {
       openedBench = name;
@@ -266,26 +308,38 @@ function checkInteractionManager() {
     isRestingProvider: () => resting,
   });
 
-  // yaw = 0 faces -Z, so standing at (x, z + d) faces (x, z)
-  // 1. Vehicle search + capacity guard
+  // 1. Vehicle search + capacity guard + clean post-search prompt
   mgr.setPackCapacityProvider(() => 0);
   mgr.update(0.016, 0, 2.2, 0);
   assert.equal(mgr.targeted?.id, 'v_taxi');
   assert.equal(mgr.getPrompt()?.actionLabel, 'Search');
-  mgr.interact(); // Pack full -> must NOT consume vehicle loot
+  mgr.interact();
   assert.equal((interactables[0] as any).searched, false);
 
   mgr.setPackCapacityProvider(() => 16);
   mgr.interact();
   assert.equal((interactables[0] as any).searched, true);
   assert.equal(mgr.inventory.scrap_metal, 2);
-  assert.equal(mgr.getPrompt()?.actionLabel, 'Inspect');
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Examine');
 
-  // 2. Priority bias: loose resource sitting on workbench is targeted first, then workbench
+  // 2. Searchable prop reports to onContainerSearched for mission parity
+  mgr.update(0.016, 5, 1.4, 0);
+  assert.equal(mgr.targeted?.id, 'p_dump_s1');
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Search');
+  mgr.interact();
+  assert.ok(searchedIds.includes('p_dump_s1'));
+  assert.ok(mgr.getSearchedPropIds().includes('p_dump_s1'));
+
+  // 3. Partial pickup overflow + Loot Remaining prompt + reset() restoration
+  mgr.setPackCapacityProvider(() => mgr.getTotalItems() + 1); // room for 1 of 2 canned_food
   mgr.update(0.016, 10, 1.2, 0);
   assert.equal(mgr.targeted?.id, 'res_on_table');
   mgr.interact();
-  assert.equal(mgr.inventory.canned_food, 1);
+  assert.equal((interactables[3] as any).amount, 1);
+  assert.equal((interactables[3] as any).collected, false);
+  mgr.setPackCapacityProvider(() => 16);
+  mgr.interact();
+  assert.equal((interactables[3] as any).collected, true);
 
   mgr.update(0.016, 10, 1.2, 0);
   assert.equal(mgr.targeted?.id, 'wb_shop');
@@ -293,7 +347,7 @@ function checkInteractionManager() {
   mgr.interact();
   assert.equal(openedBench, 'Shop Repair Workbench');
 
-  // 3. Bed rest toggle prompt changes based on resting state
+  // 4. Bed rest toggle
   mgr.update(0.016, 15, 1.2, 0);
   assert.equal(mgr.getPrompt()?.kind, 'bed');
   assert.equal(mgr.getPrompt()?.actionLabel, 'Rest on');
@@ -301,52 +355,87 @@ function checkInteractionManager() {
   assert.equal(restToggles, 1);
   assert.equal(mgr.getPrompt()?.actionLabel, 'Stand up from');
 
-  // 4. Examine sign + re-examine
+  // 5. Examine sign
   mgr.update(0.016, 20, 1.2, 0);
   assert.equal(mgr.getPrompt()?.kind, 'examine');
-  assert.equal(mgr.getPrompt()?.actionLabel, 'Read');
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Read Sign');
   mgr.interact();
   assert.equal(examinedTitle, 'District 04 Crossroads');
   assert.equal((interactables[5] as any).examined, true);
 
-  // 5. Key pickup + Locked door unlock + animatingSet settling
+  // 6. Locked door Check Lock -> Key pickup -> Unlock -> settle
+  mgr.update(0.016, 25, 1.2, 0);
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Check Lock');
+  assert.equal(mgr.interact(), false);
+
   mgr.update(0.016, 22, 1.2, 0);
   assert.equal(mgr.targeted?.id, 'clinic_key');
   mgr.interact();
   assert.ok(mgr.getCollectedKeyIds().includes('clinic_key'));
 
   mgr.update(0.016, 25, 1.2, 0);
-  assert.equal(mgr.targeted?.id, 'door_test');
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Unlock');
   mgr.interact();
   assert.equal((interactables[7] as any).isOpen, true);
   assert.equal((interactables[7] as any).collider.active, false);
 
-  // Step enough frames for door to settle cleanly to openSwingAngle without errors
   for (let i = 0; i < 180; i++) {
     mgr.update(1 / 60, 25, 1.2, 0);
   }
   assert.ok(Math.abs(doorPivot.rotation.y - Math.PI * 0.5) < 0.01);
 
-  // 6. Save/Load round trip + Pre-Phase-15 backward-compatible restore
+  // 7. Partial container loot prompt ("Loot Remaining")
+  mgr.setPackCapacityProvider(() => mgr.getTotalItems() + 1); // room for 1 of 2 water_bottle
+  mgr.update(0.016, 30, 1.2, 0);
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Search');
+  mgr.interact();
+  assert.equal((interactables[8] as any).loot.amount, 1);
+  assert.equal((interactables[8] as any).lootTaken, false);
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Loot Remaining');
+  mgr.setPackCapacityProvider(() => 16);
+  mgr.interact();
+  assert.equal((interactables[8] as any).lootTaken, true);
+  assert.equal(mgr.getPrompt()?.name, 'Locker (Empty)');
+
+  // 8. Tool-locked container: blocked without scrap_metal, unlocked with scrap_metal
+  mgr.inventory.scrap_metal = 0;
+  mgr.update(0.016, 35, 1.2, 0);
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Check Lock');
+  assert.equal(mgr.interact(), false);
+  assert.equal((interactables[9] as any).unlocked, false);
+
+  mgr.inventory.scrap_metal = 1;
+  mgr.update(0.016, 35, 1.2, 0);
+  assert.equal(mgr.getPrompt()?.actionLabel, 'Pry Open');
+  assert.equal(mgr.interact(), true);
+  assert.equal((interactables[9] as any).unlocked, true);
+  assert.equal(mgr.inventory.medical_supplies, 1);
+
+  // 9. Save/Load round trip + Pre-Phase-15 legacy restore
   const saved = mgr.exportWorldState();
   const savedInv = { ...mgr.inventory };
   assert.ok(saved.searchedExtraIds?.includes('v_taxi'));
-  assert.ok(saved.examinedObjectIds?.includes('sign_nw'));
+  assert.ok(saved.examinedObjectIds?.includes('p_sign_nw'));
+  assert.ok(saved.unlockedContainerIds?.includes('cnt_mil_footlocker'));
 
   mgr.reset();
   assert.equal((interactables[0] as any).searched, false);
-  assert.ok((interactables[0] as any).loot !== undefined);
+  assert.equal((interactables[0] as any).loot.amount, 2);
+  assert.equal((interactables[3] as any).amount, 2);
+  assert.equal((interactables[8] as any).loot.amount, 2);
+  assert.equal((interactables[9] as any).unlocked, false);
   assert.equal((interactables[5] as any).examined, false);
 
   mgr.restoreWorldState(saved, savedInv);
   assert.equal((interactables[0] as any).searched, true);
   assert.equal((interactables[5] as any).examined, true);
+  assert.equal((interactables[9] as any).unlocked, true);
 
-  // Pre-Phase-15 save without searchedExtraIds / examinedObjectIds
+  // Legacy v1 save compatibility (openedContainerIds without unlockedContainerIds)
   mgr.restoreWorldState(
     {
       collectedResourceIds: ['res_on_table'],
-      openedContainerIds: [],
+      openedContainerIds: ['cnt_mil_footlocker'],
       openDoorIds: [],
       unlockedDoorIds: [],
       collectedKeyIds: [],
@@ -355,53 +444,60 @@ function checkInteractionManager() {
   );
   assert.equal((interactables[0] as any).searched, false);
   assert.equal((interactables[5] as any).examined, false);
-  console.log('✓ InteractionManager mechanics, priority, animation settling, & save/load passed');
+  assert.equal((interactables[9] as any).unlocked, true);
+  assert.equal((interactables[9] as any).inspected, true);
+  console.log('✓ InteractionManager mechanics, tool locks, overflow reset, & save/load passed');
 }
 
 function checkZombieDoorBlocking() {
-  const doorSeg: WorldColliderSegment = { x1: -1, z1: 0, x2: 1, z2: 0, active: true };
-  assert.equal(hasLineOfSight2D(0, -2, 0, 2, [], [doorSeg]), false, 'Closed door should block LOS');
-  doorSeg.active = false;
-  assert.equal(hasLineOfSight2D(0, -2, 0, 2, [], [doorSeg]), true, 'Open door should allow LOS');
-
-  doorSeg.active = true;
-  const zombie: ZombieEntity = {
-    id: 'z_test',
-    variant: 'shambler',
-    x: 0,
-    z: -1.0,
-    yaw: 0,
-    hp: 40,
-    maxHp: 40,
-    speed: 2.2,
-    attackRange: 1.4,
-    attackDamage: 10,
-    attackCooldown: 0,
-    state: 'chase',
-    homeX: 0,
-    homeZ: -5,
-    patrolAngle: 0,
-    alertTimer: 2,
-    hitFlash: 0,
-    attackSwing: 0,
-    radius: 0.35,
-    alive: true,
-    deathAnim: 0,
+  const doorSeg: WorldColliderSegment = {
+    x1: -1,
+    z1: 0,
+    x2: 1,
+    z2: 0,
+    halfThickness: 0.1,
+    active: true,
+  };
+  const colliders: WorldColliders = {
+    boxes: [],
+    circles: [],
+    segments: [doorSeg],
+    sidewalks: [],
+    floors: [],
+    roads: [],
+    bounds: { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
   };
 
-  const res = stepZombiesAI(
-    [zombie],
-    1 / 30,
-    0,
-    0.5, // Player just behind closed door -> dist 1.5 but blocked by doorSeg
+  assert.equal(
+    hasLineOfSight2D(0, -2, 0, 2, colliders),
     false,
-    0,
-    [],
-    [doorSeg],
-    1.0
+    'Closed door should block LOS'
   );
+  doorSeg.active = false;
+  assert.equal(
+    hasLineOfSight2D(0, -2, 0, 2, colliders),
+    true,
+    'Open door should allow LOS'
+  );
+
+  doorSeg.active = true;
+  const zombie = createZombieAgent({ id: 'z_test', homeX: 0, homeZ: -1.0, yaw: 0 }, 0, colliders);
+  zombie.state = 'attacking';
+  zombie.attackWindup = 0.05;
+
+  const res = stepZombiesAI([zombie], 0.1, 0, 0.5, false, 0, colliders, false);
   assert.equal(res.playerDamage, 0, 'Zombie must not hit player through closed door');
-  console.log('✓ Zombie LOS & melee door blocking verified');
+
+  // Sound muffling across closed door vs clear line
+  const hearingZombie = createZombieAgent({ id: 'z_hear', homeX: 0, homeZ: -8.5, yaw: 0 }, 1, colliders);
+  const muffledAlerts = dispatchNoiseToZombies(
+    [hearingZombie],
+    { x: 0, z: 2.0, radius: 12, source: 'interact' },
+    colliders,
+    0
+  );
+  assert.equal(muffledAlerts, 0, 'Closed door should muffle distant 10.5m noise (effective max 7.44m)');
+  console.log('✓ Zombie LOS, melee door blocking, & sound muffling verified');
 }
 
 function checkReactSsrRendering() {
@@ -411,7 +507,7 @@ function checkReactSsrRendering() {
 
   const benchHtml = renderToStaticMarkup(
     React.createElement(WorkbenchModal, {
-      workbenchName: 'Mercer Garage Bench',
+      workbenchName: 'Mechanic Repair Bench',
       inventory: inv,
       totalInventoryItems: 4,
       packCapacity: 16,
@@ -420,7 +516,7 @@ function checkReactSsrRendering() {
       onClose: () => {},
     })
   );
-  assert.ok(benchHtml.includes('MERCER GARAGE BENCH'));
+  assert.ok(benchHtml.includes('MECHANIC REPAIR BENCH'));
   assert.ok(benchHtml.includes('Assemble Field Medkit'));
 
   const baseHud: HudSnapshot = {
@@ -447,11 +543,10 @@ function checkReactSsrRendering() {
     contextTitle: null,
     contextMessage: null,
     interactionPrompt: {
-      targetId: 'v_taxi',
-      kind: 'vehicle',
+      id: 'v_taxi',
+      name: 'Central Cab #412',
       actionLabel: 'Search',
-      label: 'Abandoned Taxi',
-      sublabel: 'Check trunk & glovebox',
+      kind: 'vehicle',
     },
     inventory: inv,
     totalInventoryItems: 4,
@@ -502,11 +597,11 @@ function checkReactSsrRendering() {
   };
 
   for (const kind of ['vehicle', 'workbench', 'examine', 'bed'] as const) {
-    const prompt = {
-      targetId: `id_${kind}`,
+    const prompt: InteractionPrompt = {
+      id: `id_${kind}`,
       kind,
-      actionLabel: kind === 'bed' ? 'Rest on' : kind === 'examine' ? 'Read' : 'Use',
-      label: `Object ${kind}`,
+      actionLabel: kind === 'bed' ? 'Rest on' : kind === 'examine' ? 'Read Sign' : 'Use',
+      name: `Object ${kind}`,
     };
     const hudHtml = renderToStaticMarkup(
       React.createElement(HudOverlay, {
@@ -529,6 +624,7 @@ function checkReactSsrRendering() {
       })
     );
     assert.ok(hudHtml.includes(`Object ${kind}`));
+    assert.ok(hudHtml.includes(prompt.actionLabel));
 
     const mobileHtml = renderToStaticMarkup(
       React.createElement(MobileControls, {

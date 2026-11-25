@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
+import { formatTpl, useI18n } from '../i18n';
 
 interface PauseModalProps {
   hud: HudSnapshot;
@@ -25,16 +26,22 @@ export function PauseModal({
 }: PauseModalProps) {
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
+  const { dir, t } = useI18n();
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const handleSave = () => {
     const ok = onSaveGame();
-    setSaveNotice(ok ? `Saved (Day ${hud.day} · ${hud.formattedTime})` : 'Save unavailable');
+    setSaveNotice(
+      ok
+        ? formatTpl(t.pauseModal.savedNotice, { day: hud.day, time: hud.formattedTime })
+        : t.pauseModal.saveUnavailable
+    );
     window.setTimeout(() => setSaveNotice(null), 2600);
   };
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="pause-title"
@@ -55,10 +62,14 @@ export function PauseModal({
           id="pause-title"
           className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 mb-1"
         >
-          PAUSED
+          {t.pauseModal.title}
         </h2>
         <p className={`text-xs text-stone-400 font-mono-tabular ${isCompactLandscape ? 'mb-3' : 'mb-5'}`}>
-          Day {hud.day} · {hud.formattedTime} · {hud.weatherLabel}
+          {formatTpl(t.pauseModal.subtitleFormat, {
+            day: hud.day,
+            time: hud.formattedTime,
+            weather: hud.weatherLabel,
+          })}
         </p>
 
         <div className={isCompactLandscape ? 'grid grid-cols-2 gap-2.5' : 'flex flex-col gap-3'}>
@@ -69,7 +80,7 @@ export function PauseModal({
               isCompactLandscape ? 'col-span-2' : ''
             }`}
           >
-            Resume
+            {t.pauseModal.resumeBtn}
           </button>
 
           <button
@@ -77,7 +88,7 @@ export function PauseModal({
             onClick={handleSave}
             className="h-11 px-4 rounded-lg bg-[#171d2a] hover:bg-[#1f2738] border border-emerald-600/50 text-emerald-200 font-semibold text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400 truncate"
           >
-            {saveNotice ?? 'Save Game'}
+            {saveNotice ?? t.pauseModal.saveGameBtn}
           </button>
 
           {(hasSaveData || hud.missions.hasSaveData) && (
@@ -86,7 +97,7 @@ export function PauseModal({
               onClick={onLoadGame}
               className="h-11 px-4 rounded-lg bg-[#171d2a] hover:bg-[#1f2738] border border-stone-700/80 text-stone-100 font-medium text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400"
             >
-              Load Last Save
+              {t.pauseModal.loadLastSaveBtn}
             </button>
           )}
 
@@ -95,17 +106,15 @@ export function PauseModal({
             onClick={onOpenSettings}
             className="h-11 px-4 rounded-lg bg-[#171d2a] hover:bg-[#1f2738] border border-stone-700/80 text-stone-100 font-medium text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400"
           >
-            Settings
+            {t.pauseModal.settingsBtn}
           </button>
 
           <button
             type="button"
             onClick={onReturnToMenu}
-            className={`h-11 px-4 rounded-lg bg-transparent hover:bg-stone-800/70 border border-stone-700/60 text-stone-300 hover:text-stone-100 font-medium text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400 ${
-              isCompactLandscape && !(hasSaveData || hud.missions.hasSaveData) ? '' : ''
-            }`}
+            className="h-11 px-4 rounded-lg bg-transparent hover:bg-stone-800/70 border border-stone-700/60 text-stone-300 hover:text-stone-100 font-medium text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400"
           >
-            Main Menu
+            {t.pauseModal.mainMenuBtn}
           </button>
         </div>
 
@@ -114,7 +123,7 @@ export function PauseModal({
             isCompactLandscape ? 'mt-3 pt-2.5' : 'mt-5 pt-4'
           }`}
         >
-          {isTouchMode ? 'Tap Resume to continue' : 'Press Esc to resume'}
+          {isTouchMode ? t.pauseModal.footerTouch : t.pauseModal.footerDesktop}
         </div>
       </div>
     </div>

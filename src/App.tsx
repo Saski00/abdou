@@ -35,7 +35,18 @@ import {
   ShopModalTab,
   StoryObjectInspectionData,
 } from './game/types';
+import { getLocalizedRegion } from './game/worldLocations';
 import { useTouchDevice } from './game/useTouchDevice';
+import {
+  formatTpl,
+  getLanguage,
+  getTranslations,
+  setLanguage,
+  tDayPhase,
+  tWeaponLabel,
+  tWeather,
+  useI18n,
+} from './i18n';
 
 type ActiveModal =
   | 'NONE'
@@ -50,73 +61,85 @@ type ActiveModal =
   | 'WORKBENCH'
   | 'ENDING';
 
-const INITIAL_HUD: HudSnapshot = {
-  health: 100,
-  maxHealth: 100,
-  hunger: 100,
-  maxHunger: 100,
-  thirst: 100,
-  maxThirst: 100,
-  energy: 100,
-  maxEnergy: 100,
-  isResting: false,
-  stamina: 100,
-  maxStamina: 100,
-  isExhausted: false,
-  isSprinting: false,
-  day: 1,
-  formattedTime: '08:00',
-  dayPhaseLabel: 'Morning',
-  weather: 'clear',
-  weatherLabel: 'Clear',
-  flashlightOn: true,
-  pointerLocked: false,
-  contextTitle: null,
-  contextMessage: null,
-  interactionPrompt: null,
-  inventory: createInitialInventory(),
-  totalInventoryItems: 0,
-  packCapacity: 16,
-  money: DEFAULT_ECONOMY_CONFIG.startingMoney,
-  shop: createInitialShopSnapshot(DEFAULT_ECONOMY_CONFIG.startingMoney),
-  staff: createInitialStaffSnapshot(1),
-  missions: createInitialMissionSnapshot(false),
-  latestToast: null,
-  damagePulseId: 0,
-  attackPulseId: 0,
-  inActiveCombat: false,
-  weaponLabel: 'Steel Pipe',
-  zombiesDefeated: 0,
-  deathReason: null,
-  playerX: -11.5,
-  playerZ: -4.5,
-  playerYaw: 0.48,
-  insideShop: false,
-  isSafeHaven: false,
-  currentLocationId: null,
-  currentLocationName: 'District 04 Streets',
-  currentLocationSubtitle: 'Outside The Last Shop',
-  currentLocationDanger: null,
-  currentRegionId: 'main_street',
-  currentRegionName: 'Main Street',
-  discoveredLocationIds: ['last_shop'],
-  discoveredRegionIds: ['main_street'],
-  collectedKeyIds: [],
-  guidanceHint: null,
-};
+function createInitialHudSnapshot(): HudSnapshot {
+  const t = getTranslations();
+  const mainStreet = getLocalizedRegion('main_street');
+  return {
+    health: 100,
+    maxHealth: 100,
+    hunger: 100,
+    maxHunger: 100,
+    thirst: 100,
+    maxThirst: 100,
+    energy: 100,
+    maxEnergy: 100,
+    isResting: false,
+    stamina: 100,
+    maxStamina: 100,
+    isExhausted: false,
+    isSprinting: false,
+    day: 1,
+    formattedTime: '08:00',
+    dayPhaseLabel: tDayPhase('Morning'),
+    weather: 'clear',
+    weatherLabel: tWeather('clear'),
+    flashlightOn: true,
+    pointerLocked: false,
+    contextTitle: null,
+    contextMessage: null,
+    interactionPrompt: null,
+    inventory: createInitialInventory(),
+    totalInventoryItems: 0,
+    packCapacity: 16,
+    money: DEFAULT_ECONOMY_CONFIG.startingMoney,
+    shop: createInitialShopSnapshot(DEFAULT_ECONOMY_CONFIG.startingMoney),
+    staff: createInitialStaffSnapshot(1),
+    missions: createInitialMissionSnapshot(false),
+    latestToast: null,
+    damagePulseId: 0,
+    attackPulseId: 0,
+    inActiveCombat: false,
+    weaponLabel: tWeaponLabel(),
+    zombiesDefeated: 0,
+    deathReason: null,
+    playerX: -11.5,
+    playerZ: -4.5,
+    playerYaw: 0.48,
+    insideShop: false,
+    isSafeHaven: false,
+    currentLocationId: null,
+    currentLocationName: formatTpl(t.gameMessages.locationsFallback.streetsSuffix, {
+      region: mainStreet.name,
+    }),
+    currentLocationSubtitle: t.hud.defaultLocationOutsideShop,
+    currentLocationDanger: null,
+    currentRegionId: 'main_street',
+    currentRegionName: mainStreet.name,
+    discoveredLocationIds: ['last_shop'],
+    discoveredRegionIds: ['main_street'],
+    collectedKeyIds: [],
+    guidanceHint: null,
+  };
+}
 
 export default function App() {
   const soundEngine = useMemo(() => new SoundEngine(), []);
   const engineBridgeRef = useRef<TouchEngineBridge | null>(null);
+
+  const [settings, setSettings] = useState<GameSettings>(() => {
+    const loaded = loadSettingsFromStorage();
+    setLanguage(loaded.language);
+    return loaded;
+  });
+  const { dir, t } = useI18n();
 
   const [screenState, setScreenState] = useState<GameScreenState>('MENU');
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [shopInitialTab, setShopInitialTab] = useState<ShopModalTab>('counter');
   const [recruitSurvivorId, setRecruitSurvivorId] = useState<string | null>(null);
   const [storyNoteData, setStoryNoteData] = useState<StoryObjectInspectionData | null>(null);
-  const [workbenchName, setWorkbenchName] = useState<string>('Supply Workbench');
-  const [settings, setSettings] = useState<GameSettings>(() => loadSettingsFromStorage());
-  const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
+  const [workbenchName, setWorkbenchName] = useState<string>('');
+  const [hud, setHud] = useState<HudSnapshot>(() => createInitialHudSnapshot());
   const [sessionToken, setSessionToken] = useState(0);
   const [loadToken, setLoadToken] = useState(0);
   const [savedSummary, setSavedSummary] = useState<SavedGameSummary | null>(() =>
@@ -162,13 +185,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [screenState, activeModal, soundEngine]);
 
+  useEffect(() => {
+    if (getLanguage() !== settings.language) {
+      setLanguage(settings.language);
+    }
+  }, [settings.language]);
+
   const handlePlay = useCallback(() => {
     soundEngine.playUiClick(560);
     setActiveModal('NONE');
     setRecruitSurvivorId(null);
     setStoryNoteData(null);
-    setHud(INITIAL_HUD);
-    setSessionToken((t) => t + 1);
+    setHud(createInitialHudSnapshot());
+    setSessionToken((tok) => tok + 1);
     setScreenState('PLAYING');
   }, [soundEngine]);
 
@@ -252,7 +281,7 @@ export default function App() {
     (name: string) => {
       if (screenState !== 'PLAYING') return;
       soundEngine.playUiClick(560);
-      setWorkbenchName(name || 'Supply Workbench');
+      setWorkbenchName(name || getTranslations().workbenchModal.defaultName);
       setActiveModal('WORKBENCH');
     },
     [screenState, soundEngine]
@@ -316,6 +345,7 @@ export default function App() {
 
   const handleSettingsChange = useCallback(
     (next: GameSettings) => {
+      setLanguage(next.language);
       soundEngine.setSettings(next.masterVolume, next.muted);
       saveSettingsToStorage(next);
       setSettings(next);
@@ -478,7 +508,7 @@ export default function App() {
       : null;
 
   return (
-    <main className="relative w-full h-dvh overflow-hidden bg-[#121822]">
+    <main dir={dir} className="relative w-full h-dvh overflow-hidden bg-[#121822]">
       <GameCanvas
         screenState={screenState}
         settings={settings}
@@ -512,6 +542,8 @@ export default function App() {
       {screenState === 'MENU' && (
         <MainMenu
           savedSummary={savedSummary}
+          language={settings.language}
+          onChangeLanguage={(lang) => handleSettingsChange({ ...settings, language: lang })}
           onContinueSaved={handleContinueSaved}
           onPlay={handlePlay}
           onOpenSettings={() => {
@@ -703,7 +735,7 @@ export default function App() {
       {screenState === 'GAMEOVER' && (
         <GameOverModal
           hud={hud}
-          reason={hud.deathReason || 'You succumbed to the wasteland.'}
+          reason={hud.deathReason || t.gameOverModal.fallbackReason}
           onRestart={handlePlay}
           onReturnToMenu={handleReturnToMenu}
         />

@@ -2,6 +2,7 @@ import { ArrowUp, Flashlight, Hand, Sword } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewportLayout } from '../game/responsiveLayout';
 import { InteractionPrompt } from '../game/types';
+import { useI18n } from '../i18n';
 
 interface MobileControlsProps {
   flashlightOn: boolean;
@@ -26,6 +27,7 @@ export function MobileControls({
   onAttack,
   onToggleFlashlight,
 }: MobileControlsProps) {
+  const { t } = useI18n();
   const isCompactLandscape = viewport.isCompactLandscape;
   const maxRadius = isCompactLandscape ? 38 : 44;
 
@@ -178,10 +180,11 @@ export function MobileControls({
   const lookLeftClass = viewport.orientation === 'landscape' ? 'left-[32%]' : 'left-[42%]';
 
   return (
-    <div className="fixed inset-0 z-10 pointer-events-none select-none">
+    // Keep touch sticks physically left-to-right (movement left, look & actions right) regardless of UI language
+    <div dir="ltr" className="fixed inset-0 z-10 pointer-events-none select-none">
       {/* Camera Look Touch Surface (wider in landscape, leaves left thumb zone dedicated to movement stick) */}
       <div
-        aria-label="Touch camera look area"
+        aria-label={t.mobileControls.lookAreaAria}
         onPointerDown={handleLookPointerDown}
         onPointerMove={handleLookPointerMove}
         onPointerUp={handleLookPointerEnd}
@@ -205,7 +208,7 @@ export function MobileControls({
         <div
           ref={padRef}
           role="application"
-          aria-label="Movement joystick"
+          aria-label={t.mobileControls.joystickAria}
           onPointerDown={handleJoyPointerDown}
           onPointerMove={handleJoyPointerMove}
           onPointerUp={handleJoyPointerEnd}
@@ -283,7 +286,9 @@ export function MobileControls({
 
           <button
             type="button"
-            aria-label={flashlightOn ? 'Turn flashlight off' : 'Turn flashlight on'}
+            aria-label={
+              flashlightOn ? t.mobileControls.flashlightOnAria : t.mobileControls.flashlightOffAria
+            }
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -307,7 +312,7 @@ export function MobileControls({
         <div className={`flex items-end pointer-events-auto ${isCompactLandscape ? 'gap-2.5' : 'gap-3'}`}>
           <button
             type="button"
-            aria-label="Melee attack"
+            aria-label={t.mobileControls.meleeAttackAria}
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -322,13 +327,13 @@ export function MobileControls({
           >
             <Sword className="w-5 h-5 stroke-[2.2]" />
             <span className="text-[10px] font-semibold tracking-wide leading-none mt-0.5">
-              Attack
+              {t.mobileControls.attackLabel}
             </span>
           </button>
 
           <button
             type="button"
-            aria-label="Jump"
+            aria-label={t.mobileControls.jumpAria}
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -343,7 +348,7 @@ export function MobileControls({
           >
             <ArrowUp className="w-5 h-5 stroke-[2.4]" />
             <span className="text-[10px] font-semibold tracking-wide leading-none mt-0.5">
-              Jump
+              {t.mobileControls.jumpLabel}
             </span>
           </button>
         </div>

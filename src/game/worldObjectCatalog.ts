@@ -80,20 +80,20 @@ export const VEHICLE_INTERACT_SPECS: Record<string, VehicleInteractSpec> = {
   },
   v_police_car: {
     name: 'Patrol Cruiser #04',
-    initialNote: 'Cruiser rack is empty, but heavy steel trunk hardware remains.',
+    initialNote: 'Cruiser shotgun rack is empty, but trunk hardware remains. Dash tag notes: "Evidence Key locked inside Captain Morales office."',
     inspectedNote: 'Patrol Cruiser #04 — dead battery, Precinct radio still clicking faintly.',
     loot: { resourceId: 'scrap_metal', amount: 1 },
   },
   v_clinic_amb: {
     name: 'Mercy Triage Ambulance',
-    initialNote: 'Forced the jammed side compartment — an intact trauma pack survived inside.',
+    initialNote: 'Forced the jammed side compartment — an intact trauma pack survived. Triage clipboard points to the Clinic Exam Wing for Pharmacy keys.',
     inspectedNote: 'Mercy Triage Ambulance — oxygen cylinders depleted, triage tray empty.',
     loot: { resourceId: 'medical_supplies', amount: 1 },
   },
   v_mil_truck: {
     name: 'Military Cargo Truck',
-    initialNote: 'Olive-drab transport bed held spare armor fasteners and steel plates.',
-    inspectedNote: 'Military Cargo Truck — convoy orders mention V4 containment lockouts.',
+    initialNote: 'Olive-drab transport bed held spare armor fasteners and steel plates. Convoy manifest mentions V4 containment lockouts.',
+    inspectedNote: 'Military Cargo Truck — tailgate bent open, spare crates cleared.',
     loot: { resourceId: 'scrap_metal', amount: 2 },
   },
 };
@@ -237,6 +237,15 @@ export const PROP_SEARCH_SPECS: Record<string, PropSearchSpec> = {
     inspectedNote: 'Roadside Cart — left in the middle lane during the evacuation.',
     radiusOffset: 0.4,
   },
+  p_trash_evac: {
+    name: 'Abandoned Evac Bags',
+    searchAction: 'Search Bags',
+    emptyAction: 'Inspect Bags',
+    initialNote: 'Rummaged through soaked evacuation duffel bags — found an unopened bottle of water.',
+    inspectedNote: 'Abandoned Evac Bags — luggage tags from Mercer Flats, picked clean.',
+    loot: { resourceId: 'water_bottle', amount: 1 },
+    radiusOffset: 0.5,
+  },
 };
 
 export const PROP_EXAMINE_SPECS: Record<string, PropExamineSpec> = {
@@ -338,6 +347,55 @@ export const PROP_EXAMINE_SPECS: Record<string, PropExamineSpec> = {
     noteText: 'Heavy gear grease smeared toward the unlocked Scrap Yard timber gate.',
     radiusOffset: 0.55,
   },
+  p_bar1: {
+    name: 'Northbound Concrete Barrier',
+    actionLabel: 'Examine',
+    noteTitle: 'Roadblock Line',
+    noteText: 'Chipped Jersey barriers stenciled "SECTOR A HOLD LINE". Bullet gouges face south toward Main Blvd.',
+    radiusOffset: 0.9,
+  },
+  p_bar_mil: {
+    name: 'Checkpoint Blast Barrier',
+    actionLabel: 'Examine',
+    noteTitle: 'Military Checkpoint',
+    noteText: 'Heavy reinforced barrier protecting the North St patrol post and emergency supply footlocker.',
+    radiusOffset: 0.9,
+  },
+  p_bar_lab: {
+    name: 'Lab Gate Barrier',
+    actionLabel: 'Examine',
+    noteTitle: 'Containment Perimeter',
+    noteText: 'Bio-containment blockade stamped "V4 CLEARANCE ONLY". Guard post abandoned during lockdown.',
+    radiusOffset: 0.9,
+  },
+  p_sand_north1: {
+    name: 'Roadblock Sandbags',
+    actionLabel: 'Inspect',
+    noteTitle: 'Checkpoint Fighting Position',
+    noteText: 'Torn sandbags and spent brass casings scattered around the emergency relay tower.',
+    radiusOffset: 0.85,
+  },
+  p_sand_mil: {
+    name: 'North Patrol Sandbags',
+    actionLabel: 'Inspect',
+    noteTitle: 'Patrol Bunker',
+    noteText: 'Chalk tally marks count days until radio batteries died. The 148.6 MHz repeater still has intact wiring.',
+    radiusOffset: 0.85,
+  },
+  p_sand_police: {
+    name: 'Precinct Sandbags',
+    actionLabel: 'Inspect',
+    noteTitle: 'Precinct Perimeter',
+    noteText: 'Officers stacked sandbags across South St before retreating inside to lock the Evidence Room.',
+    radiusOffset: 0.85,
+  },
+  p_rub1: {
+    name: 'Collapsed Brick Rubble',
+    actionLabel: 'Examine',
+    noteTitle: 'Vacant Lot Ruins',
+    noteText: 'Crumbled brick from an old corner wall—good source of loose wood and scrap around the fenced lot.',
+    radiusOffset: 0.75,
+  },
 };
 
 export interface FurnitureInteractSpec {
@@ -382,25 +440,301 @@ export function getInteriorFurnitureInteractionSpec(
       radiusOffset: 0.75,
     };
   }
-  if (buildingId === 'abandoned_house' && furnitureKind === 'kitchen_counter') {
+  if (buildingId === 'starlight_diner' && furnitureKind === 'kitchen_counter') {
     return {
-      interactKind: 'examine',
-      name: 'Kitchen Faucet',
-      actionLabel: 'Check Faucet',
-      noteTitle: 'Dry Kitchen Tap',
-      noteText: 'Rust drips once from the spout before the pipe goes completely silent.',
+      interactKind: 'workbench',
+      name: 'Diner Kitchen Prep Station',
       radiusOffset: 0.85,
     };
   }
-  if (buildingId === 'abandoned_house' && furnitureKind === 'sink_vanity') {
-    return {
-      interactKind: 'examine',
-      name: 'Bathroom Sink',
-      actionLabel: 'Check Faucet',
-      noteTitle: 'Dry Vanity Tap',
-      noteText: 'The tank is empty, though a spare medical cabinet hangs on the east wall.',
-      radiusOffset: 0.65,
-    };
+
+  // Meaningful interior environmental storytelling & facility checks
+  if (buildingId === 'last_shop') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Front Checkout Counter',
+        actionLabel: 'Check',
+        noteTitle: 'Last Shop Counter',
+        noteText: 'Polished timber counter and ledger tray. Interact with the brass register to manage shop stock, prices, and upgrades.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 1) {
+      return {
+        interactKind: 'examine',
+        name: 'Retail Display Shelf',
+        actionLabel: 'Inspect',
+        noteTitle: 'Storefront Display',
+        noteText: 'Display shelves update automatically as you stock food, water, scrap, wood, and medical supplies at the counter.',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Storeroom Rack',
+        actionLabel: 'Inspect',
+        noteTitle: 'Backroom Reserve Rack',
+        noteText: 'Extra storage brackets line the west wall—upgrade Storage Tiers at the counter to expand reserve capacity.',
+        radiusOffset: 0.75,
+      };
+    }
   }
+
+  if (buildingId === 'vale_pharmacy') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Vale Checkout Counter',
+        actionLabel: 'Inspect',
+        noteTitle: 'Abandoned Register',
+        noteText: 'Cash drawer was emptied before lockdown, leaving behind stamped quarantine clinic transfer slips.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 1) {
+      return {
+        interactKind: 'examine',
+        name: 'Picked-Over Aisle Shelf',
+        actionLabel: 'Inspect',
+        noteTitle: 'Store Aisle',
+        noteText: 'Empty medicine cartons litter the bottom rack. Most emergency stock was locked inside the back dispensary.',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'table' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Dispensary Prep Table',
+        actionLabel: 'Inspect',
+        noteTitle: 'Vale Dispensary',
+        noteText: 'Stainless tray stained with antiseptic and courier packing tape from Depot 04.',
+        radiusOffset: 0.75,
+      };
+    }
+  }
+
+  if (buildingId === 'depot_04') {
+    if (furnitureKind === 'shelf' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Freight Inventory Rack',
+        actionLabel: 'Inspect',
+        noteTitle: 'Depot Freight Racks',
+        noteText: 'Heavy steel racking stamped "MUNICIPAL CONTINGENCY STOCK".',
+        radiusOffset: 0.8,
+      };
+    }
+    if (furnitureKind === 'pallet_crates' && index === 2) {
+      return {
+        interactKind: 'examine',
+        name: 'Strapped Freight Pallets',
+        actionLabel: 'Inspect',
+        noteTitle: 'Northbound Cargo',
+        noteText: 'Barcoded crates addressed to North Roadblock Relay Maintenance—only heavy straps remain.',
+        radiusOffset: 0.75,
+      };
+    }
+  }
+
+  if (buildingId === 'abandoned_house') {
+    if (furnitureKind === 'kitchen_counter') {
+      return {
+        interactKind: 'examine',
+        name: 'Kitchen Faucet',
+        actionLabel: 'Check',
+        noteTitle: 'Dry Kitchen Tap',
+        noteText: 'Rust drips once from the spout before the pipe goes completely silent.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'sink_vanity') {
+      return {
+        interactKind: 'examine',
+        name: 'Bathroom Sink',
+        actionLabel: 'Check',
+        noteTitle: 'Dry Vanity Tap',
+        noteText: 'The tank is empty, though a spare medical cabinet hangs on the east wall.',
+        radiusOffset: 0.65,
+      };
+    }
+    if (furnitureKind === 'table' && index === 1) {
+      return {
+        interactKind: 'examine',
+        name: 'Dining Table',
+        actionLabel: 'Inspect',
+        noteTitle: 'Dr. Vance Quarter',
+        noteText: 'Folded frequency charts and half-finished coffee mugs left in haste.',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'couch' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Worn Living Couch',
+        actionLabel: 'Search',
+        noteTitle: 'Living Room',
+        noteText: 'Torn cushions and a wool blanket—no supplies tucked underneath.',
+        radiusOffset: 0.85,
+      };
+    }
+  }
+
+  if (buildingId === 'starlight_diner') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Diner Service Counter',
+        actionLabel: 'Inspect',
+        noteTitle: 'Starlight Counter',
+        noteText: 'Cracked chrome stools and cold coffee carafes—check the menu board and pantry cabinet in back.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'table' && index === 1) {
+      return {
+        interactKind: 'examine',
+        name: 'Diner Booth Table',
+        actionLabel: 'Inspect',
+        noteTitle: 'Evacuation Staging Booth',
+        noteText: 'Scratched into the laminate: "Back kitchen exit leads straight to South Diner Camp."',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 4) {
+      return {
+        interactKind: 'examine',
+        name: 'Pantry Supply Shelf',
+        actionLabel: 'Inspect',
+        noteTitle: 'Diner Pantry',
+        noteText: 'Wire racks picked bare except for the locked Pantry Cabinet and backroom crate.',
+        radiusOffset: 0.75,
+      };
+    }
+  }
+
+  if (buildingId === 'redline_auto') {
+    if (furnitureKind === 'pallet_crates' && index === 1) {
+      return {
+        interactKind: 'examine',
+        name: 'Auto Parts Pallets',
+        actionLabel: 'Inspect',
+        noteTitle: 'Garage Stock',
+        noteText: 'Alternator housings and timber shipping skids stacked beside the rear Service Bay exit.',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'table' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Parts Office Desk',
+        actionLabel: 'Inspect',
+        noteTitle: 'Redline Parts Office',
+        noteText: 'Work orders list armored plate welds for Military Checkpoint trucks.',
+        radiusOffset: 0.75,
+      };
+    }
+  }
+
+  if (buildingId === 'police_precinct') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Precinct Booking Desk',
+        actionLabel: 'Inspect',
+        noteTitle: 'Precinct Reception',
+        noteText: 'Shattered safety glass over the dispatch desk. Evidence Room requires Captain Morales’s key.',
+        radiusOffset: 0.9,
+      };
+    }
+    if (furnitureKind === 'table' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: "Captain's Desk",
+        actionLabel: 'Inspect',
+        noteTitle: 'Captain Morales Office',
+        noteText: 'Seizure logs and patrol rosters—Evidence Locker sits across the hall to the east.',
+        radiusOffset: 0.8,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 4) {
+      return {
+        interactKind: 'examine',
+        name: 'Seized Evidence Rack',
+        actionLabel: 'Inspect',
+        noteTitle: 'Evidence Storage',
+        noteText: 'Tagged property bins sealed before the blackout.',
+        radiusOffset: 0.75,
+      };
+    }
+  }
+
+  if (buildingId === 'mercy_clinic') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Clinic Triage Desk',
+        actionLabel: 'Inspect',
+        noteTitle: 'Mercy Clinic Triage',
+        noteText: 'Patient intake clipboards and an emergency key note pointing toward the Triage Exam Wing.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'table' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Triage Exam Table',
+        actionLabel: 'Inspect',
+        noteTitle: 'Exam Wing',
+        noteText: 'Sterile trays and patient charts documenting early Class-V4 fever cases.',
+        radiusOffset: 0.8,
+      };
+    }
+    if (furnitureKind === 'counter' && index === 4) {
+      return {
+        interactKind: 'examine',
+        name: 'Pharmacy Dispensary Counter',
+        actionLabel: 'Inspect',
+        noteTitle: 'Clinic Pharmacy',
+        noteText: 'Refrigerated medical bins and V4 Research Lab clearance logs.',
+        radiusOffset: 0.85,
+      };
+    }
+  }
+
+  if (buildingId === 'research_lab') {
+    if (furnitureKind === 'counter' && index === 0) {
+      return {
+        interactKind: 'examine',
+        name: 'Decontamination Console',
+        actionLabel: 'Inspect',
+        noteTitle: 'Bio-Lab Airlock',
+        noteText: 'Airlock pressure gauges reading ZERO—backup power failed weeks ago.',
+        radiusOffset: 0.85,
+      };
+    }
+    if (furnitureKind === 'shelf' && index === 2) {
+      return {
+        interactKind: 'examine',
+        name: 'Observation Log Shelf',
+        actionLabel: 'Inspect',
+        noteTitle: 'Lab Observation Room',
+        noteText: 'Binders labeled "ASHFALL PARTICULATE & V4 CONTAINMENT" line the wall.',
+        radiusOffset: 0.75,
+      };
+    }
+    if (furnitureKind === 'table' && index === 3) {
+      return {
+        interactKind: 'examine',
+        name: 'Specimen Vault Bench',
+        actionLabel: 'Inspect',
+        noteTitle: 'V4 Specimen Vault',
+        noteText: 'Reinforced stainless containment bench beside the V4 Archive Terminal.',
+        radiusOffset: 0.8,
+      };
+    }
+  }
+
   return null;
 }

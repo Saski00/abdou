@@ -1,5 +1,15 @@
 import { SIDEWALK_HEIGHT } from '../assets/maps/neighborhoodMap';
-import { RESOURCE_DEFINITIONS, RESOURCE_ORDER, consumeInventoryResource } from './resources';
+import {
+  formatTemplate,
+  getTranslations,
+  tClue,
+  tMission,
+  tMissionObjectiveLabel,
+  tResourceName,
+  tStoryObject,
+  tSurvivor,
+} from '../i18n';
+import { RESOURCE_ORDER, consumeInventoryResource } from './resources';
 import {
   InventoryState,
   MissionCategory,
@@ -965,54 +975,23 @@ export function getSurvivorStoryRemark(
   completedMissionIds: ReadonlySet<string>,
   endingCompleted: boolean
 ): string {
+  const remarks = tSurvivor(survivorId).storyRemarks;
   if (endingCompleted) {
-    switch (survivorId) {
-      case 'surv_maya':
-        return 'Heard that 148.6 MHz chime clear across the porch! Traders from the outer ridge will be knocking by morning.';
-      case 'surv_soren':
-        return 'Quiet streets at last—now that the relay beacon is up, even the stragglers along North Ave are pulling back.';
-      case 'surv_dante':
-        return 'Once outside supply runners follow your broadcast, my old freight routes will actually mean something again.';
-      case 'surv_kira':
-        return 'You actually lit up the North Roadblock repeater. Every scout in the valley owes The Last Shop a drink.';
-      default:
-        return 'Feels good knowing somebody out beyond the ash fog finally knows District 04 is still standing.';
-    }
+    return remarks.endingCompleted;
   }
 
-  if (survivorId === 'surv_kira') {
-    if (completedMissionIds.has('m4_diner_clues')) {
-      return 'Did you check those convoy notes on the table? If those bio-drums came through Vale Corner Store, check their locked back room.';
-    }
-    return 'I saw civil-defense couriers unloading heavy cases behind Vale Corner Store right before the sirens died. Watch the street—infected linger near the intersection.';
+  const missionCheckMap: Record<string, string> = {
+    surv_kira: 'm4_diner_clues',
+    surv_soren: 'm5_dispensary_secret',
+    surv_dante: 'm7_voices_in_dark',
+    surv_maya: 'm9_house_archive',
+    surv_toby: 'm8_north_barricade',
+  };
+  const gateId = missionCheckMap[survivorId];
+  if (gateId && completedMissionIds.has(gateId)) {
+    return remarks.afterMission;
   }
-
-  if (survivorId === 'surv_soren') {
-    if (completedMissionIds.has('m5_dispensary_secret')) {
-      return 'So that was a Class-V4 leak in the back room... no wonder Vale went dark first. Depot 04 has the remaining freight logs if you head east.';
-    }
-    return 'The back dispensary door here has been jammed shut since Day 0. Careful if you pry it open.';
-  }
-
-  if (survivorId === 'surv_dante') {
-    if (completedMissionIds.has('m7_voices_in_dark')) {
-      return 'Those dispatch coils went north toward the roadblock barricades. Stay sharp if you follow Central Avenue up there.';
-    }
-    return 'I locked the surviving tools inside the Depot cage before the power failed. My workbench still holds the last dispatch ledger.';
-  }
-
-  if (survivorId === 'surv_maya') {
-    if (completedMissionIds.has('m9_house_archive')) {
-      return "Dr. Vance stayed up every night working on that repeater frequency. Don't let her research go to waste at the roadblock.";
-    }
-    return 'Dr. Vance lived just down this hall—her journal is still on the side table, if you can spare a moment while keeping the shop stocked.';
-  }
-
-  // surv_toby
-  if (completedMissionIds.has('m8_north_barricade')) {
-    return 'Heard gunshots and groans rolling down from the North Roadblock earlier. You really cleared a path through that barricade?';
-  }
-  return 'Keep your porch light burning—word travels fast when a shop in District 04 actually has food and clean water.';
+  return remarks.beforeMission;
 }
 
 export class MissionSystem {
@@ -1132,6 +1111,8 @@ export class MissionSystem {
     const cfg = STORY_OBJECTS.find((o) => o.id === objectId);
     if (!cfg) return null;
 
+    const objLoc = tStoryObject(cfg.id);
+    const relayMsg = getTranslations().gameMessages.storyRelay;
     const alreadyActivated = this.activatedStoryObjects.has(objectId);
     if (cfg.id === 'story_final_relay') {
       const m10Status = this.getStatus('m10_ashfall_beacon');
@@ -1140,9 +1121,9 @@ export class MissionSystem {
       if (m10Status === 'completed') {
         return {
           id: cfg.id,
-          title: cfg.name,
-          subtitle: cfg.subtitle,
-          body: 'Signal Beacon Active on 148.6 MHz. The directional dish pulses cleanly above North Roadblock, guiding survivors and trade caravans toward The Last Shop.',
+          title: objLoc.name,
+          subtitle: objLoc.subtitle,
+          body: relayMsg.completedBody,
           category: cfg.category,
           alreadyActivated: true,
         };
@@ -1151,12 +1132,11 @@ export class MissionSystem {
       if (m10Status === 'locked') {
         return {
           id: cfg.id,
-          title: cfg.name,
-          subtitle: cfg.subtitle,
-          body: cfg.initialBody,
+          title: objLoc.name,
+          subtitle: objLoc.subtitle,
+          body: objLoc.body,
           category: cfg.category,
-          actionDisabledReason:
-            'Complete Chapters 1–9 (including Dr. Vance Research Journal) to learn the beacon frequency before calibrating.',
+          actionDisabledReason: relayMsg.lockedDisabledReason,
           alreadyActivated: false,
         };
       }
@@ -1166,18 +1146,26 @@ export class MissionSystem {
         for (const resId of RESOURCE_ORDER) {
           const req = cfg.requiresResources?.[resId] ?? 0;
           if (req > 0 && (inventory[resId] ?? 0) < req) {
-            missing.push(`${req} ${RESOURCE_DEFINITIONS[resId].name} (have ${inventory[resId] ?? 0})`);
+            missing.push(
+              formatTemplate(relayMsg.needItemCount, {
+                req,
+                name: tResourceName(resId, req),
+                have: inventory[resId] ?? 0,
+              })
+            );
           }
         }
         return {
           id: cfg.id,
-          title: cfg.name,
-          subtitle: cfg.subtitle,
-          body: cfg.initialBody,
+          title: objLoc.name,
+          subtitle: objLoc.subtitle,
+          body: objLoc.body,
           category: cfg.category,
-          actionLabel: cfg.activateActionLabel,
+          actionLabel: objLoc.activateActionLabel ?? cfg.activateActionLabel,
           actionDisabledReason:
-            missing.length > 0 ? `Need ${missing.join(' & ')} in pack` : undefined,
+            missing.length > 0
+              ? formatTemplate(relayMsg.needInPackTemplate, { items: missing.join(' & ') })
+              : undefined,
           requiresResources: cfg.requiresResources,
           alreadyActivated: false,
         };
@@ -1185,33 +1173,39 @@ export class MissionSystem {
 
       // Already calibrated -> check surge clear before transmit
       if (surgeKills < 3) {
+        const baseText = objLoc.activatedBody ?? objLoc.body;
         return {
           id: cfg.id,
-          title: cfg.name,
-          subtitle: cfg.subtitle,
-          body: `${cfg.activatedBody} Warning: The calibration whine attracted infected nearby—clear all ${3 - surgeKills} remaining Signal Surge infected before transmitting!`,
+          title: objLoc.name,
+          subtitle: objLoc.subtitle,
+          body: formatTemplate(relayMsg.surgeWarningBody, {
+            base: baseText,
+            rem: 3 - surgeKills,
+          }),
           category: cfg.category,
-          actionDisabledReason: `Defeat Signal Surge infected (${surgeKills}/3 cleared)`,
+          actionDisabledReason: formatTemplate(relayMsg.surgeDisabledReason, {
+            kills: surgeKills,
+          }),
           alreadyActivated: true,
         };
       }
 
       return {
         id: cfg.id,
-        title: cfg.name,
-        subtitle: cfg.subtitle,
-        body: cfg.activatedBody ?? cfg.initialBody,
+        title: objLoc.name,
+        subtitle: objLoc.subtitle,
+        body: objLoc.activatedBody ?? objLoc.body,
         category: cfg.category,
-        actionLabel: 'Transmit 148.6 MHz Beacon',
+        actionLabel: relayMsg.transmitActionLabel,
         alreadyActivated: true,
       };
     }
 
     return {
       id: cfg.id,
-      title: cfg.name,
-      subtitle: cfg.subtitle,
-      body: cfg.initialBody,
+      title: objLoc.name,
+      subtitle: objLoc.subtitle,
+      body: objLoc.body,
       category: cfg.category,
       alreadyActivated: this.inspectedStoryObjects.has(objectId),
     };
@@ -1348,9 +1342,10 @@ export class MissionSystem {
 
           if (!this.claimedRewardIds.has(def.id)) {
             this.claimedRewardIds.add(def.id);
+            const missionLoc = tMission(def.id);
             outcome.rewardGrants.push({
               missionId: def.id,
-              missionTitle: def.title,
+              missionTitle: missionLoc.title,
               money: def.rewards.money ?? 0,
               resources: def.rewards.resources ?? {},
             });
@@ -1359,8 +1354,12 @@ export class MissionSystem {
           if (def.clueUnlockId && !this.discoveredClues.has(def.clueUnlockId)) {
             const clueDef = STORY_CLUE_DEFINITIONS[def.clueUnlockId];
             if (clueDef) {
+              const clueLoc = tClue(clueDef.id);
               const clue: StoryClueSummary = {
                 ...clueDef,
+                title: clueLoc.title,
+                source: clueLoc.source,
+                body: clueLoc.body,
                 discoveredDay: Math.max(1, mergedCtx.day),
               };
               this.discoveredClues.set(clue.id, clue);
@@ -1404,10 +1403,11 @@ export class MissionSystem {
     const isCompleted = this.getStatus(def.id) === 'completed';
 
     return def.objectives.map((obj) => {
+      const desc = tMissionObjectiveLabel(def.id, obj.id, obj.description);
       if (isCompleted) {
         return {
           id: obj.id,
-          description: obj.description,
+          description: desc,
           type: obj.type,
           current: obj.target,
           target: obj.target,
@@ -1480,7 +1480,7 @@ export class MissionSystem {
       const clampedCurrent = Math.min(obj.target, Math.max(0, current));
       return {
         id: obj.id,
-        description: obj.description,
+        description: desc,
         type: obj.type,
         current: clampedCurrent,
         target: obj.target,
@@ -1493,13 +1493,14 @@ export class MissionSystem {
   public getSnapshot(ctx: MissionRuntimeContext, hasSaveData: boolean): MissionSnapshot {
     const missions: MissionSummary[] = MISSION_DEFINITIONS.map((def) => {
       const status = this.getStatus(def.id);
+      const missionLoc = tMission(def.id);
       return {
         id: def.id,
         order: def.order,
         category: def.category,
-        chapterLabel: def.chapterLabel,
-        title: def.title,
-        description: def.description,
+        chapterLabel: missionLoc.chapterLabel,
+        title: missionLoc.title,
+        description: missionLoc.description,
         status,
         tracked: this.trackedMissionId === def.id,
         objectives: this.evaluateObjectives(def, ctx),
@@ -1515,11 +1516,21 @@ export class MissionSystem {
     const mainMissions = missions.filter((m) => m.category === 'main');
     const sideMissions = missions.filter((m) => m.category === 'side');
 
+    const localizedClues: StoryClueSummary[] = Array.from(this.discoveredClues.values()).map((c) => {
+      const clueLoc = tClue(c.id);
+      return {
+        ...c,
+        title: clueLoc.title,
+        source: clueLoc.source,
+        body: clueLoc.body,
+      };
+    });
+
     return {
       missions,
       trackedMissionId: this.trackedMissionId,
       trackedMission,
-      clues: Array.from(this.discoveredClues.values()),
+      clues: localizedClues,
       mainCompletedCount: mainMissions.filter((m) => m.status === 'completed').length,
       mainTotalCount: mainMissions.length,
       sideCompletedCount: sideMissions.filter((m) => m.status === 'completed').length,

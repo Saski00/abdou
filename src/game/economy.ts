@@ -1,4 +1,12 @@
 import {
+  formatTemplate,
+  getTranslations,
+  tDecoration,
+  tResourceName,
+  tShopLevel,
+  tStorageTier,
+} from '../i18n';
+import {
   RESOURCE_DEFINITIONS,
   RESOURCE_ORDER,
   addInventoryResource,
@@ -307,10 +315,11 @@ export function formatMoney(amount: number): string {
 export function createInitialShopSnapshot(startingMoney = DEFAULT_ECONOMY_CONFIG.startingMoney): ShopSnapshot {
   const lvl1 = getShopLevelConfig(1);
   const cleanMoney = Math.max(0, Math.round(startingMoney));
+  const econMsg = getTranslations().gameMessages.economy;
   return {
     money: cleanMoney,
     shopLevel: 1,
-    shopLevelName: lvl1.name,
+    shopLevelName: tShopLevel(1).name,
     maxShopLevel: MAX_SHOP_LEVEL,
     storageTier: 0,
     maxStorageTier: MAX_STORAGE_TIER,
@@ -321,7 +330,7 @@ export function createInitialShopSnapshot(startingMoney = DEFAULT_ECONOMY_CONFIG
     ownedDecorations: [],
     shopManualOpen: true,
     shopAcceptingCustomers: true,
-    shopStatusReason: 'Open for survivors (06:00 - 19:30)',
+    shopStatusReason: econMsg.shopStatusOpen,
     shopStock: createInitialInventory(),
     shopStorage: createInitialInventory(),
     totalStockItems: 0,
@@ -437,13 +446,14 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): { ok: boolean; record: ShopTransactionRecord } {
     const clean = Math.max(0, Math.round(amount));
+    const econMsg = getTranslations().gameMessages.economy;
     if (clean > 0) {
       const spendRes = this.spendMoney(clean);
       if (!spendRes.ok) {
         return {
           ok: false,
           record: this.recordError(
-            `Need ${formatMoney(clean)} to recruit ${survivorName}`,
+            formatTemplate(econMsg.needRecruitFee, { cost: formatMoney(clean), name: survivorName }),
             timeLabel
           ),
         };
@@ -456,8 +466,8 @@ export class ShopEconomySystem {
         moneyDelta: -clean,
         message:
           clean > 0
-            ? `Recruited ${survivorName} (${formatMoney(clean)})`
-            : `Recruited ${survivorName}`,
+            ? formatTemplate(econMsg.recruitedLogWithFee, { name: survivorName, cost: formatMoney(clean) })
+            : formatTemplate(econMsg.recruitedLog, { name: survivorName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -469,12 +479,13 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): { ok: boolean; record: ShopTransactionRecord } {
     const clean = Math.max(1, Math.round(salary));
+    const econMsg = getTranslations().gameMessages.economy;
     const spendRes = this.spendMoney(clean);
     if (!spendRes.ok) {
       return {
         ok: false,
         record: this.recordError(
-          `Insufficient funds for ${employeeName}'s salary (${formatMoney(clean)})`,
+          formatTemplate(econMsg.insufficientSalary, { name: employeeName, cost: formatMoney(clean) }),
           timeLabel
         ),
       };
@@ -484,7 +495,7 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'salary',
         moneyDelta: -clean,
-        message: `Paid ${employeeName} salary (${formatMoney(clean)})`,
+        message: formatTemplate(econMsg.paidSalary, { name: employeeName, cost: formatMoney(clean) }),
         timestampLabel: timeLabel,
       }),
     };
@@ -497,12 +508,12 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): { ok: boolean; deposited: number; record: ShopTransactionRecord } {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
     if (qty <= 0) {
       return {
         ok: false,
         deposited: 0,
-        record: this.recordError('Nothing collected to deposit', timeLabel),
+        record: this.recordError(econMsg.nothingToDeposit, timeLabel),
       };
     }
 
@@ -514,7 +525,11 @@ export class ShopEconomySystem {
         ok: false,
         deposited: 0,
         record: this.recordError(
-          `${collectorName}: backroom storage full (${usedStorage}/${maxCap})`,
+          formatTemplate(econMsg.storageFullLog, {
+            name: collectorName,
+            used: usedStorage,
+            max: maxCap,
+          }),
           timeLabel
         ),
       };
@@ -522,7 +537,7 @@ export class ShopEconomySystem {
 
     const deposited = Math.min(qty, free);
     this.shopStorage = addInventoryResource(this.shopStorage, resourceId, deposited);
-    const itemName = deposited === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, deposited);
 
     return {
       ok: true,
@@ -530,10 +545,14 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'staff',
         resourceId,
-        itemName: def.displayName,
+        itemName: tResourceName(resourceId, 1),
         quantity: deposited,
         moneyDelta: 0,
-        message: `${collectorName} stored ${deposited} ${itemName} in backroom`,
+        message: formatTemplate(econMsg.collectorStoredLog, {
+          name: collectorName,
+          qty: deposited,
+          item: itemName,
+        }),
         timestampLabel: timeLabel,
       }),
     };
@@ -566,20 +585,25 @@ export class ShopEconomySystem {
   }
 
   public upgradeShopLevel(timeLabel = ''): ShopUpgradeResult {
+    const econMsg = getTranslations().gameMessages.economy;
     const nextCfg = getNextShopLevelConfig(this.shopLevel);
     if (!nextCfg) {
       return {
         ok: false,
-        record: this.recordError('Shop is already at maximum level (Level 5)', timeLabel),
+        record: this.recordError(econMsg.alreadyMaxLevel, timeLabel),
       };
     }
 
+    const nextName = tShopLevel(nextCfg.level).name;
     const spendRes = this.spendMoney(nextCfg.upgradeCost);
     if (!spendRes.ok) {
       return {
         ok: false,
         record: this.recordError(
-          `Need ${formatMoney(nextCfg.upgradeCost)} to upgrade to ${nextCfg.name}`,
+          formatTemplate(econMsg.needUpgradeMoney, {
+            cost: formatMoney(nextCfg.upgradeCost),
+            name: nextName,
+          }),
           timeLabel
         ),
       };
@@ -591,27 +615,35 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'upgrade',
         moneyDelta: -nextCfg.upgradeCost,
-        message: `Upgraded to Level ${nextCfg.level}: ${nextCfg.name}`,
+        message: formatTemplate(econMsg.upgradedShopLog, {
+          level: nextCfg.level,
+          name: nextName,
+        }),
         timestampLabel: timeLabel,
       }),
     };
   }
 
   public upgradeStorageTier(timeLabel = ''): ShopUpgradeResult {
+    const econMsg = getTranslations().gameMessages.economy;
     const nextCfg = getNextStorageUpgradeConfig(this.storageTier);
     if (!nextCfg) {
       return {
         ok: false,
-        record: this.recordError('Storage racks are already at maximum tier', timeLabel),
+        record: this.recordError(econMsg.alreadyMaxStorage, timeLabel),
       };
     }
 
+    const nextName = tStorageTier(nextCfg.tier).name;
     const spendRes = this.spendMoney(nextCfg.cost);
     if (!spendRes.ok) {
       return {
         ok: false,
         record: this.recordError(
-          `Need ${formatMoney(nextCfg.cost)} for ${nextCfg.name}`,
+          formatTemplate(econMsg.needStorageMoney, {
+            cost: formatMoney(nextCfg.cost),
+            name: nextName,
+          }),
           timeLabel
         ),
       };
@@ -624,25 +656,33 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'upgrade',
         moneyDelta: -nextCfg.cost,
-        message: `Installed ${nextCfg.name} (${newCap} storage capacity)`,
+        message: formatTemplate(econMsg.installedStorageLog, {
+          name: nextName,
+          cap: newCap,
+        }),
         timestampLabel: timeLabel,
       }),
     };
   }
 
   public purchaseDecoration(decorationId: string, timeLabel = ''): ShopUpgradeResult {
+    const econMsg = getTranslations().gameMessages.economy;
     const deco = SHOP_DECORATIONS.find((d) => d.id === decorationId);
     if (!deco) {
       return {
         ok: false,
-        record: this.recordError('Unknown shop decoration', timeLabel),
+        record: this.recordError(econMsg.unknownDecoration, timeLabel),
       };
     }
 
+    const decoName = tDecoration(deco.id).name;
     if (this.ownedDecorations.has(deco.id)) {
       return {
         ok: false,
-        record: this.recordError(`${deco.name} is already installed`, timeLabel),
+        record: this.recordError(
+          formatTemplate(econMsg.decorationAlreadyInstalled, { name: decoName }),
+          timeLabel
+        ),
       };
     }
 
@@ -651,7 +691,10 @@ export class ShopEconomySystem {
       return {
         ok: false,
         record: this.recordError(
-          `Need ${formatMoney(deco.cost)} for ${deco.name}`,
+          formatTemplate(econMsg.needDecorationMoney, {
+            cost: formatMoney(deco.cost),
+            name: decoName,
+          }),
           timeLabel
         ),
       };
@@ -663,7 +706,7 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'upgrade',
         moneyDelta: -deco.cost,
-        message: `Installed ${deco.name} in shop`,
+        message: formatTemplate(econMsg.installedDecorationLog, { name: decoName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -674,11 +717,12 @@ export class ShopEconomySystem {
   }
 
   public setShopManualOpen(open: boolean, timeLabel = ''): boolean {
+    const econMsg = getTranslations().gameMessages.economy;
     this.shopManualOpen = open;
     this.recordTx({
       kind: 'transfer',
       moneyDelta: 0,
-      message: open ? 'Shop opened for survivor customers' : 'Shop closed to new customers',
+      message: open ? econMsg.shopOpenedLog : econMsg.shopClosedLog,
       timestampLabel: timeLabel,
     });
     return this.shopManualOpen;
@@ -699,14 +743,15 @@ export class ShopEconomySystem {
   }
 
   public spendMoney(amount: number): { ok: boolean; error?: string; balance: number } {
+    const econMsg = getTranslations().gameMessages.economy;
     const clean = Number.isFinite(amount) ? Math.round(amount) : 0;
     if (clean <= 0) {
-      return { ok: false, error: 'Invalid spend amount', balance: this.money };
+      return { ok: false, error: econMsg.invalidSpend, balance: this.money };
     }
     if (!this.cfg.allowNegativeMoney && this.money < clean) {
       return {
         ok: false,
-        error: `Insufficient funds (need ${formatMoney(clean)})`,
+        error: formatTemplate(econMsg.insufficientFunds, { cost: formatMoney(clean) }),
         balance: this.money,
       };
     }
@@ -729,14 +774,15 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): ShopTransferResult {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, inventory[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
         nextInventory: inventory,
-        record: this.recordError('Select at least 1 item to stock', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneStock, timeLabel),
       };
     }
 
@@ -745,7 +791,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Not enough ${def.displayName} in pack (${available} available)`,
+          formatTemplate(econMsg.notEnoughInPack, { item: itemSingle, avail: available }),
           timeLabel
         ),
       };
@@ -753,7 +799,7 @@ export class ShopEconomySystem {
 
     const nextInventory = consumeInventoryResource(inventory, resourceId, qty);
     this.shopStock = addInventoryResource(this.shopStock, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
@@ -761,10 +807,10 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Stocked ${qty} ${itemName} on shop shelf`,
+        message: formatTemplate(econMsg.stockedShelfLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -778,14 +824,15 @@ export class ShopEconomySystem {
     packCapacity = Infinity
   ): ShopTransferResult {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStock[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
         nextInventory: inventory,
-        record: this.recordError('Select at least 1 item to take', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneTake, timeLabel),
       };
     }
 
@@ -794,7 +841,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Only ${available} ${def.displayName} in shop stock`,
+          formatTemplate(econMsg.onlyInStock, { avail: available, item: itemSingle }),
           timeLabel
         ),
       };
@@ -807,7 +854,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Pack full (${packUsed}/${packCapacity} · ${free} slot${free === 1 ? '' : 's'} left)`,
+          formatTemplate(econMsg.packFullDetailed, { used: packUsed, cap: packCapacity, free }),
           timeLabel
         ),
       };
@@ -815,7 +862,7 @@ export class ShopEconomySystem {
 
     this.shopStock = consumeInventoryResource(this.shopStock, resourceId, qty);
     const nextInventory = addInventoryResource(inventory, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
@@ -823,10 +870,10 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Returned ${qty} ${itemName} to pack`,
+        message: formatTemplate(econMsg.returnedToPackLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -839,14 +886,15 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): ShopTransferResult {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, inventory[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
         nextInventory: inventory,
-        record: this.recordError('Select at least 1 item to store', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneStore, timeLabel),
       };
     }
 
@@ -855,7 +903,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Not enough ${def.displayName} in pack (${available} available)`,
+          formatTemplate(econMsg.notEnoughInPack, { item: itemSingle, avail: available }),
           timeLabel
         ),
       };
@@ -869,7 +917,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Storage full (${usedStorage}/${maxCap} used · ${free} space left)`,
+          formatTemplate(econMsg.storageFullDetailed, { used: usedStorage, max: maxCap, free }),
           timeLabel
         ),
       };
@@ -877,7 +925,7 @@ export class ShopEconomySystem {
 
     const nextInventory = consumeInventoryResource(inventory, resourceId, qty);
     this.shopStorage = addInventoryResource(this.shopStorage, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
@@ -885,10 +933,10 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Stored ${qty} ${itemName} in backroom locker`,
+        message: formatTemplate(econMsg.storedBackroomLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -902,14 +950,15 @@ export class ShopEconomySystem {
     packCapacity = Infinity
   ): ShopTransferResult {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStorage[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
         nextInventory: inventory,
-        record: this.recordError('Select at least 1 item to retrieve', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneRetrieve, timeLabel),
       };
     }
 
@@ -918,7 +967,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Only ${available} ${def.displayName} in storage`,
+          formatTemplate(econMsg.onlyInStorage, { avail: available, item: itemSingle }),
           timeLabel
         ),
       };
@@ -931,7 +980,7 @@ export class ShopEconomySystem {
         ok: false,
         nextInventory: inventory,
         record: this.recordError(
-          `Pack full (${packUsed}/${packCapacity} · ${free} slot${free === 1 ? '' : 's'} left)`,
+          formatTemplate(econMsg.packFullDetailed, { used: packUsed, cap: packCapacity, free }),
           timeLabel
         ),
       };
@@ -939,7 +988,7 @@ export class ShopEconomySystem {
 
     this.shopStorage = consumeInventoryResource(this.shopStorage, resourceId, qty);
     const nextInventory = addInventoryResource(inventory, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
@@ -947,10 +996,10 @@ export class ShopEconomySystem {
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Retrieved ${qty} ${itemName} from storage`,
+        message: formatTemplate(econMsg.retrievedFromStorageLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -962,36 +1011,40 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): { ok: boolean; record: ShopTransactionRecord } {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStorage[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
-        record: this.recordError('Select at least 1 item to move to shelf', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneMoveShelf, timeLabel),
       };
     }
 
     if (available < qty) {
       return {
         ok: false,
-        record: this.recordError(`Only ${available} ${def.displayName} in storage`, timeLabel),
+        record: this.recordError(
+          formatTemplate(econMsg.onlyInStorage, { avail: available, item: itemSingle }),
+          timeLabel
+        ),
       };
     }
 
     this.shopStorage = consumeInventoryResource(this.shopStorage, resourceId, qty);
     this.shopStock = addInventoryResource(this.shopStock, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Moved ${qty} ${itemName} from storage to shop stock`,
+        message: formatTemplate(econMsg.movedStorageToStockLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -1003,20 +1056,24 @@ export class ShopEconomySystem {
     timeLabel = ''
   ): { ok: boolean; record: ShopTransactionRecord } {
     const qty = sanitizeQuantity(quantity);
-    const def = this.cfg.prices[resourceId];
+    const econMsg = getTranslations().gameMessages.economy;
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStock[resourceId] ?? 0);
 
     if (qty <= 0) {
       return {
         ok: false,
-        record: this.recordError('Select at least 1 item to move to storage', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneMoveStorage, timeLabel),
       };
     }
 
     if (available < qty) {
       return {
         ok: false,
-        record: this.recordError(`Only ${available} ${def.displayName} in shop stock`, timeLabel),
+        record: this.recordError(
+          formatTemplate(econMsg.onlyInStock, { avail: available, item: itemSingle }),
+          timeLabel
+        ),
       };
     }
 
@@ -1027,7 +1084,7 @@ export class ShopEconomySystem {
       return {
         ok: false,
         record: this.recordError(
-          `Storage full (${usedStorage}/${maxCap} used · ${free} space left)`,
+          formatTemplate(econMsg.storageFullDetailed, { used: usedStorage, max: maxCap, free }),
           timeLabel
         ),
       };
@@ -1035,17 +1092,17 @@ export class ShopEconomySystem {
 
     this.shopStock = consumeInventoryResource(this.shopStock, resourceId, qty);
     this.shopStorage = addInventoryResource(this.shopStorage, resourceId, qty);
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
 
     return {
       ok: true,
       record: this.recordTx({
         kind: 'transfer',
         resourceId,
-        itemName: def.displayName,
+        itemName: itemSingle,
         quantity: qty,
         moneyDelta: 0,
-        message: `Moved ${qty} ${itemName} from shop stock to storage`,
+        message: formatTemplate(econMsg.movedStockToStorageLog, { qty, item: itemName }),
         timestampLabel: timeLabel,
       }),
     };
@@ -1058,7 +1115,9 @@ export class ShopEconomySystem {
     options: { source?: 'manual' | 'customer'; buyerName?: string } = {}
   ): ShopSaleResult {
     const qty = sanitizeQuantity(quantity);
+    const econMsg = getTranslations().gameMessages.economy;
     const def = this.cfg.prices[resourceId];
+    const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStock[resourceId] ?? 0);
     const source = options.source ?? 'manual';
     const buyerName = options.buyerName?.trim() || 'Survivor';
@@ -1067,7 +1126,7 @@ export class ShopEconomySystem {
       return {
         ok: false,
         earned: 0,
-        record: this.recordError('Select at least 1 item to sell', timeLabel),
+        record: this.recordError(econMsg.selectAtLeastOneSell, timeLabel),
       };
     }
 
@@ -1076,7 +1135,7 @@ export class ShopEconomySystem {
         ok: false,
         earned: 0,
         record: this.recordError(
-          `Cannot sell ${qty} ${def.displayName} (${available} in stock)`,
+          formatTemplate(econMsg.cannotSellStock, { qty, item: itemSingle, avail: available }),
           timeLabel
         ),
       };
@@ -1088,20 +1147,29 @@ export class ShopEconomySystem {
     this.totalSalesCount += qty;
     this.totalRevenueEarned += earned;
 
-    const itemName = qty === 1 ? def.displayName : def.pluralName;
+    const itemName = tResourceName(resourceId, qty);
     const record = this.recordTx({
       kind: 'sale',
       source,
       customerName: source === 'customer' ? buyerName : undefined,
       resourceId,
-      itemName: def.displayName,
+      itemName: itemSingle,
       quantity: qty,
       unitPrice: def.sellPrice,
       moneyDelta: earned,
       message:
         source === 'customer'
-          ? `${buyerName} bought ${qty} ${itemName} (+${formatMoney(earned)})`
-          : `Sold ${qty} ${itemName} for ${formatMoney(earned)}`,
+          ? formatTemplate(econMsg.customerBoughtLog, {
+              buyer: buyerName,
+              qty,
+              item: itemName,
+              earned: formatMoney(earned),
+            })
+          : formatTemplate(econMsg.manualSoldLog, {
+              qty,
+              item: itemName,
+              earned: formatMoney(earned),
+            }),
       timestampLabel: timeLabel,
     });
 
@@ -1114,7 +1182,7 @@ export class ShopEconomySystem {
           id: record.id,
           customerName: buyerName,
           resourceId,
-          itemName: def.displayName,
+          itemName: itemSingle,
           quantity: qty,
           unitPrice: def.sellPrice,
           totalRevenue: earned,
@@ -1134,7 +1202,7 @@ export class ShopEconomySystem {
   public getSnapshot(
     activeCustomers: ActiveCustomerSummary[] = [],
     shopAcceptingCustomers = this.shopManualOpen,
-    shopStatusReason = this.shopManualOpen ? 'Open for survivors' : 'Closed by owner'
+    shopStatusReason?: string
   ): ShopSnapshot {
     const stockCopy: InventoryState = createInitialInventory();
     const storageCopy: InventoryState = createInitialInventory();
@@ -1142,6 +1210,11 @@ export class ShopEconomySystem {
       stockCopy[id] = Math.max(0, this.shopStock[id] ?? 0);
       storageCopy[id] = Math.max(0, this.shopStorage[id] ?? 0);
     }
+
+    const econMsg = getTranslations().gameMessages.economy;
+    const resolvedStatusReason =
+      shopStatusReason ??
+      (this.shopManualOpen ? econMsg.shopStatusOpen : econMsg.shopStatusClosedOwner);
 
     const levelCfg = getShopLevelConfig(this.shopLevel);
     const storageCapacity = this.getStorageCapacity();
@@ -1158,7 +1231,7 @@ export class ShopEconomySystem {
     return {
       money: this.money,
       shopLevel: this.shopLevel,
-      shopLevelName: levelCfg.name,
+      shopLevelName: tShopLevel(this.shopLevel).name,
       maxShopLevel: MAX_SHOP_LEVEL,
       storageTier: this.storageTier,
       maxStorageTier: MAX_STORAGE_TIER,
@@ -1169,7 +1242,7 @@ export class ShopEconomySystem {
       ownedDecorations: this.getOwnedDecorations(),
       shopManualOpen: this.shopManualOpen,
       shopAcceptingCustomers,
-      shopStatusReason,
+      shopStatusReason: resolvedStatusReason,
       shopStock: stockCopy,
       shopStorage: storageCopy,
       totalStockItems: getTotalInventoryItems(stockCopy),

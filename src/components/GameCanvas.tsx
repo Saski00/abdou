@@ -10,6 +10,7 @@ import {
   ShopModalTab,
   StoryObjectInspectionData,
 } from '../game/types';
+import { useI18n } from '../i18n';
 
 export interface TouchEngineBridge {
   setTouchMove: (x: number, y: number, sprint: boolean) => void;
@@ -105,6 +106,7 @@ export function GameCanvas({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Game3DEngine | null>(null);
   const [contextLost, setContextLost] = useState(false);
+  const { lang, t } = useI18n();
 
   const callbacksRef = useRef({
     onHudChange,
@@ -268,16 +270,18 @@ export function GameCanvas({
       <div
         ref={mountRef}
         className="w-full h-full touch-none"
-        aria-label="Last Shop 3D world"
+        aria-label={t.meta.appTitle}
       />
       {contextLost && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0e14]/95 px-6 text-center">
           <div className="max-w-sm">
             <h2 className="font-display text-2xl font-bold text-stone-100 mb-2">
-              Graphics Context Paused
+              {lang === 'ar' ? 'تم إيقاف سياق الرسوميات مؤقتاً' : 'Graphics Context Paused'}
             </h2>
             <p className="text-sm text-stone-400">
-              Waiting for WebGL graphics context to restore...
+              {lang === 'ar'
+                ? 'بانتظار استعادة سياق رسوميات WebGL...'
+                : 'Waiting for WebGL graphics context to restore...'}
             </p>
           </div>
         </div>

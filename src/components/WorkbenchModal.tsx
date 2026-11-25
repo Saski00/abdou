@@ -1,8 +1,8 @@
 import { Hammer, Package, X } from 'lucide-react';
 import { WORKBENCH_RECIPES, canCraftRecipe } from '../game/craftingSystem';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { RESOURCE_DEFINITIONS } from '../game/resources';
 import { InventoryState } from '../game/types';
+import { formatTpl, tRecipe, tResource, tResourceName, useI18n } from '../i18n';
 
 interface WorkbenchModalProps {
   workbenchName: string;
@@ -23,11 +23,14 @@ export function WorkbenchModal({
   onCraftRecipe,
   onClose,
 }: WorkbenchModalProps) {
+  const { dir, t } = useI18n();
+  const wbCopy = t.workbenchModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="workbench-title"
@@ -57,21 +60,25 @@ export function WorkbenchModal({
                 id="workbench-title"
                 className="font-display text-2xl font-bold tracking-wider text-stone-100 leading-none truncate"
               >
-                {workbenchName.toUpperCase()}
+                {(workbenchName || wbCopy.defaultTitle).toUpperCase()}
               </h2>
             </div>
             <p className="text-xs text-stone-400 mt-1.5 flex items-center gap-2 font-mono-tabular">
               <Package className="w-3.5 h-3.5 text-stone-500 shrink-0" aria-hidden="true" />
               <span>
-                Pack {totalInventoryItems}/{packCapacity} · Wood {inventory.wood ?? 0} · Scrap{' '}
-                {inventory.scrap_metal ?? 0}
+                {formatTpl(wbCopy.headerStats, {
+                  used: totalInventoryItems,
+                  cap: packCapacity,
+                  wood: inventory.wood ?? 0,
+                  scrap: inventory.scrap_metal ?? 0,
+                })}
               </span>
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close workbench"
+            aria-label={wbCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -82,7 +89,8 @@ export function WorkbenchModal({
         <div className="flex-1 overflow-y-auto touch-pan-y px-4 py-4 sm:px-6 space-y-3">
           {WORKBENCH_RECIPES.map((recipe) => {
             const check = canCraftRecipe(recipe, inventory, packCapacity);
-            const outDef = RESOURCE_DEFINITIONS[recipe.outputResourceId];
+            const recText = tRecipe(recipe.id, recipe);
+            const outRes = tResource(recipe.outputResourceId);
             const ownedOut = inventory[recipe.outputResourceId] ?? 0;
 
             return (
@@ -92,15 +100,19 @@ export function WorkbenchModal({
               >
                 <div className="min-w-0 space-y-1.5">
                   <div className="flex items-baseline justify-between sm:justify-start gap-2">
-                    <h3 className="text-sm font-semibold text-stone-100">{recipe.name}</h3>
+                    <h3 className="text-sm font-semibold text-stone-100">{recText.name}</h3>
                     <span className="font-mono-tabular text-[11px] font-semibold text-emerald-300 whitespace-nowrap">
-                      +{recipe.outputAmount} {outDef.name} (Pack {ownedOut})
+                      {formatTpl(wbCopy.outputBadge, {
+                        qty: recipe.outputAmount,
+                        item: outRes.name,
+                        owned: ownedOut,
+                      })}
                     </span>
                   </div>
-                  <p className="text-xs text-stone-400 leading-snug">{recipe.description}</p>
+                  <p className="text-xs text-stone-400 leading-snug">{recText.description}</p>
                   <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] font-mono-tabular">
                     {recipe.ingredients.map((ing) => {
-                      const def = RESOURCE_DEFINITIONS[ing.resourceId];
+                      const ingName = tResourceName(ing.resourceId, ing.amount);
                       const have = inventory[ing.resourceId] ?? 0;
                       const met = have >= ing.amount;
                       return (
@@ -112,7 +124,7 @@ export function WorkbenchModal({
                               : 'border-rose-700/60 bg-[#231015] text-rose-300'
                           }`}
                         >
-                          {ing.amount} {def.name} ({have})
+                          <bdi dir="ltr">{ing.amount}</bdi> {ingName} (<bdi dir="ltr">{have}</bdi>)
                         </span>
                       );
                     })}
@@ -129,7 +141,7 @@ export function WorkbenchModal({
                       : 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
                   }`}
                 >
-                  {check.ok ? 'Craft' : check.reason}
+                  {check.ok ? wbCopy.craftBtn : check.reason}
                 </button>
               </div>
             );
@@ -143,14 +155,14 @@ export function WorkbenchModal({
           }`}
         >
           <span className="text-xs text-stone-400 font-mono-tabular">
-            {isTouchMode ? 'Uses materials from your pack' : 'Esc to close'}
+            {isTouchMode ? wbCopy.footerTouch : wbCopy.footerDesktop}
           </span>
           <button
             type="button"
             onClick={onClose}
             className="h-11 px-4 rounded-lg border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs sm:text-sm font-semibold cursor-pointer"
           >
-            Close
+            {wbCopy.closeBtn}
           </button>
         </div>
       </div>

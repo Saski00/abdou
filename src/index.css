@@ -25,6 +25,16 @@
     background-color: #0b0e14;
     font-family: var(--font-sans);
   }
+  html[lang="ar"],
+  [dir="rtl"] {
+    --font-display: 'Cairo', 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-sans: 'Cairo', 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+[dir="rtl"],
+[dir="rtl"] * {
+  letter-spacing: 0 !important;
 }
 
 .font-display {

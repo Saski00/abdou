@@ -1,4 +1,5 @@
 import { InventoryState, ResourceId } from './types';
+import { tResource, tResourceName } from '../i18n';
 
 export interface ResourceDefinition {
   id: ResourceId;
@@ -74,6 +75,10 @@ export const RESOURCE_PURPOSE_HINTS: Record<ResourceId, string> = {
   wood: 'Sell ($9), recruit staff, or brace North Relay',
   medical_supplies: 'Use (+35 Health) or sell high ($22)',
 };
+
+export function getLocalizedResourcePurposeHint(id: ResourceId): string {
+  return tResource(id).purposeHint || RESOURCE_PURPOSE_HINTS[id];
+}
 
 export function createInitialInventory(): InventoryState {
   return {
@@ -151,8 +156,7 @@ export function getTotalInventoryItems(inventory: InventoryState): number {
 }
 
 export function formatResourceCollectedLabel(id: ResourceId, amount: number): string {
-  const def = RESOURCE_DEFINITIONS[id];
   const count = Math.max(1, Math.floor(amount));
-  const label = count === 1 ? def.name : def.pluralName;
+  const label = tResourceName(id, count);
   return `+${count} ${label}`;
 }

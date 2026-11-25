@@ -1,4 +1,5 @@
 import { WeatherKind } from './types';
+import { tWeather } from '../i18n';
 
 export interface WeatherConfig {
   minDurationSec: number;
@@ -81,7 +82,7 @@ export class WeatherSystem {
   public getSnapshot(): WeatherSnapshot {
     return {
       weather: this.targetWeather,
-      label: WEATHER_LABELS[this.targetWeather],
+      label: tWeather(this.targetWeather),
       rainIntensity: this.rainIntensity,
       fogIntensity: this.fogIntensity,
     };

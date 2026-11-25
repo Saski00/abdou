@@ -1,5 +1,6 @@
 import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
+import { formatTpl, useI18n } from '../i18n';
 
 interface GameOverModalProps {
   hud: HudSnapshot;
@@ -16,9 +17,11 @@ export function GameOverModal({
 }: GameOverModalProps) {
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
+  const { dir, t } = useI18n();
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="gameover-title"
@@ -41,10 +44,10 @@ export function GameOverModal({
             isCompactLandscape ? 'text-3xl' : 'text-4xl'
           }`}
         >
-          YOU DIED
+          {t.gameOverModal.title}
         </h2>
         <p className={`text-sm text-stone-300 mt-1.5 ${isCompactLandscape ? 'mb-3' : 'mb-5'}`}>
-          {reason}
+          {reason || t.gameOverModal.fallbackReason}
         </p>
 
         <div
@@ -53,28 +56,35 @@ export function GameOverModal({
           }`}
         >
           <div>
-            <div className="text-[11px] text-stone-400">Survived</div>
+            <div className="text-[11px] text-stone-400">{t.gameOverModal.survivedLabel}</div>
             <div className="font-mono-tabular text-base font-bold text-stone-100">
-              Day {hud.day} · {hud.formattedTime}
+              {formatTpl(t.gameOverModal.survivedValue, {
+                day: hud.day,
+                time: hud.formattedTime,
+              })}
             </div>
           </div>
           <div>
-            <div className="text-[11px] text-stone-400">Infected Defeated</div>
+            <div className="text-[11px] text-stone-400">
+              {t.gameOverModal.infectedDefeatedLabel}
+            </div>
             <div className="font-mono-tabular text-base font-bold text-amber-300">
-              {hud.zombiesDefeated}
+              <bdi dir="ltr">{hud.zombiesDefeated}</bdi>
             </div>
           </div>
           <div>
-            <div className="text-[11px] text-stone-400">Supplies Carried</div>
+            <div className="text-[11px] text-stone-400">
+              {t.gameOverModal.suppliesCarriedLabel}
+            </div>
             <div className="font-mono-tabular text-base font-bold text-stone-100">
-              {hud.totalInventoryItems} items
+              {formatTpl(t.gameOverModal.suppliesCarriedValue, {
+                count: hud.totalInventoryItems,
+              })}
             </div>
           </div>
           <div>
-            <div className="text-[11px] text-stone-400">Weather</div>
-            <div className="text-base font-semibold text-stone-200">
-              {hud.weatherLabel}
-            </div>
+            <div className="text-[11px] text-stone-400">{t.gameOverModal.weatherLabel}</div>
+            <div className="text-base font-semibold text-stone-200">{hud.weatherLabel}</div>
           </div>
         </div>
 
@@ -84,7 +94,7 @@ export function GameOverModal({
             onClick={onRestart}
             className="h-12 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-stone-950 font-semibold text-sm tracking-wide transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-300"
           >
-            Restart Survival
+            {t.gameOverModal.restartBtn}
           </button>
 
           <button
@@ -92,7 +102,7 @@ export function GameOverModal({
             onClick={onReturnToMenu}
             className="h-11 px-5 rounded-lg bg-transparent hover:bg-stone-800/70 border border-stone-700/70 text-stone-300 hover:text-stone-100 font-medium text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400"
           >
-            Main Menu
+            {t.gameOverModal.mainMenuBtn}
           </button>
         </div>
       </div>

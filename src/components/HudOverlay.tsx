@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot, ResourceId } from '../game/types';
+import { formatTpl, useI18n } from '../i18n';
 
 interface HudOverlayProps {
   hud: HudSnapshot;
@@ -56,6 +57,8 @@ export function HudOverlay({
   onConsumeItem,
   onToggleRest,
 }: HudOverlayProps) {
+  const { dir, t } = useI18n();
+
   const hpPct = Math.max(0, Math.min(100, (hud.health / hud.maxHealth) * 100));
   const stamPct = Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100));
 
@@ -143,6 +146,7 @@ export function HudOverlay({
 
   return (
     <div
+      dir={dir}
       className="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between"
       style={{
         paddingTop: isCompactLandscape
@@ -192,7 +196,7 @@ export function HudOverlay({
             }`}
           >
             <span className="font-mono-tabular text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-stone-950">
-              {isTouchMode ? 'TAP' : 'E'}
+              {isTouchMode ? t.hud.tapKeyLabel : <bdi dir="ltr">E</bdi>}
             </span>
             <div className="flex items-baseline gap-1.5 text-xs sm:text-sm">
               <span className="font-semibold text-amber-300">
@@ -207,7 +211,7 @@ export function HudOverlay({
       {/* Top HUD Bar */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-start justify-between gap-2">
-          {/* Top-Left: Minimal Health + Dynamic Stamina + Conditional Need Alerts / Combat */}
+          {/* Top-Start: Minimal Health + Dynamic Stamina + Conditional Need Alerts / Combat */}
           <div className="flex flex-col items-start gap-1.5 min-w-0">
             <div
               className={`bg-[#0e121a]/82 backdrop-blur-sm border rounded-lg shadow-lg transition-colors ${healthBarWidth} ${
@@ -223,7 +227,7 @@ export function HudOverlay({
                     aria-hidden="true"
                   />
                   <span className="text-[11px] font-semibold tracking-wide text-stone-200 uppercase">
-                    HP
+                    {t.hud.hpShort}
                   </span>
                 </div>
                 <span
@@ -231,7 +235,7 @@ export function HudOverlay({
                     healthCritical ? 'text-rose-300' : 'text-stone-100'
                   }`}
                 >
-                  {hud.health}
+                  <bdi dir="ltr">{hud.health}</bdi>
                 </span>
               </div>
 
@@ -247,7 +251,7 @@ export function HudOverlay({
               {/* Dynamic Sprint Stamina (fades away when rested & full) */}
               <div
                 aria-hidden={!showStaminaBar}
-                aria-label={`Sprint stamina ${hud.stamina}%`}
+                aria-label={formatTpl(t.hud.sprintStaminaAria, { pct: hud.stamina })}
                 className={`overflow-hidden transition-[opacity,max-height,margin] duration-200 ${
                   showStaminaBar
                     ? 'opacity-100 max-h-3 mt-1.5'
@@ -280,7 +284,7 @@ export function HudOverlay({
                       className="min-h-[36px] px-2.5 py-1 rounded-lg bg-rose-500/92 hover:bg-rose-400 border border-rose-200/80 text-white text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform"
                     >
                       <HeartPulse className="w-3.5 h-3.5 shrink-0" />
-                      <span>Heal ({medQty})</span>
+                      <span>{formatTpl(t.hud.healBtn, { qty: medQty })}</span>
                     </button>
                   )}
 
@@ -290,8 +294,8 @@ export function HudOverlay({
                       onClick={() => handleUrgentNeedTap('canned_food', foodQty)}
                       aria-label={
                         hud.hunger === 0
-                          ? `Starving (${foodQty} food in pack)`
-                          : `Hunger ${hud.hunger}%`
+                          ? `${t.hud.starvingLabel} (${foodQty})`
+                          : `${t.hud.hungryLabel} ${hud.hunger}%`
                       }
                       className={`min-h-[36px] px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform ${
                         hungerCritical
@@ -301,12 +305,17 @@ export function HudOverlay({
                     >
                       <Utensils className="w-3 h-3 shrink-0" />
                       <span className="font-mono-tabular">
-                        {hud.hunger === 0
-                          ? 'Starving'
-                          : `${hungerCritical ? 'Low Food' : 'Hungry'} ${hud.hunger}%`}
+                        {hud.hunger === 0 ? (
+                          t.hud.starvingLabel
+                        ) : (
+                          <>
+                            {hungerCritical ? t.hud.lowFoodLabel : t.hud.hungryLabel}{' '}
+                            <bdi dir="ltr">{hud.hunger}%</bdi>
+                          </>
+                        )}
                       </span>
                       {foodQty > 0 && (
-                        <span className="text-amber-300 font-bold">· Eat</span>
+                        <span className="text-amber-300 font-bold">{t.hud.eatSuffix}</span>
                       )}
                     </button>
                   )}
@@ -317,8 +326,8 @@ export function HudOverlay({
                       onClick={() => handleUrgentNeedTap('water_bottle', waterQty)}
                       aria-label={
                         hud.thirst === 0
-                          ? `Dehydrated (${waterQty} water in pack)`
-                          : `Thirst ${hud.thirst}%`
+                          ? `${t.hud.dehydratedLabel} (${waterQty})`
+                          : `${t.hud.thirstyLabel} ${hud.thirst}%`
                       }
                       className={`min-h-[36px] px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform ${
                         thirstCritical
@@ -328,12 +337,17 @@ export function HudOverlay({
                     >
                       <Droplet className="w-3 h-3 shrink-0" />
                       <span className="font-mono-tabular">
-                        {hud.thirst === 0
-                          ? 'Dehydrated'
-                          : `${thirstCritical ? 'Low Water' : 'Thirsty'} ${hud.thirst}%`}
+                        {hud.thirst === 0 ? (
+                          t.hud.dehydratedLabel
+                        ) : (
+                          <>
+                            {thirstCritical ? t.hud.lowWaterLabel : t.hud.thirstyLabel}{' '}
+                            <bdi dir="ltr">{hud.thirst}%</bdi>
+                          </>
+                        )}
                       </span>
                       {waterQty > 0 && (
-                        <span className="text-sky-300 font-bold">· Drink</span>
+                        <span className="text-sky-300 font-bold">{t.hud.drinkSuffix}</span>
                       )}
                     </button>
                   )}
@@ -345,7 +359,9 @@ export function HudOverlay({
                       className="min-h-[36px] px-2 py-1 rounded-lg bg-[#0e121a]/88 border border-emerald-500/55 text-emerald-200 text-[11px] font-semibold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform"
                     >
                       <Zap className="w-3 h-3 shrink-0" />
-                      <span className="font-mono-tabular">Tired {hud.energy}% · Rest</span>
+                      <span className="font-mono-tabular">
+                        {formatTpl(t.hud.tiredRestLabel, { pct: hud.energy })}
+                      </span>
                     </button>
                   )}
 
@@ -357,7 +373,10 @@ export function HudOverlay({
                     >
                       <BedDouble className="w-3.5 h-3.5 shrink-0" />
                       <span className="font-mono-tabular">
-                        Resting {hud.energy}% · {isTouchMode ? 'Stand Up' : 'Stand (R)'}
+                        {formatTpl(t.hud.restingEnergyStand, {
+                          pct: hud.energy,
+                          action: isTouchMode ? t.hud.standUpTouch : t.hud.standDesktop,
+                        })}
                       </span>
                     </button>
                   )}
@@ -384,31 +403,35 @@ export function HudOverlay({
                   aria-hidden="true"
                 />
                 <span className="text-stone-400 font-mono-tabular whitespace-nowrap">
-                  {hud.flashlightOn ? 'On' : 'Off'}
+                  {hud.flashlightOn ? t.hud.lightOnShort : t.hud.lightOffShort}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Top-Right: Quiet Time + Clean Menu Buttons + Single-Line Active Objective */}
+          {/* Top-End: Quiet Time + Clean Menu Buttons + Single-Line Active Objective */}
           <div className="flex flex-col items-end gap-1.5 min-w-0">
             <div className="flex items-center justify-end gap-1.5 sm:gap-2 pointer-events-auto">
               {/* Unboxed minimal time (and cash only inside The Last Shop) */}
               <div
-                className="hidden sm:flex items-center gap-1.5 pr-1 text-xs font-mono-tabular text-stone-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] whitespace-nowrap"
-                aria-label={`Day ${hud.day}, ${hud.formattedTime}`}
+                className="hidden sm:flex items-center gap-1.5 pe-1 text-xs font-mono-tabular text-stone-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] whitespace-nowrap"
+                aria-label={`${formatTpl(t.hud.dayPrefix, { day: hud.day })}, ${hud.formattedTime}`}
               >
-                <span className="font-semibold text-amber-300">Day {hud.day}</span>
+                <span className="font-semibold text-amber-300">
+                  {formatTpl(t.hud.dayPrefix, { day: hud.day })}
+                </span>
                 <span className="text-stone-500" aria-hidden="true">
                   ·
                 </span>
-                <span>{hud.formattedTime}</span>
+                <bdi dir="ltr">{hud.formattedTime}</bdi>
                 {hud.insideShop && (
                   <>
                     <span className="text-stone-500" aria-hidden="true">
                       ·
                     </span>
-                    <span className="font-bold text-emerald-300">${hud.money}</span>
+                    <span className="font-bold text-emerald-300">
+                      <bdi dir="ltr">${hud.money}</bdi>
+                    </span>
                   </>
                 )}
               </div>
@@ -416,7 +439,7 @@ export function HudOverlay({
               <button
                 type="button"
                 onClick={onOpenMap}
-                aria-label={`Open neighborhood map (${hud.discoveredLocationIds.length} locations discovered)`}
+                aria-label={`${t.hud.mapAria} (${hud.discoveredLocationIds.length})`}
                 className={`h-11 ${
                   isDesktopLike ? 'px-2.5' : 'w-11'
                 } flex items-center justify-center gap-1.5 rounded-lg border transition-colors cursor-pointer shadow-lg whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400 ${
@@ -427,14 +450,16 @@ export function HudOverlay({
               >
                 <MapIcon className={`w-4 h-4 ${isMapOpen ? 'text-stone-950' : 'text-sky-300'}`} />
                 {!isTouchMode && isDesktopLike && (
-                  <span className="text-[11px] opacity-80 font-mono-tabular">N</span>
+                  <bdi dir="ltr" className="text-[11px] opacity-80 font-mono-tabular">
+                    N
+                  </bdi>
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={onOpenMissions}
-                aria-label={`Open missions (${hud.missions.mainCompletedCount} of ${hud.missions.mainTotalCount} main completed)`}
+                aria-label={`${t.hud.missionsAria} (${hud.missions.mainCompletedCount}/${hud.missions.mainTotalCount})`}
                 className={`h-11 ${
                   isDesktopLike ? 'px-2.5' : 'w-11'
                 } flex items-center justify-center gap-1 rounded-lg border transition-colors cursor-pointer shadow-lg whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400 ${
@@ -449,14 +474,16 @@ export function HudOverlay({
                   }`}
                 />
                 {!isTouchMode && isDesktopLike && (
-                  <span className="text-[11px] opacity-80 font-mono-tabular">M</span>
+                  <bdi dir="ltr" className="text-[11px] opacity-80 font-mono-tabular">
+                    M
+                  </bdi>
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={onOpenInventory}
-                aria-label={`Open pack and player status (${hud.totalInventoryItems} of ${hud.packCapacity} items)`}
+                aria-label={`${t.hud.inventoryAria} (${hud.totalInventoryItems}/${hud.packCapacity})`}
                 className={`h-11 ${
                   isDesktopLike || packNearFull ? 'px-2.5' : 'w-11'
                 } flex items-center justify-center gap-1 rounded-lg border transition-colors cursor-pointer shadow-lg whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400 ${
@@ -471,20 +498,22 @@ export function HudOverlay({
               >
                 <Backpack className="w-4 h-4 shrink-0" />
                 {packNearFull && (
-                  <span className="font-mono-tabular text-[11px] font-bold">
+                  <bdi dir="ltr" className="font-mono-tabular text-[11px] font-bold">
                     {hud.totalInventoryItems}/{hud.packCapacity}
-                  </span>
+                  </bdi>
                 )}
                 {!isTouchMode && isDesktopLike && (
-                  <span className="text-[11px] opacity-80 font-mono-tabular">I</span>
+                  <bdi dir="ltr" className="text-[11px] opacity-80 font-mono-tabular">
+                    I
+                  </bdi>
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={onToggleMute}
-                aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-                title={muted ? 'Unmute audio' : 'Mute audio'}
+                aria-label={muted ? t.hud.unmuteAria : t.hud.muteAria}
+                title={muted ? t.hud.unmuteAria : t.hud.muteAria}
                 className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/82 backdrop-blur-sm border border-stone-700/60 text-stone-300 hover:text-stone-100 hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -493,7 +522,7 @@ export function HudOverlay({
               <button
                 type="button"
                 onClick={onPauseClick}
-                aria-label="Pause game"
+                aria-label={t.hud.pauseAria}
                 className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/82 backdrop-blur-sm border border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 <Pause className="w-4 h-4" />
@@ -506,8 +535,8 @@ export function HudOverlay({
                 type="button"
                 onClick={onOpenMissions}
                 onPointerDown={(e) => e.stopPropagation()}
-                aria-label={`Current objective: ${nextObjective.description}`}
-                className={`pointer-events-auto flex items-center gap-1.5 rounded-lg bg-[#0e121a]/78 backdrop-blur-sm border border-stone-700/50 hover:border-amber-500/60 px-2.5 py-1 text-left transition-colors cursor-pointer shadow-md ${
+                aria-label={`${t.hud.objectiveAria}: ${nextObjective.description}`}
+                className={`pointer-events-auto flex items-center gap-1.5 rounded-lg bg-[#0e121a]/78 backdrop-blur-sm border border-stone-700/50 hover:border-amber-500/60 px-2.5 py-1 text-start transition-colors cursor-pointer shadow-md ${
                   isDesktopLike
                     ? 'max-w-[300px]'
                     : isCompactLandscape
@@ -519,17 +548,26 @@ export function HudOverlay({
                 <span className="text-[11px] font-medium text-stone-200 truncate">
                   {nextObjective.description}
                 </span>
-                <span className="font-mono-tabular text-[10px] font-semibold text-amber-300 shrink-0">
+                <bdi
+                  dir="ltr"
+                  className="font-mono-tabular text-[10px] font-semibold text-amber-300 shrink-0"
+                >
                   {Math.min(nextObjective.current, nextObjective.target)}/{nextObjective.target}
-                </span>
+                </bdi>
               </button>
             )}
 
             {/* Mobile compact time readout subtly below right bar */}
             {!isDesktopLike && (
-              <div className="sm:hidden text-[10px] font-mono-tabular text-stone-300/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] pr-0.5 whitespace-nowrap">
-                Day {hud.day} · {hud.formattedTime}
-                {hud.insideShop ? ` · $${hud.money}` : ''}
+              <div className="sm:hidden text-[10px] font-mono-tabular text-stone-300/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] pe-0.5 whitespace-nowrap">
+                {formatTpl(t.hud.dayPrefix, { day: hud.day })} ·{' '}
+                <bdi dir="ltr">{hud.formattedTime}</bdi>
+                {hud.insideShop ? (
+                  <>
+                    {' · '}
+                    <bdi dir="ltr">${hud.money}</bdi>
+                  </>
+                ) : null}
               </div>
             )}
           </div>
@@ -593,8 +631,8 @@ export function HudOverlay({
             onPointerDown={(e) => e.stopPropagation()}
             className={`pointer-events-auto bg-[#0e141e]/92 backdrop-blur-sm border border-sky-500/45 rounded-lg shadow-xl flex items-start gap-2 ${
               isCompactLandscape
-                ? 'max-w-[min(360px,calc(100vw-305px))] pl-2.5 pr-1.5 py-1.5'
-                : 'max-w-sm sm:max-w-lg w-full sm:w-auto pl-3.5 pr-2 py-2'
+                ? 'max-w-[min(360px,calc(100vw-305px))] ps-2.5 pe-1.5 py-1.5'
+                : 'max-w-sm sm:max-w-lg w-full sm:w-auto ps-3.5 pe-2 py-2'
             }`}
           >
             <Lightbulb className="w-4 h-4 text-sky-300 shrink-0 mt-0.5" aria-hidden="true" />
@@ -609,7 +647,7 @@ export function HudOverlay({
             <button
               type="button"
               onClick={() => onDismissGuidance(hud.guidanceHint!.id)}
-              aria-label="Dismiss hint"
+              aria-label={t.hud.dismissHintAria}
               className="w-9 h-9 rounded-md flex items-center justify-center text-stone-400 hover:text-stone-100 hover:bg-stone-800 cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" />
@@ -622,8 +660,8 @@ export function HudOverlay({
           !isTouchMode &&
           !hud.pointerLocked &&
           !hud.contextMessage && (
-            <div className="bg-[#0e121a]/80 backdrop-blur-sm border border-stone-700/45 rounded-lg px-3.5 py-1 text-[11px] text-stone-300 font-mono-tabular">
-              Click viewport to look · WASD Move · E Interact · I Pack · N Map · M Missions
+            <div className="bg-[#0e121a]/80 backdrop-blur-sm border border-stone-700/45 rounded-lg px-3.5 py-1 text-[11px] text-stone-300 font-mono-tabular text-center">
+              {t.hud.desktopControlsBanner}
             </div>
           )}
       </div>

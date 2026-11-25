@@ -15,11 +15,13 @@ import {
   applyCustomerPurchaseOutcome,
   buildActiveCustomerSummaries,
   evaluateShopOpenStatus,
+  resolveCustomerStatusLabel,
   stepCustomerSpawnSchedule,
   stepCustomersAI,
 } from '../game/customerAI';
 import { SHOP_ITEM_PRICES, ShopEconomySystem, formatMoney } from '../game/economy';
 import { ActiveCustomerSummary } from '../game/types';
+import { formatTpl, getTranslations, tResourceName } from '../i18n';
 import { AssetManager } from './AssetManager';
 import { CustomerInteractTarget, InteractionManager } from './InteractionManager';
 import { BuiltWorld, WorldDoorInteractable } from './WorldBuilder';
@@ -41,7 +43,7 @@ export class CustomerManager {
     lastSpawnSide: 0,
   };
   private lastAccepting = true;
-  private lastStatusReason = 'Open for survivors (06:00 - 19:30)';
+  private lastStatusReason = '';
 
   constructor(
     scene: THREE.Scene,
@@ -70,7 +72,7 @@ export class CustomerManager {
       lastSpawnSide: 0,
     };
     this.lastAccepting = true;
-    this.lastStatusReason = 'Open for survivors (06:00 - 19:30)';
+    this.lastStatusReason = '';
   }
 
   private clearEntities(): void {
@@ -168,8 +170,7 @@ export class CustomerManager {
         buyerName: req.customerName,
       });
 
-      const def = SHOP_ITEM_PRICES[req.resourceId];
-      const itemLabel = req.quantity === 1 ? def.displayName : def.pluralName;
+      const itemLabel = tResourceName(req.resourceId, req.quantity);
       applyCustomerPurchaseOutcome(
         ent.agent,
         res.ok,
@@ -235,7 +236,7 @@ export class CustomerManager {
         kind: 'customer',
         id: a.id,
         name: a.profile.name,
-        statusLabel: a.statusLabel,
+        statusLabel: resolveCustomerStatusLabel(a),
         x: a.x,
         y: a.y,
         z: a.z,
@@ -248,22 +249,28 @@ export class CustomerManager {
     const ent = this.entities.find((e) => e.agent.id === customerId);
     if (!ent) return;
     const a = ent.agent;
+    const t = getTranslations();
     const topPrefId = (Object.keys(a.profile.preferences) as (keyof typeof a.profile.preferences)[]).sort(
       (x, y) => a.profile.preferences[y] - a.profile.preferences[x]
     )[0];
-    const prefName = SHOP_ITEM_PRICES[topPrefId].displayName;
+    const prefName = tResourceName(topPrefId, 1);
 
     if (a.selectedPurchase) {
-      const def = SHOP_ITEM_PRICES[a.selectedPurchase.resourceId];
+      const itemName = tResourceName(a.selectedPurchase.resourceId, a.selectedPurchase.quantity);
       const msg = a.purchaseCompleted
-        ? `${a.profile.name}: Thanks for the ${def.displayName}! (${formatMoney(a.budget)} left)`
-        : `${a.profile.name}: Heading to register with ${a.selectedPurchase.quantity} ${def.displayName}`;
+        ? formatTpl(t.gameMessages.toasts.customerThanksPurchased, {
+            name: a.profile.name,
+            qty: a.selectedPurchase.quantity,
+            item: itemName,
+          })
+        : `${a.profile.name}: ${resolveCustomerStatusLabel(a)}`;
       this.interactions.pushToast(msg, 'world', 2.6);
       return;
     }
 
+    const status = resolveCustomerStatusLabel(a);
     this.interactions.pushToast(
-      `${a.profile.name} (${a.statusLabel}) · Prefers ${prefName} · Cash ${formatMoney(a.budget)}`,
+      `${a.profile.name} (${status}) · ${formatTpl(t.shopModal.prefers, { item: prefName })} · ${formatMoney(a.budget)}`,
       'world',
       2.6
     );
@@ -281,7 +288,11 @@ export class CustomerManager {
   }
 
   public getShopStatusReason(): string {
-    return this.lastStatusReason;
+    return this.lastStatusReason || evaluateShopOpenStatus(
+      8,
+      this.economy.isShopManualOpen(),
+      DEFAULT_CUSTOMER_CONFIG
+    ).reason;
   }
 
   public dispose(): void {

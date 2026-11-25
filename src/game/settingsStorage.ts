@@ -5,6 +5,7 @@ import { GameSettings } from './types';
 export const SETTINGS_STORAGE_KEY = 'last_shop_settings_v1';
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  language: 'en',
   masterVolume: 0.55,
   muted: false,
   mouseSensitivity: 1.0,
@@ -20,6 +21,7 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_GAME_SETTINGS };
   }
+  const language = raw.language === 'ar' ? 'ar' : 'en';
   const touchControls =
     raw.touchControls === 'auto' || raw.touchControls === 'on' || raw.touchControls === 'off'
       ? raw.touchControls
@@ -40,6 +42,7 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
       : DEFAULT_GAME_SETTINGS.dayLengthSeconds;
 
   return {
+    language,
     masterVolume:
       typeof raw.masterVolume === 'number' && Number.isFinite(raw.masterVolume)
         ? clamp(raw.masterVolume, 0, 1)

@@ -1,5 +1,6 @@
 import { RESOURCE_DEFINITIONS, addInventoryResourceCapped, consumeInventoryResource, getTotalInventoryItems } from './resources';
 import { InventoryState, ResourceId } from './types';
+import { formatTpl, getTranslations, tResourceName } from '../i18n';
 
 export interface WorkbenchRecipeIngredient {
   resourceId: ResourceId;
@@ -60,15 +61,20 @@ export function canCraftRecipe(
   inventory: InventoryState,
   packCapacity: number
 ): { ok: boolean; reason: string | null } {
+  const t = getTranslations();
   let inputCount = 0;
   for (const ing of recipe.ingredients) {
     inputCount += ing.amount;
     const have = Math.max(0, inventory[ing.resourceId] ?? 0);
     if (have < ing.amount) {
-      const def = RESOURCE_DEFINITIONS[ing.resourceId];
+      const itemName = tResourceName(ing.resourceId, ing.amount);
       return {
         ok: false,
-        reason: `Need ${ing.amount} ${ing.amount === 1 ? def.name : def.pluralName}`,
+        reason: formatTpl(t.gameMessages.toasts.craftMissingMaterial, {
+          qty: ing.amount,
+          name: itemName,
+          have,
+        }),
       };
     }
   }
@@ -78,7 +84,10 @@ export function canCraftRecipe(
   if (netAfter > packCapacity) {
     return {
       ok: false,
-      reason: `Pack full (${currentItems}/${packCapacity})`,
+      reason: formatTpl(t.gameMessages.toasts.craftPackFull, {
+        used: currentItems,
+        cap: packCapacity,
+      }),
     };
   }
 
@@ -90,12 +99,13 @@ export function craftWorkbenchRecipe(
   inventory: InventoryState,
   packCapacity: number
 ): WorkbenchCraftResult {
+  const t = getTranslations();
   const recipe = WORKBENCH_RECIPES.find((r) => r.id === recipeId);
   if (!recipe) {
     return {
       ok: false,
       nextInventory: inventory,
-      message: 'Unknown workbench recipe',
+      message: t.gameMessages.toasts.cannotCraftUnknown,
       tone: 'warning',
     };
   }
@@ -105,7 +115,7 @@ export function craftWorkbenchRecipe(
     return {
       ok: false,
       nextInventory: inventory,
-      message: check.reason ?? 'Cannot craft right now',
+      message: check.reason ?? t.gameMessages.toasts.cannotCraftUnknown,
       tone: 'warning',
     };
   }
@@ -125,16 +135,24 @@ export function craftWorkbenchRecipe(
     return {
       ok: false,
       nextInventory: inventory,
-      message: `Pack full (${getTotalInventoryItems(inventory)}/${packCapacity})`,
+      message: formatTpl(t.gameMessages.toasts.craftPackFull, {
+        used: getTotalInventoryItems(inventory),
+        cap: packCapacity,
+      }),
       tone: 'warning',
     };
   }
 
-  const outDef = RESOURCE_DEFINITIONS[recipe.outputResourceId];
+  const recipeTitle = t.recipes[recipe.id]?.name ?? recipe.name;
+  const outName = tResourceName(recipe.outputResourceId, recipe.outputAmount);
   return {
     ok: true,
     nextInventory: addRes.nextInventory,
-    message: `Crafted +${recipe.outputAmount} ${outDef.name}`,
+    message: formatTpl(t.gameMessages.toasts.craftedSuccess, {
+      name: recipeTitle,
+      qty: recipe.outputAmount,
+      output: outName,
+    }),
     tone: 'resource',
   };
 }

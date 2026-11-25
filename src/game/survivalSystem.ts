@@ -1,7 +1,8 @@
 import { clamp } from './collision';
-import { consumeInventoryResource, RESOURCE_DEFINITIONS } from './resources';
+import { consumeInventoryResource } from './resources';
 import { SavedSurvivalState } from './saveSystem';
 import { InventoryState, ResourceId } from './types';
+import { formatTpl, getTranslations, tResourceName } from '../i18n';
 
 export interface SurvivalConfig {
   maxHealth: number;
@@ -207,17 +208,18 @@ export class SurvivalSystem {
   }
 
   public toggleRest(): { isResting: boolean; message: string } {
+    const t = getTranslations();
     this.isResting = !this.isResting;
     if (this.isResting) {
       this.idleCalmTimer = this.cfg.idleCalmDelaySec;
       return {
         isResting: true,
-        message: 'Resting to recover energy',
+        message: t.gameMessages.toasts.restStarted,
       };
     }
     return {
       isResting: false,
-      message: 'Stopped resting',
+      message: t.gameMessages.toasts.restStopped,
     };
   }
 
@@ -317,12 +319,9 @@ export class SurvivalSystem {
       healthDrain += this.cfg.dehydrationHealthDrainPerSec;
     }
     if (healthDrain > 0) {
+      const surv = getTranslations().gameMessages.survival;
       const reason =
-        this.thirst <= 0 && this.hunger <= 0
-          ? 'Succumbed to starvation and dehydration'
-          : this.thirst <= 0
-            ? 'Died of dehydration'
-            : 'Starved to death';
+        this.thirst <= 0 ? surv.deathDehydration : surv.deathStarvation;
       this.takeDamage(healthDrain * dt, reason);
     }
 
@@ -332,13 +331,14 @@ export class SurvivalSystem {
   }
 
   public consumeItem(resourceId: ResourceId, inventory: InventoryState): ConsumeResult {
+    const t = getTranslations();
     const def = CONSUMABLE_DEFINITIONS[resourceId];
-    const resourceMeta = RESOURCE_DEFINITIONS[resourceId];
+    const itemName = tResourceName(resourceId, 1);
     if (!def) {
       return {
         consumed: false,
         nextInventory: inventory,
-        message: `${resourceMeta.name} cannot be consumed directly`,
+        message: formatTpl(t.gameMessages.toasts.consumeCantUse, { name: itemName }),
         tone: 'world',
       };
     }
@@ -348,52 +348,67 @@ export class SurvivalSystem {
       return {
         consumed: false,
         nextInventory: inventory,
-        message: `No ${resourceMeta.name} left`,
+        message: formatTpl(t.gameMessages.toasts.consumeNothingLeft, { name: itemName }),
         tone: 'world',
       };
     }
 
+    let message = '';
     if (def.targetStat === 'hunger') {
       if (this.hunger >= this.cfg.maxHunger - 0.5) {
         return {
           consumed: false,
           nextInventory: inventory,
-          message: 'Hunger is already full',
+          message: t.gameMessages.toasts.consumeAlreadyFull,
           tone: 'world',
         };
       }
       this.hunger = clamp(this.hunger + def.restoreAmount, 0, this.cfg.maxHunger);
       if (this.hunger > 0) this.warnedStarving = false;
       if (this.hunger > this.cfg.criticalThreshold + 5) this.warnedHungerCrit = false;
+      message = formatTpl(t.gameMessages.toasts.consumeAteFood, {
+        name: itemName,
+        hunger: def.restoreAmount,
+        hp: 0,
+      });
     } else if (def.targetStat === 'thirst') {
       if (this.thirst >= this.cfg.maxThirst - 0.5) {
         return {
           consumed: false,
           nextInventory: inventory,
-          message: 'Thirst is already full',
+          message: t.gameMessages.toasts.consumeAlreadyFull,
           tone: 'world',
         };
       }
       this.thirst = clamp(this.thirst + def.restoreAmount, 0, this.cfg.maxThirst);
       if (this.thirst > 0) this.warnedDehydrated = false;
       if (this.thirst > this.cfg.criticalThreshold + 5) this.warnedThirstCrit = false;
+      message = formatTpl(t.gameMessages.toasts.consumeDrankWater, {
+        name: itemName,
+        thirst: def.restoreAmount,
+        stam: 0,
+      });
     } else {
       if (this.health >= this.cfg.maxHealth - 0.5) {
         return {
           consumed: false,
           nextInventory: inventory,
-          message: 'Health is already full',
+          message: t.gameMessages.toasts.consumeAlreadyFull,
           tone: 'world',
         };
       }
       this.health = clamp(this.health + def.restoreAmount, 0, this.cfg.maxHealth);
+      message = formatTpl(t.gameMessages.toasts.consumeUsedMed, {
+        name: itemName,
+        hp: def.restoreAmount,
+      });
     }
 
     const nextInventory = consumeInventoryResource(inventory, resourceId, 1);
     return {
       consumed: true,
       nextInventory,
-      message: `${def.verbPast} ${resourceMeta.name} (${def.effectLabel})`,
+      message,
       tone: 'resource',
       soundKind: def.soundKind,
     };
@@ -402,6 +417,7 @@ export class SurvivalSystem {
   private evaluateWarnings(): SurvivalNotification | null {
     const crit = this.cfg.criticalThreshold;
     const clearBuffer = crit + 5;
+    const surv = getTranslations().gameMessages.survival;
 
     // Reset edge flags once recovered cleanly above hysteresis buffer
     if (this.hunger > 5) this.warnedStarving = false;
@@ -420,7 +436,7 @@ export class SurvivalSystem {
         this.warnedDehydrated = true;
         this.warnedThirstCrit = true;
         this.lastWarningAt = this.elapsedSec;
-        return { text: 'Dehydrated — Thirst at 0%, losing health', tone: 'warning' };
+        return { text: surv.thirstNoticeCritical, tone: 'warning' };
       }
       return null;
     }
@@ -430,7 +446,7 @@ export class SurvivalSystem {
         this.warnedStarving = true;
         this.warnedHungerCrit = true;
         this.lastWarningAt = this.elapsedSec;
-        return { text: 'Starving — Hunger at 0%, losing health', tone: 'warning' };
+        return { text: surv.hungerNoticeCritical, tone: 'warning' };
       }
       return null;
     }
@@ -438,19 +454,19 @@ export class SurvivalSystem {
     if (this.thirst <= crit && canEmit(!this.warnedThirstCrit)) {
       this.warnedThirstCrit = true;
       this.lastWarningAt = this.elapsedSec;
-      return { text: 'Critical Thirst — Drink water soon', tone: 'warning' };
+      return { text: surv.thirstNoticeCritical, tone: 'warning' };
     }
 
     if (this.hunger <= crit && canEmit(!this.warnedHungerCrit)) {
       this.warnedHungerCrit = true;
       this.lastWarningAt = this.elapsedSec;
-      return { text: 'Critical Hunger — Eat canned food soon', tone: 'warning' };
+      return { text: surv.hungerNoticeCritical, tone: 'warning' };
     }
 
     if (this.energy <= crit && !this.isResting && canEmit(!this.warnedEnergyLow)) {
       this.warnedEnergyLow = true;
       this.lastWarningAt = this.elapsedSec;
-      return { text: 'Low Energy — Rest to recover faster', tone: 'warning' };
+      return { text: surv.exhaustedNotice, tone: 'warning' };
     }
 
     return null;

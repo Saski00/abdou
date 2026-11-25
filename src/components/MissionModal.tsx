@@ -12,9 +12,10 @@ import {
 } from 'lucide-react';
 import { formatMoney } from '../game/economy';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { RESOURCE_DEFINITIONS, RESOURCE_ORDER } from '../game/resources';
+import { RESOURCE_ORDER } from '../game/resources';
 import { HudSnapshot, MissionSummary } from '../game/types';
-import { LOCATION_BY_ID, getBearingLabel } from '../game/worldLocations';
+import { LOCATION_BY_ID, getLocalizedBearingLabel, getLocalizedLocation } from '../game/worldLocations';
+import { formatTpl, tClue, tMission, tResourceName, useI18n } from '../i18n';
 
 interface MissionModalProps {
   hud: HudSnapshot;
@@ -25,38 +26,48 @@ interface MissionModalProps {
 
 type MissionTab = 'main' | 'side' | 'clues';
 
-function formatRewardLine(mission: MissionSummary): string[] {
-  const parts: string[] = [];
-  if (mission.rewards.money && mission.rewards.money > 0) {
-    parts.push(`+${formatMoney(mission.rewards.money)}`);
-  }
-  if (mission.rewards.resources) {
-    for (const id of RESOURCE_ORDER) {
-      const qty = mission.rewards.resources[id] ?? 0;
-      if (qty > 0) {
-        parts.push(`+${qty} ${RESOURCE_DEFINITIONS[id].name}`);
-      }
-    }
-  }
-  if (mission.rewards.clueTitle) {
-    parts.push(`Clue: ${mission.rewards.clueTitle}`);
-  }
-  if (mission.rewards.unlockText) {
-    parts.push(mission.rewards.unlockText);
-  }
-  return parts;
-}
-
 export function MissionModal({
   hud,
   isTouchMode,
   onTrackMission,
   onClose,
 }: MissionModalProps) {
+  const { dir, t } = useI18n();
+  const misCopy = t.missionModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const [tab, setTab] = useState<MissionTab>('main');
   const { missions } = hud;
+
+  const formatRewardLine = (mission: MissionSummary): string[] => {
+    const parts: string[] = [];
+    const mLoc = tMission(mission.id);
+    if (mission.rewards.money && mission.rewards.money > 0) {
+      parts.push(`+${formatMoney(mission.rewards.money)}`);
+    }
+    if (mission.rewards.resources) {
+      for (const id of RESOURCE_ORDER) {
+        const qty = mission.rewards.resources[id] ?? 0;
+        if (qty > 0) {
+          parts.push(`+${qty} ${tResourceName(id, qty)}`);
+        }
+      }
+    }
+    if (mission.rewards.clueId) {
+      const cLoc = tClue(mission.rewards.clueId);
+      const clueTitle = cLoc?.title ?? mission.rewards.clueTitle;
+      if (clueTitle) {
+        parts.push(formatTpl(misCopy.clueRewardPrefix, { title: clueTitle }));
+      }
+    } else if (mission.rewards.clueTitle) {
+      parts.push(formatTpl(misCopy.clueRewardPrefix, { title: mission.rewards.clueTitle }));
+    }
+    const unlockText = mLoc?.unlockText ?? mission.rewards.unlockText;
+    if (unlockText) {
+      parts.push(unlockText);
+    }
+    return parts;
+  };
 
   const mainMissions = useMemo(
     () =>
@@ -78,6 +89,7 @@ export function MissionModal({
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="mission-modal-title"
@@ -105,24 +117,28 @@ export function MissionModal({
               <Compass className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
               <h2
                 id="mission-modal-title"
-                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate ${
+                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate uppercase ${
                   isCompactLandscape ? 'text-xl' : 'text-2xl sm:text-3xl'
                 }`}
               >
-                THE ASHFALL SIGNAL
+                {misCopy.headerTitle}
               </h2>
             </div>
             <p className="text-xs text-stone-400 mt-1 font-mono-tabular">
-              Story {missions.mainCompletedCount}/{missions.mainTotalCount} · Side{' '}
-              {missions.sideCompletedCount}/{missions.sideTotalCount} · Clues{' '}
-              {missions.clues.length}
-              {missions.endingCompleted ? ' · Beacon Online' : ''}
+              {formatTpl(misCopy.headerSummary, {
+                mainDone: missions.mainCompletedCount,
+                mainTotal: missions.mainTotalCount,
+                sideDone: missions.sideCompletedCount,
+                sideTotal: missions.sideTotalCount,
+                clues: missions.clues.length,
+              })}
+              {missions.endingCompleted ? misCopy.beaconOnlineSuffix : ''}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close missions log"
+            aria-label={misCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -145,10 +161,10 @@ export function MissionModal({
             }`}
           >
             <ScrollText className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>Main Story</span>
-            <span className="font-mono-tabular text-[11px] opacity-80">
+            <span>{misCopy.tabMainStory}</span>
+            <bdi dir="ltr" className="font-mono-tabular text-[11px] opacity-80">
               {missions.mainCompletedCount}/{missions.mainTotalCount}
-            </span>
+            </bdi>
           </button>
 
           <button
@@ -161,10 +177,10 @@ export function MissionModal({
             }`}
           >
             <Sparkles className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>Side Missions</span>
-            <span className="font-mono-tabular text-[11px] opacity-80">
+            <span>{misCopy.tabSideMissions}</span>
+            <bdi dir="ltr" className="font-mono-tabular text-[11px] opacity-80">
               {missions.sideCompletedCount}/{missions.sideTotalCount}
-            </span>
+            </bdi>
           </button>
 
           <button
@@ -177,10 +193,10 @@ export function MissionModal({
             }`}
           >
             <BookOpen className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>Story Clues</span>
-            <span className="font-mono-tabular text-[11px] opacity-80">
+            <span>{misCopy.tabStoryClues}</span>
+            <bdi dir="ltr" className="font-mono-tabular text-[11px] opacity-80">
               {missions.clues.length}
-            </span>
+            </bdi>
           </button>
         </div>
 
@@ -189,27 +205,34 @@ export function MissionModal({
           {tab === 'clues' ? (
             missions.clues.length === 0 ? (
               <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-6 text-center">
-                <p className="text-sm text-stone-300 font-medium">No story clues recovered yet.</p>
-                <p className="text-xs text-stone-400 mt-1">
-                  Inspect radios, ledgers, and journals around District 04 to piece together what happened.
-                </p>
+                <p className="text-sm text-stone-300 font-medium">{misCopy.noCluesTitle}</p>
+                <p className="text-xs text-stone-400 mt-1">{misCopy.noCluesDesc}</p>
               </div>
             ) : (
-              missions.clues.map((clue) => (
-                <div
-                  key={clue.id}
-                  className="rounded-lg border border-stone-700/70 bg-[#141b27] p-3.5 space-y-1.5"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-bold text-amber-300">{clue.title}</h3>
-                    <span className="font-mono-tabular text-[11px] text-stone-400 shrink-0">
-                      Day {clue.discoveredDay}
-                    </span>
+              missions.clues.map((clue) => {
+                const cLoc = tClue(clue.id);
+                return (
+                  <div
+                    key={clue.id}
+                    className="rounded-lg border border-stone-700/70 bg-[#141b27] p-3.5 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-bold text-amber-300">
+                        {cLoc?.title ?? clue.title}
+                      </h3>
+                      <span className="font-mono-tabular text-[11px] text-stone-400 shrink-0">
+                        {formatTpl(t.common.dayLabel, { day: clue.discoveredDay })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 font-medium">
+                      {cLoc?.source ?? clue.source}
+                    </p>
+                    <p className="text-xs sm:text-sm text-stone-200 leading-relaxed">
+                      {cLoc?.body ?? clue.body}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-stone-400 font-medium">{clue.source}</p>
-                  <p className="text-xs sm:text-sm text-stone-200 leading-relaxed">{clue.body}</p>
-                </div>
-              ))
+                );
+              })
             )
           ) : (
             visibleMissions.map((mission) => {
@@ -218,6 +241,7 @@ export function MissionModal({
               const isTracked = mission.tracked;
               const canTrack = mission.status === 'active' || mission.status === 'available';
               const rewardLines = formatRewardLine(mission);
+              const mLoc = tMission(mission.id);
 
               return (
                 <div
@@ -234,9 +258,9 @@ export function MissionModal({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-[11px] font-mono-tabular text-stone-400">
+                      <div className="flex items-center gap-2 text-[11px] font-mono-tabular text-stone-400 flex-wrap">
                         <span className="text-amber-300/90 font-semibold">
-                          {mission.chapterLabel}
+                          {mLoc?.chapterLabel ?? mission.chapterLabel}
                         </span>
                         <span aria-hidden="true">·</span>
                         <span
@@ -251,32 +275,40 @@ export function MissionModal({
                           }
                         >
                           {isCompleted
-                            ? 'Completed'
+                            ? misCopy.completedBadge
                             : isLocked
-                              ? 'Locked'
+                              ? misCopy.lockedBadge
                               : isTracked
-                                ? 'Tracked'
-                                : 'Active'}
+                                ? misCopy.trackedBadge
+                                : misCopy.activeBadge}
                         </span>
                         {!isLocked && mission.targetZoneId && LOCATION_BY_ID[mission.targetZoneId] && (() => {
-                          const z = LOCATION_BY_ID[mission.targetZoneId!];
+                          const z =
+                            getLocalizedLocation(mission.targetZoneId!) ??
+                            LOCATION_BY_ID[mission.targetZoneId!];
                           const isKnown = hud.discoveredLocationIds.includes(z.id);
                           const dx = z.x - hud.playerX;
                           const dz = z.z - hud.playerZ;
-                          const bearing = getBearingLabel(dx, dz);
+                          const bearing = getLocalizedBearingLabel(dx, dz);
                           const dist = Math.round(Math.hypot(dx, dz));
                           return (
                             <>
                               <span aria-hidden="true">·</span>
                               <span className="text-stone-400 truncate">
-                                {isKnown ? `${z.shortName} (${bearing} ${dist}m)` : `Signal ${bearing} · ${dist}m`}
+                                {isKnown
+                                  ? formatTpl(misCopy.knownBearingDist, {
+                                      name: z.shortName,
+                                      bearing,
+                                      dist,
+                                    })
+                                  : formatTpl(misCopy.signalBearingDist, { bearing, dist })}
                               </span>
                             </>
                           );
                         })()}
                       </div>
                       <h3 className="text-sm sm:text-base font-bold text-stone-100 mt-0.5">
-                        {isLocked ? 'Locked Story Chapter' : mission.title}
+                        {isLocked ? misCopy.lockedChapterTitle : (mLoc?.title ?? mission.title)}
                       </h3>
                     </div>
 
@@ -291,29 +323,29 @@ export function MissionModal({
                         }`}
                       >
                         <Target className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                        <span>{isTracked ? 'Tracking' : 'Track'}</span>
+                        <span>{isTracked ? misCopy.trackingBtn : misCopy.trackBtn}</span>
                       </button>
                     )}
 
                     {isCompleted && (
                       <span className="h-9 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1 shrink-0">
                         <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Done</span>
+                        <span>{misCopy.doneBadge}</span>
                       </span>
                     )}
 
                     {isLocked && (
                       <span className="h-9 px-2.5 rounded-md bg-stone-900 border border-stone-800 text-stone-500 text-xs font-medium flex items-center gap-1 shrink-0">
                         <Lock className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Locked</span>
+                        <span>{misCopy.lockedBadge}</span>
                       </span>
                     )}
                   </div>
 
                   <p className="text-xs sm:text-sm text-stone-300 mt-1.5 leading-relaxed">
                     {isLocked
-                      ? 'Complete earlier story chapters to unlock this mission.'
-                      : mission.description}
+                      ? misCopy.lockedChapterDesc
+                      : (mLoc?.description ?? mission.description)}
                   </p>
 
                   {!isLocked && (
@@ -340,23 +372,25 @@ export function MissionModal({
                                 obj.completed ? 'text-stone-400 line-through' : 'text-stone-200'
                               }`}
                             >
-                              {obj.optional ? 'Optional: ' : ''}
-                              {obj.description}
+                              {obj.optional ? misCopy.optionalPrefix : ''}
+                              {mLoc?.objectiveLabels[obj.id] ?? obj.description}
                             </span>
                           </div>
-                          <span
+                          <bdi
+                            dir="ltr"
                             className={`font-mono-tabular font-semibold shrink-0 ${
                               obj.completed ? 'text-emerald-300' : 'text-amber-300'
                             }`}
                           >
                             {Math.min(obj.current, obj.target)}/{obj.target}
-                          </span>
+                          </bdi>
                         </div>
                       ))}
 
                       {rewardLines.length > 0 && (
                         <div className="pt-1.5 text-[11px] text-stone-400 font-mono-tabular">
-                          Rewards: <span className="text-emerald-300">{rewardLines.join(' · ')}</span>
+                          {misCopy.rewardsPrefix}{' '}
+                          <span className="text-emerald-300">{rewardLines.join(' · ')}</span>
                         </div>
                       )}
                     </div>
@@ -373,15 +407,15 @@ export function MissionModal({
             isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
           }`}
         >
-          <span className="text-xs text-stone-400 font-mono-tabular">
-            {isTouchMode ? 'Tap Track to pin on HUD' : 'M or Esc to close'}
+          <span className="text-xs text-stone-400 font-mono-tabular truncate">
+            {isTouchMode ? misCopy.footerTouch : misCopy.footerDesktop}
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="h-11 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs sm:text-sm cursor-pointer transition-colors"
+            className="h-11 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs sm:text-sm cursor-pointer transition-colors shrink-0"
           >
-            Close
+            {misCopy.closeBtn}
           </button>
         </div>
       </div>

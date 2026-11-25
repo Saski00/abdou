@@ -72,6 +72,7 @@ export interface SavedWorldInteractablesState {
   searchedContainerIds: string[];
   collectedKeyIds?: string[];
   unlockedDoorIds?: string[];
+  unlockedContainerIds?: string[];
   searchedExtraIds?: string[];
   examinedObjectIds?: string[];
 }
@@ -90,6 +91,7 @@ export interface SavedGameData {
   savedAtIso: string;
   day: number;
   formattedTime: string;
+  activeMissionId?: string | null;
   activeMissionTitle: string;
   player: SavedPlayerState;
   inventory: InventoryState;
@@ -112,6 +114,7 @@ export interface SavedGameData {
 export interface SavedGameSummary {
   day: number;
   formattedTime: string;
+  activeMissionId?: string | null;
   activeMissionTitle: string;
   money: number;
   shopLevel: number;
@@ -173,6 +176,7 @@ export function getSavedGameSummary(): SavedGameSummary | null {
   return {
     day: Math.max(1, Math.floor(data.day || 1)),
     formattedTime: data.formattedTime || '08:00',
+    activeMissionId: data.activeMissionId ?? data.missions?.trackedMissionId ?? null,
     activeMissionTitle: data.activeMissionTitle || 'District 04 Survivor',
     money: Math.round(data.economy?.money ?? 50),
     shopLevel: Math.max(1, Math.floor(data.economy?.shopLevel ?? 1)),

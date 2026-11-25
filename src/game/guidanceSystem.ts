@@ -1,4 +1,5 @@
 import { GuidanceHintSummary } from './types';
+import { tGuidanceHint } from '../i18n';
 
 export interface GuidanceContext {
   playerDistanceMoved: number;
@@ -237,10 +238,11 @@ export class GuidanceSystem {
     }
 
     this.activeHintId = best.id;
+    const locHint = tGuidanceHint(best.id);
     return {
       id: best.id,
-      title: best.title,
-      message: best.getMessage(ctx.isTouchMode),
+      title: locHint?.title ?? best.title,
+      message: locHint?.message ?? best.getMessage(ctx.isTouchMode),
     };
   }
 }

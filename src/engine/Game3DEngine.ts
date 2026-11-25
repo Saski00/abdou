@@ -6,9 +6,9 @@ import { NEIGHBORHOOD_MAP } from '../assets/maps/neighborhoodMap';
 import { createMaterialPalette } from '../assets/models/proceduralModels';
 import { createProceduralTextureSet } from '../assets/textures/proceduralTextures';
 import {
-  RESOURCE_DEFINITIONS,
   RESOURCE_ORDER,
   addInventoryResource,
+  addInventoryResourceCapped,
   createInitialInventory,
   createStarterInventory,
   getPackCapacity,
@@ -44,7 +44,25 @@ import { WeatherSystem } from '../game/weatherSystem';
 import { GuidanceSystem } from '../game/guidanceSystem';
 import { craftWorkbenchRecipe as runWorkbenchRecipe } from '../game/craftingSystem';
 import { computeResponsiveCameraFov } from '../game/responsiveLayout';
-import { LOCATION_BY_ID, REGION_BY_ID, getLocationAtPosition, getRegionAtPosition } from '../game/worldLocations';
+import {
+  LOCATION_BY_ID,
+  REGION_BY_ID,
+  getLocalizedLocation,
+  getLocalizedRegion,
+  getLocationAtPosition,
+  getRegionAtPosition,
+} from '../game/worldLocations';
+import {
+  formatTpl,
+  getLanguage,
+  getTranslations,
+  setLanguage,
+  tContextZone,
+  tDayPhase,
+  tMission,
+  tResource,
+  tWeaponLabel,
+} from '../i18n';
 import { AssetManager } from './AssetManager';
 import { AtmosphereManager } from './AtmosphereManager';
 import { CustomerManager } from './CustomerManager';
@@ -160,6 +178,7 @@ export class Game3DEngine {
   private attackPulseId = 0;
   private recentCombatTimer = 0;
   private moveNoiseCooldown = 0;
+  private lastInteractAtMs = 0;
   private lastSalesSnapshotCount = 0;
   private lastReplenishDay = 1;
 
@@ -185,6 +204,7 @@ export class Game3DEngine {
   ) {
     this.container = container;
     this.settings = { ...initialSettings };
+    setLanguage(this.settings.language);
     this.sound = sound;
     this.callbacks = callbacks;
 
@@ -568,11 +588,12 @@ export class Game3DEngine {
     if (!isTouchMode) {
       this.controller.requestPointerLock();
     }
+    const t = getTranslations();
     this.showContextMessage(
-      'District 04 · Outside The Last Shop',
+      t.gameMessages.toasts.introTitle,
       isTouchMode
-        ? 'Your backup-powered shop is right ahead. Step inside and stock 2 supplies onto shelves to signal surviving neighbors.'
-        : 'Click viewport to look · Move with WASD · Step inside The Last Shop ahead to open for business.',
+        ? t.gameMessages.toasts.introTouchMsg
+        : t.gameMessages.toasts.introDesktopMsg,
       6.5
     );
     this.emitHud(true);
@@ -582,18 +603,20 @@ export class Game3DEngine {
     if (this.screenState !== 'PLAYING' && this.screenState !== 'PAUSED') {
       return false;
     }
+    const t = getTranslations();
     const timeSnap = this.timeSystem.getSnapshot();
     const ctx = this.buildMissionContext();
     const missionSnap = this.missions.getSnapshot(ctx, true);
     const activeTitle =
       missionSnap.trackedMission?.title ??
-      (this.missions.endingCompleted ? 'District 04 Rebuilt (Freeplay)' : 'District 04');
+      (this.missions.endingCompleted ? t.gameMessages.toasts.loadedFallbackMsg : 'District 04');
 
     const payload: SavedGameData = {
       version: CURRENT_SAVE_VERSION,
       savedAtIso: new Date().toISOString(),
       day: timeSnap.day,
       formattedTime: timeSnap.formattedTime,
+      activeMissionId: missionSnap.trackedMissionId ?? null,
       activeMissionTitle: activeTitle,
       player: {
         x: this.controller.position.x,
@@ -622,7 +645,10 @@ export class Game3DEngine {
     const ok = saveGameToStorage(payload);
     if (ok && showToast) {
       this.interactions.pushToast(
-        `Game saved (Day ${timeSnap.day} · ${timeSnap.formattedTime})`,
+        formatTpl(t.gameMessages.toasts.dayEndedFreeplay, {
+          day: timeSnap.day,
+          time: timeSnap.formattedTime,
+        }),
         'resource',
         2.4
       );
@@ -632,9 +658,10 @@ export class Game3DEngine {
   }
 
   public loadSavedGame(isTouchMode = false): boolean {
+    const t = getTranslations();
     const saved = loadGameFromStorage();
     if (!saved) {
-      this.interactions.pushToast('No saved game found', 'warning', 2.4);
+      this.interactions.pushToast(t.gameMessages.toasts.noSaveFound, 'warning', 2.4);
       this.emitHud(true);
       return false;
     }
@@ -729,9 +756,16 @@ export class Game3DEngine {
       this.controller.requestPointerLock();
     }
     const timeSnap = this.timeSystem.getSnapshot();
+    const localizedMissionTitle =
+      (saved.activeMissionId ? tMission(saved.activeMissionId)?.title : null) ??
+      saved.activeMissionTitle ??
+      t.gameMessages.toasts.loadedFallbackMsg;
     this.showContextMessage(
-      `Loaded Day ${timeSnap.day} · ${timeSnap.formattedTime}`,
-      saved.activeMissionTitle || 'Continue exploring District 04.',
+      formatTpl(t.gameMessages.toasts.loadedTitle, {
+        day: timeSnap.day,
+        time: timeSnap.formattedTime,
+      }),
+      localizedMissionTitle,
       4.5
     );
     this.emitHud(true);
@@ -880,9 +914,10 @@ export class Game3DEngine {
 
     const alreadyCalibrated = this.missions.isStoryObjectActivated('story_final_relay');
     if (!alreadyCalibrated) {
+      const t = getTranslations();
       if (!this.missions.canDeliverRelayMaterials('story_final_relay', this.interactions.inventory)) {
         this.sound.playUiClick(360);
-        this.interactions.pushToast('Need 2 Scrap Metal & 2 Wood in pack', 'warning', 2.4);
+        this.interactions.pushToast(t.gameMessages.toasts.needRelayMaterials, 'warning', 2.4);
         return this.missions.buildStoryInspectionData('story_final_relay', this.interactions.inventory);
       }
       this.interactions.inventory = this.missions.consumeRelayMaterials(
@@ -890,7 +925,7 @@ export class Game3DEngine {
         this.interactions.inventory
       );
       this.sound.playStockTransfer();
-      this.interactions.pushToast('Emergency Relay calibrated! Defend the Roadblock!', 'resource', 3.4);
+      this.interactions.pushToast(t.gameMessages.toasts.relayCalibrated, 'resource', 3.4);
       this.processMissionEvent({
         type: 'interact_story_object',
         objectId: 'story_final_relay',
@@ -1113,18 +1148,19 @@ export class Game3DEngine {
       if (res.ok) movedTotal += qty;
     }
 
+    const t = getTranslations();
     if (movedTotal > 0) {
       this.world.syncShopDisplayStock(this.economy.getShopStock(), this.economy.getShopLevel());
       this.sound.playStockTransfer();
       this.interactions.pushToast(
-        `Moved ${movedTotal} stored items onto shop shelves`,
+        formatTpl(t.gameMessages.toasts.movedStoredToShelves, { count: movedTotal }),
         'resource',
         2.5
       );
       this.processMissionEvent({ type: 'shop_sync' });
     } else {
       this.sound.playUiClick(360);
-      this.interactions.pushToast('Backroom storage is empty', 'warning', 2.2);
+      this.interactions.pushToast(t.gameMessages.toasts.storageEmpty, 'warning', 2.2);
     }
     this.emitHud(true);
   }
@@ -1203,12 +1239,13 @@ export class Game3DEngine {
 
   public toggleShopManualOpen(): void {
     if (this.screenState !== 'PLAYING') return;
+    const t = getTranslations();
     const timeLabel = this.timeSystem.getSnapshot().formattedTime;
     const next = !this.economy.isShopManualOpen();
     this.economy.setShopManualOpen(next, timeLabel);
     this.sound.playUiClick(next ? 560 : 420);
     this.interactions.pushToast(
-      next ? 'Shop open for survivor customers' : 'Shop closed to customers',
+      next ? t.gameMessages.toasts.shopOpenedToast : t.gameMessages.toasts.shopClosedToast,
       'world',
       2.4
     );
@@ -1217,16 +1254,23 @@ export class Game3DEngine {
 
   public triggerInteract(): void {
     if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastInteractAtMs < 180) return;
+    this.lastInteractAtMs = nowMs;
+
     this.sound.unlock();
     this.sound.startAmbience();
-    const targetKind = this.interactions.targeted?.kind;
+    const target = this.interactions.targeted;
+    const targetKind = target?.kind;
+    const wasAlreadySearched =
+      (target?.kind === 'vehicle' || target?.kind === 'searchable_prop') && target.searched;
+
     if (this.interactions.interact()) {
       const emitsPhysicalNoise =
         targetKind === 'door' ||
         targetKind === 'container' ||
-        targetKind === 'vehicle' ||
-        targetKind === 'searchable_prop' ||
-        targetKind === 'resource';
+        targetKind === 'resource' ||
+        ((targetKind === 'vehicle' || targetKind === 'searchable_prop') && !wasAlreadySearched);
       if (emitsPhysicalNoise) {
         this.zombies.emitNoise({
           x: this.controller.position.x,
@@ -1256,17 +1300,18 @@ export class Game3DEngine {
     this.hasAttacked = true;
     this.attackPulseId += 1;
     this.recentCombatTimer = 2.8;
+    const t = getTranslations();
     if (result.killed) {
-      this.interactions.pushToast('Infected defeated', 'resource', 2.2);
+      this.interactions.pushToast(t.gameMessages.toasts.infectedDefeated, 'resource', 2.2);
       this.processMissionEvent({ type: 'kill_zombie', surgeId: killedSurgeId });
     } else if (result.hit) {
       this.interactions.pushToast(
-        `Hit Infected (-${result.damageDealt} HP)`,
+        formatTpl(t.gameMessages.toasts.hitInfected, { dmg: result.damageDealt }),
         'resource',
         1.8
       );
     } else {
-      this.interactions.pushToast('Swing missed', 'world', 1.4);
+      this.interactions.pushToast(t.gameMessages.toasts.swingMissed, 'world', 1.4);
     }
     this.emitHud(true);
   }
@@ -1352,7 +1397,12 @@ export class Game3DEngine {
   }
 
   public updateSettings(next: GameSettings): void {
+    const prevLang = this.settings.language;
     this.settings = { ...next };
+    setLanguage(next.language);
+    if (next.language !== prevLang) {
+      this.staff.refreshLocalization();
+    }
     this.sound.setSettings(next.masterVolume, next.muted);
     this.controller.setSensitivity(next.mouseSensitivity);
     this.timeSystem.setDayLengthSeconds(
@@ -1454,7 +1504,9 @@ export class Game3DEngine {
       );
       if (respawned > 0) {
         this.interactions.pushToast(
-          `Day ${timeSnap.day}: Fresh infected spotted on the outer streets`,
+          formatTpl(getTranslations().gameMessages.toasts.freshInfectedNewDay, {
+            day: timeSnap.day,
+          }),
           'world',
           3.0
         );
@@ -1541,12 +1593,16 @@ export class Game3DEngine {
     }
 
     if (zombieTick.playerDamage > 0) {
-      const dealt = this.survival.takeDamage(zombieTick.playerDamage, 'Killed by infected');
+      const t = getTranslations();
+      const dealt = this.survival.takeDamage(
+        zombieTick.playerDamage,
+        t.gameMessages.survival.deathInfected
+      );
       if (dealt > 0) {
         this.damagePulseId += 1;
         this.recentCombatTimer = 3.5;
         this.interactions.pushToast(
-          `Attacked by infected (-${Math.round(dealt)} HP)`,
+          formatTpl(t.gameMessages.toasts.attackedByInfected, { dmg: Math.round(dealt) }),
           'warning',
           2.2
         );
@@ -1565,7 +1621,9 @@ export class Game3DEngine {
       this.controller.exitPointerLock();
       this.sound.setAmbienceActive(false);
       this.zombies.setFirstPersonWeaponVisible(false);
-      this.callbacks.onGameOver(this.survival.deathReason || 'You died');
+      this.callbacks.onGameOver(
+        this.survival.deathReason || getTranslations().gameMessages.survival.deathFallback
+      );
       this.emitHud(true);
       return;
     }
@@ -1586,6 +1644,7 @@ export class Game3DEngine {
       this.sound.playShopBell();
     }
 
+    const t = getTranslations();
     const loc = getLocationAtPosition(px, pz);
     this.currentLocationId = loc?.id ?? (this.insideShop ? 'last_shop' : null);
     let forceHudFromDiscovery = false;
@@ -1593,34 +1652,56 @@ export class Game3DEngine {
     if (loc && !this.discoveredLocationIds.has(loc.id)) {
       this.discoveredLocationIds.add(loc.id);
       this.discoveredRegionIds.add(loc.regionId);
-      const regionDef = REGION_BY_ID[loc.regionId];
+      const locLocalized = getLocalizedLocation(loc.id) ?? loc;
+      const regionDef = getLocalizedRegion(loc.regionId);
       let rewardText = '';
+      let discoveryOverflow = false;
       if (loc.discoveryReward && !this.claimedDiscoveryRewardIds.has(loc.id)) {
         this.claimedDiscoveryRewardIds.add(loc.id);
+        let anyAdded = false;
+        const rewardLabel = locLocalized.discoveryRewardLabel ?? loc.discoveryReward.label;
         if (loc.discoveryReward.money && loc.discoveryReward.money > 0) {
           this.economy.grantMissionReward(
             loc.discoveryReward.money,
-            `Discovery: ${loc.name} (+${formatMoney(loc.discoveryReward.money)})`,
+            `${locLocalized.name} (+${formatMoney(loc.discoveryReward.money)})`,
             timeSnap.formattedTime
           );
+          anyAdded = true;
         }
         if (loc.discoveryReward.resources) {
+          const packCap = getPackCapacity(this.economy.getShopLevel());
           for (const id of RESOURCE_ORDER) {
             const qty = loc.discoveryReward.resources[id] ?? 0;
             if (qty > 0) {
-              this.interactions.inventory = addInventoryResource(
+              const addRes = addInventoryResourceCapped(
                 this.interactions.inventory,
                 id,
-                qty
+                qty,
+                packCap
               );
+              this.interactions.inventory = addRes.nextInventory;
+              if (addRes.added > 0) anyAdded = true;
+              if (addRes.overflow > 0) discoveryOverflow = true;
             }
           }
         }
-        rewardText = ` · ${loc.discoveryReward.label}`;
+        if (anyAdded && !discoveryOverflow) {
+          rewardText = ` · ${rewardLabel}`;
+        } else if (anyAdded && discoveryOverflow) {
+          rewardText = formatTpl(t.gameMessages.toasts.packFullPartialReward, {
+            label: rewardLabel,
+          });
+        } else if (discoveryOverflow) {
+          rewardText = t.gameMessages.toasts.packFullCacheLeft;
+        }
       }
       this.interactions.pushToast(
-        `Discovered: ${loc.name} (${regionDef.name})${rewardText}`,
-        loc.discoveryReward ? 'resource' : 'world',
+        formatTpl(t.gameMessages.toasts.discoveredLocation, {
+          loc: locLocalized.name,
+          region: regionDef.name,
+          reward: rewardText,
+        }),
+        discoveryOverflow ? 'warning' : loc.discoveryReward ? 'resource' : 'world',
         3.6
       );
       if (!this.missions.getVisitedZones().includes(loc.id)) {
@@ -1630,7 +1711,8 @@ export class Game3DEngine {
       justDiscoveredLocation = true;
     }
 
-    const activeRegion = loc ? REGION_BY_ID[loc.regionId] : getRegionAtPosition(px, pz);
+    const activeRegionRaw = loc ? REGION_BY_ID[loc.regionId] : getRegionAtPosition(px, pz);
+    const activeRegion = getLocalizedRegion(activeRegionRaw.id);
     if (activeRegion.id !== this.lastRegionId) {
       this.lastRegionId = activeRegion.id;
       const firstRegionVisit = !this.discoveredRegionIds.has(activeRegion.id);
@@ -1641,8 +1723,13 @@ export class Game3DEngine {
       if (!justDiscoveredLocation) {
         this.interactions.pushToast(
           firstRegionVisit
-            ? `Region Discovered: ${activeRegion.name} — ${activeRegion.subtitle}`
-            : `Entering ${activeRegion.name}`,
+            ? formatTpl(t.gameMessages.toasts.discoveredRegion, {
+                name: activeRegion.name,
+                subtitle: activeRegion.subtitle,
+              })
+            : formatTpl(t.gameMessages.toasts.enteringRegion, {
+                name: activeRegion.name,
+              }),
           'world',
           firstRegionVisit ? 3.2 : 2.1
         );
@@ -1778,7 +1865,12 @@ export class Game3DEngine {
       zombiesDefeated: this.zombies.zombiesDefeated,
       visitedZones: this.missions.getVisitedZones(),
       openedDoors: this.interactions.getOpenDoorIds(),
-      searchedContainers: this.interactions.getSearchedContainerIds(),
+      searchedContainers: Array.from(
+        new Set([
+          ...this.interactions.getSearchedContainerIds(),
+          ...this.interactions.getSearchedPropIds(),
+        ])
+      ),
       collectedResourceCount: this.missions.getCollectedResourceCount(),
       talkedSurvivors: this.missions.getTalkedSurvivors(),
       inspectedStoryObjects: this.missions.getInspectedStoryObjects(),
@@ -1809,20 +1901,27 @@ export class Game3DEngine {
           (o) => o.completed && !prevCompletedObjIds.has(o.id)
         );
         if (newlyDoneObj) {
-          this.interactions.pushToast(`Objective Complete: ${newlyDoneObj.description}`, 'world', 2.8);
+          this.interactions.pushToast(
+            formatTpl(getTranslations().gameMessages.toasts.objectiveComplete, {
+              desc: newlyDoneObj.description,
+            }),
+            'world',
+            2.8
+          );
         }
       }
     }
   }
 
   private applyMissionOutcome(outcome: MissionProcessOutcome): void {
+    const t = getTranslations();
     const timeLabel = this.timeSystem.getSnapshot().formattedTime;
 
     for (const reward of outcome.rewardGrants) {
       if (reward.money > 0) {
         this.economy.grantMissionReward(
           reward.money,
-          `Mission Reward: ${reward.missionTitle} (+${formatMoney(reward.money)})`,
+          `${reward.missionTitle} (+${formatMoney(reward.money)})`,
           timeLabel
         );
       }
@@ -1847,8 +1946,8 @@ export class Game3DEngine {
       this.sound.playZombieGroan();
       this.interactions.pushToast(
         outcome.triggerSurgeId === 'surge_relay'
-          ? 'Signal Surge! Clear the infected drawn to the Relay!'
-          : 'Ambush at North Roadblock! Infected closing in!',
+          ? t.gameMessages.toasts.signalSurgeToast
+          : t.gameMessages.toasts.ambushSurgeToast,
         'warning',
         3.6
       );
@@ -1862,11 +1961,14 @@ export class Game3DEngine {
       if (first.rewards.resources) {
         for (const id of RESOURCE_ORDER) {
           const q = first.rewards.resources[id] ?? 0;
-          if (q > 0) rewardParts.push(`+${q} ${RESOURCE_DEFINITIONS[id].name}`);
+          if (q > 0) rewardParts.push(`+${q} ${tResource(id).name}`);
         }
       }
       this.interactions.pushToast(
-        `Completed: ${first.title}${rewardParts.length ? ` (${rewardParts.join(', ')})` : ''}`,
+        formatTpl(t.gameMessages.toasts.missionCompletedToast, {
+          title: first.title,
+          rewards: rewardParts.length ? ` (${rewardParts.join(', ')})` : '',
+        }),
         'resource',
         3.6
       );
@@ -1941,7 +2043,8 @@ export class Game3DEngine {
         const last = this.zoneCooldowns.get(cz.id) ?? -999;
         if (this.elapsedTime - last > 30) {
           this.zoneCooldowns.set(cz.id, this.elapsedTime);
-          this.showContextMessage(cz.title, cz.message, 5.2);
+          const czLoc = tContextZone(cz.id);
+          this.showContextMessage(czLoc?.title ?? cz.title, czLoc?.message ?? cz.message, 5.2);
           break;
         }
       }
@@ -2049,17 +2152,19 @@ export class Game3DEngine {
           })
         : null;
 
-    const currentLoc = this.currentLocationId ? LOCATION_BY_ID[this.currentLocationId] : null;
-    const regionDef = currentLoc ? REGION_BY_ID[currentLoc.regionId] : getRegionAtPosition(px, pz);
+    const t = getTranslations();
+    const currentLoc = this.currentLocationId ? getLocalizedLocation(this.currentLocationId) : null;
+    const rawRegion = currentLoc ? REGION_BY_ID[currentLoc.regionId] : getRegionAtPosition(px, pz);
+    const regionDef = getLocalizedRegion(rawRegion.id);
     const currentLocationName = currentLoc
       ? currentLoc.name
       : indoors
-        ? 'Building Interior'
-        : `${regionDef.name} Streets`;
+        ? t.gameMessages.locationsFallback.buildingInterior
+        : formatTpl(t.gameMessages.locationsFallback.streetsSuffix, { region: regionDef.name });
     const currentLocationSubtitle = currentLoc
       ? currentLoc.subtitle
       : indoors
-        ? 'Abandoned Shelter'
+        ? t.gameMessages.locationsFallback.abandonedShelter
         : regionDef.subtitle;
     const currentLocationDanger = this.insideShop
       ? 'safe'
@@ -2074,6 +2179,7 @@ export class Game3DEngine {
 
     const effectiveCombat = inActiveCombat || this.recentCombatTimer > 0;
     const key = [
+      getLanguage(),
       hp,
       hunger,
       thirst,
@@ -2157,7 +2263,7 @@ export class Game3DEngine {
       isSprinting: this.controller.isSprinting,
       day: timeSnap.day,
       formattedTime: timeSnap.formattedTime,
-      dayPhaseLabel: timeSnap.phase,
+      dayPhaseLabel: tDayPhase(timeSnap.phase),
       weather: weatherSnap.weather,
       weatherLabel: weatherSnap.label,
       flashlightOn: this.settings.flashlightOn,
@@ -2176,7 +2282,7 @@ export class Game3DEngine {
       damagePulseId: this.damagePulseId,
       attackPulseId: this.attackPulseId,
       inActiveCombat: effectiveCombat,
-      weaponLabel: 'Steel Pipe',
+      weaponLabel: tWeaponLabel(),
       zombiesDefeated: this.zombies.zombiesDefeated,
       deathReason: this.survival.deathReason,
       playerX: px,

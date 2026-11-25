@@ -1,5 +1,7 @@
 import { SIDEWALK_HEIGHT } from '../assets/maps/neighborhoodMap';
 import { WorldColliders } from '../engine/WorldBuilder';
+import { formatTemplate, getTranslations, tResourceName } from '../i18n';
+import { TranslationCatalog } from '../i18n/types';
 import {
   clamp,
   resolveCircleAABB,
@@ -155,6 +157,8 @@ export interface CustomerSelectedPurchase {
   unitPrice: number;
 }
 
+export type CustomerStatusKey = keyof TranslationCatalog['gameMessages']['customerStatuses'];
+
 export interface CustomerAgent {
   id: string;
   profile: CustomerProfile;
@@ -187,6 +191,9 @@ export interface CustomerAgent {
   selectedPurchase: CustomerSelectedPurchase | null;
   purchaseCompleted: boolean;
   statusLabel: string;
+  statusKey?: CustomerStatusKey;
+  statusResourceId?: ResourceId;
+  statusQty?: number;
 }
 
 export interface CustomerSpawnScheduleState {
@@ -232,18 +239,33 @@ export function isShopWithinVisitingHours(
   return hoursFloat >= config.openHour && hoursFloat < config.closeHour;
 }
 
+export function resolveCustomerStatusLabel(c: Pick<CustomerAgent, 'statusLabel' | 'statusKey' | 'statusResourceId' | 'statusQty'>): string {
+  if (!c.statusKey) return c.statusLabel;
+  const statuses = getTranslations().gameMessages.customerStatuses;
+  const template = statuses[c.statusKey];
+  if (c.statusResourceId) {
+    const qty = c.statusQty ?? 1;
+    return formatTemplate(template, {
+      qty,
+      item: tResourceName(c.statusResourceId, qty),
+    });
+  }
+  return template;
+}
+
 export function evaluateShopOpenStatus(
   hoursFloat: number,
   shopManualOpen: boolean,
   config: CustomerSystemConfig = DEFAULT_CUSTOMER_CONFIG
 ): { accepting: boolean; reason: string } {
+  const econMsg = getTranslations().gameMessages.economy;
   if (!shopManualOpen) {
-    return { accepting: false, reason: 'Closed by owner' };
+    return { accepting: false, reason: econMsg.shopStatusClosedOwner };
   }
   if (!isShopWithinVisitingHours(hoursFloat, config)) {
-    return { accepting: false, reason: 'Closed for night (06:00 - 19:30)' };
+    return { accepting: false, reason: econMsg.shopStatusAfterHours };
   }
-  return { accepting: true, reason: 'Open for survivors (06:00 - 19:30)' };
+  return { accepting: true, reason: econMsg.shopStatusOpen };
 }
 
 function nextPseudoRandom(seed: number): { value: number; nextSeed: number } {
@@ -412,7 +434,8 @@ export function createCustomerAgent(
     lastProgressDist: Math.hypot(target.x - spawnPt.x, target.z - spawnPt.z),
     selectedPurchase: null,
     purchaseCompleted: false,
-    statusLabel: 'Heading to shop',
+    statusLabel: getTranslations().gameMessages.customerStatuses.heading,
+    statusKey: 'heading',
   };
 }
 
@@ -518,13 +541,24 @@ function resolveCustomerCollisions(
   }
 }
 
-export function transitionCustomerToLeaving(c: CustomerAgent, reasonLabel: string): void {
+export function transitionCustomerToLeaving(
+  c: CustomerAgent,
+  reasonLabel: string,
+  statusKey?: CustomerStatusKey,
+  resourceId?: ResourceId,
+  qty?: number
+): void {
   if (c.state === 'leaving' || c.state === 'despawned') return;
   c.state = 'leaving';
   c.stateTimer = 0;
   c.stuckTimer = 0;
   c.targetLookYaw = null;
-  c.statusLabel = reasonLabel;
+  c.statusKey = statusKey;
+  c.statusResourceId = resourceId;
+  c.statusQty = qty;
+  c.statusLabel = statusKey
+    ? resolveCustomerStatusLabel({ statusLabel: reasonLabel, statusKey, statusResourceId: resourceId, statusQty: qty })
+    : reasonLabel;
 
   if (isCustomerInsideShop(c.x, c.z) || c.z < LAST_SHOP_WAYPOINTS.entranceThreshold.z + 0.15) {
     c.leavePhase = 'to_inside';
@@ -699,12 +733,14 @@ export function stepCustomersAI(
     // Handle shop closing gracefully
     if (!status.accepting) {
       if (c.state === 'approaching' || c.state === 'entering' || c.state === 'browsing') {
-        transitionCustomerToLeaving(c, 'Shop closed');
+        transitionCustomerToLeaving(c, 'Shop closed', 'shopClosed');
       }
     }
 
     if (c.state === 'approaching') {
-      c.statusLabel = 'Walking to shop';
+      c.statusKey = 'walking';
+      c.statusResourceId = undefined;
+      c.statusLabel = resolveCustomerStatusLabel(c);
       const dist = moveCustomerTowardTarget(
         c,
         cfg.walkSpeed,
@@ -725,13 +761,15 @@ export function stepCustomersAI(
         c.targetZ = LAST_SHOP_WAYPOINTS.entranceInside.z;
         c.lastProgressDist = Math.hypot(c.targetX - c.x, c.targetZ - c.z);
       } else if (c.stuckTimer > cfg.maxStuckSec || c.stateTimer > 20) {
-        transitionCustomerToLeaving(c, 'Entrance unreachable');
+        transitionCustomerToLeaving(c, 'Entrance unreachable', 'entranceUnreachable');
       }
       continue;
     }
 
     if (c.state === 'entering') {
-      c.statusLabel = ctx.frontDoorOpen ? 'Entering shop' : 'At front door';
+      c.statusKey = ctx.frontDoorOpen ? 'entering' : 'atDoor';
+      c.statusResourceId = undefined;
+      c.statusLabel = resolveCustomerStatusLabel(c);
       if (!ctx.frontDoorOpen) {
         if (ctx.allowCustomerDoorOpen && status.accepting) {
           result.requestOpenFrontDoor = true;
@@ -744,7 +782,7 @@ export function stepCustomersAI(
         );
         c.yaw = lerpAngle(c.yaw, doorYaw, clamp(8 * ctx.dt, 0, 1));
         if (c.doorWaitTimer > 4.0) {
-          transitionCustomerToLeaving(c, 'Door blocked');
+          transitionCustomerToLeaving(c, 'Door blocked', 'doorBlocked');
         }
         continue;
       }
@@ -774,9 +812,11 @@ export function stepCustomersAI(
         c.targetZ = spot.z;
         c.targetLookYaw = spot.lookYaw;
         c.lastProgressDist = Math.hypot(c.targetX - c.x, c.targetZ - c.z);
-        c.statusLabel = 'Browsing shelves';
+        c.statusKey = 'browsing';
+        c.statusResourceId = undefined;
+        c.statusLabel = resolveCustomerStatusLabel(c);
       } else if (c.stuckTimer > cfg.maxStuckSec || c.stateTimer > 8) {
-        transitionCustomerToLeaving(c, 'Entrance blocked');
+        transitionCustomerToLeaving(c, 'Entrance blocked', 'entranceBlocked');
       }
       continue;
     }
@@ -808,7 +848,8 @@ export function stepCustomersAI(
             if (!picked.selection) {
               transitionCustomerToLeaving(
                 c,
-                picked.reason === 'empty_stock' ? 'Nothing in stock' : 'Nothing in budget'
+                picked.reason === 'empty_stock' ? 'Nothing in stock' : 'Nothing in budget',
+                picked.reason === 'empty_stock' ? 'nothingInStock' : 'nothingInBudget'
               );
             } else {
               c.selectedPurchase = picked.selection;
@@ -822,8 +863,10 @@ export function stepCustomersAI(
               c.targetZ = slot.z;
               c.targetLookYaw = slot.lookYaw;
               c.lastProgressDist = Math.hypot(c.targetX - c.x, c.targetZ - c.z);
-              const def = prices[picked.selection.resourceId];
-              c.statusLabel = `Buying ${picked.selection.quantity} ${def.displayName}`;
+              c.statusKey = 'buyingItem';
+              c.statusResourceId = picked.selection.resourceId;
+              c.statusQty = picked.selection.quantity;
+              c.statusLabel = resolveCustomerStatusLabel(c);
             }
           }
         }
@@ -843,7 +886,9 @@ export function stepCustomersAI(
 
       if (dist <= 0.36) {
         c.browsePauseTimer = 2.0;
-        c.statusLabel = 'Inspecting shelf';
+        c.statusKey = 'inspecting';
+        c.statusResourceId = undefined;
+        c.statusLabel = resolveCustomerStatusLabel(c);
       } else if (c.stuckTimer > cfg.maxStuckSec || c.stateTimer > 12) {
         // Fallback: evaluate stock from current spot rather than hanging forever
         const picked = selectCustomerPurchase(c, ctx.shopStock, prices);
@@ -851,7 +896,8 @@ export function stepCustomersAI(
         if (!picked.selection) {
           transitionCustomerToLeaving(
             c,
-            picked.reason === 'empty_stock' ? 'Nothing in stock' : 'Nothing in budget'
+            picked.reason === 'empty_stock' ? 'Nothing in stock' : 'Nothing in budget',
+            picked.reason === 'empty_stock' ? 'nothingInStock' : 'nothingInBudget'
           );
         } else {
           c.selectedPurchase = picked.selection;
@@ -865,6 +911,10 @@ export function stepCustomersAI(
           c.targetZ = slot.z;
           c.targetLookYaw = slot.lookYaw;
           c.lastProgressDist = Math.hypot(c.targetX - c.x, c.targetZ - c.z);
+          c.statusKey = 'buyingItem';
+          c.statusResourceId = picked.selection.resourceId;
+          c.statusQty = picked.selection.quantity;
+          c.statusLabel = resolveCustomerStatusLabel(c);
         }
       }
       continue;
@@ -880,7 +930,7 @@ export function stepCustomersAI(
         c.seed = rePicked.nextSeed;
         if (!rePicked.selection) {
           c.selectedPurchase = null;
-          transitionCustomerToLeaving(c, 'Item sold out');
+          transitionCustomerToLeaving(c, 'Item sold out', 'itemSoldOut');
           continue;
         }
         c.selectedPurchase = rePicked.selection;
@@ -903,9 +953,11 @@ export function stepCustomersAI(
         c.checkoutWaitTimer = 1.05;
         c.vx = 0;
         c.vz = 0;
-        c.statusLabel = 'At checkout';
+        c.statusKey = 'atCheckout';
+        c.statusResourceId = undefined;
+        c.statusLabel = resolveCustomerStatusLabel(c);
       } else if (c.stuckTimer > cfg.maxStuckSec || c.stateTimer > 11) {
-        transitionCustomerToLeaving(c, 'Counter unreachable');
+        transitionCustomerToLeaving(c, 'Counter unreachable', 'counterUnreachable');
       }
       continue;
     }
@@ -920,7 +972,9 @@ export function stepCustomersAI(
         c.yaw = lerpAngle(c.yaw, c.targetLookYaw, clamp(8 * ctx.dt, 0, 1));
       }
       if (shopkeepers > 0) {
-        c.statusLabel = 'Assisted by shopkeeper';
+        c.statusKey = 'assisted';
+        c.statusResourceId = undefined;
+        c.statusLabel = resolveCustomerStatusLabel(c);
       }
 
       c.checkoutWaitTimer -= ctx.dt * speedMult;
@@ -934,7 +988,7 @@ export function stepCustomersAI(
             quantity: c.selectedPurchase.quantity,
           });
         } else {
-          transitionCustomerToLeaving(c, 'Leaving shop');
+          transitionCustomerToLeaving(c, 'Leaving shop', 'leaving');
         }
       }
       continue;
@@ -1033,7 +1087,13 @@ export function applyCustomerPurchaseOutcome(
 ): void {
   if (sold) {
     c.budget = Math.max(0, c.budget - earned);
-    transitionCustomerToLeaving(c, `Bought ${qty} ${itemName}`);
+    transitionCustomerToLeaving(
+      c,
+      `Bought ${qty} ${itemName}`,
+      'boughtItem',
+      c.selectedPurchase?.resourceId,
+      qty
+    );
     return;
   }
 
@@ -1055,17 +1115,19 @@ export function applyCustomerPurchaseOutcome(
     c.selectedPurchase = fallback.selection;
     c.purchaseCompleted = false;
     c.checkoutWaitTimer = 0.4;
-    const def = prices[fallback.selection.resourceId];
-    c.statusLabel = `Switching to ${def.displayName}`;
+    c.statusKey = 'switchingItem';
+    c.statusResourceId = fallback.selection.resourceId;
+    c.statusQty = 1;
+    c.statusLabel = resolveCustomerStatusLabel(c);
   } else {
     c.selectedPurchase = null;
-    transitionCustomerToLeaving(c, 'Sold out');
+    transitionCustomerToLeaving(c, 'Sold out', 'soldOut');
   }
 }
 
 export function buildActiveCustomerSummaries(
   customers: CustomerAgent[],
-  prices: Record<ResourceId, ShopItemPriceDefinition> = SHOP_ITEM_PRICES
+  _prices: Record<ResourceId, ShopItemPriceDefinition> = SHOP_ITEM_PRICES
 ): ActiveCustomerSummary[] {
   const summaries: ActiveCustomerSummary[] = [];
   for (const c of customers) {
@@ -1074,8 +1136,10 @@ export function buildActiveCustomerSummaries(
       id: c.id,
       name: c.profile.name,
       state: c.state,
-      statusLabel: c.statusLabel,
-      desiredItemName: c.selectedPurchase ? prices[c.selectedPurchase.resourceId].displayName : null,
+      statusLabel: resolveCustomerStatusLabel(c),
+      desiredItemName: c.selectedPurchase
+        ? tResourceName(c.selectedPurchase.resourceId, c.selectedPurchase.quantity)
+        : null,
       desiredQuantity: c.selectedPurchase ? c.selectedPurchase.quantity : 0,
       budget: c.budget,
     });

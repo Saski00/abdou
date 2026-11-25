@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Briefcase, Coins, ShieldAlert, UserCheck, UserPlus, X } from 'lucide-react';
 import { formatMoney } from '../game/economy';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { RESOURCE_DEFINITIONS, RESOURCE_ORDER } from '../game/resources';
+import { RESOURCE_ORDER } from '../game/resources';
 import {
   PROFESSION_CONFIGS,
   PROFESSION_ORDER,
   canRecruitSurvivor,
 } from '../game/staffSystem';
 import { EmployeeProfession, HudSnapshot, WorldSurvivorSummary } from '../game/types';
+import { formatTpl, tProfession, tResource, tSurvivor, useI18n } from '../i18n';
 
 interface RecruitmentModalProps {
   hud: HudSnapshot;
@@ -25,11 +26,19 @@ export function RecruitmentModal({
   onRecruit,
   onClose,
 }: RecruitmentModalProps) {
+  const { dir, t } = useI18n();
+  const recCopy = t.recruitmentModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const [selectedProfession, setSelectedProfession] = useState<EmployeeProfession>(
     survivor.preferredProfession
   );
+
+  const survLoc = tSurvivor(survivor.id);
+  const displayName = survLoc?.name ?? survivor.name;
+  const displayLocation = survLoc?.locationLabel ?? survivor.locationLabel;
+  const displayDialogue = survLoc?.dialogue ?? survivor.dialogue;
+  const displayNeed = survLoc?.needDescription ?? survivor.needDescription;
 
   const { staff, inventory, money } = hud;
   const validation = canRecruitSurvivor(
@@ -49,6 +58,7 @@ export function RecruitmentModal({
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="recruit-modal-title"
@@ -78,17 +88,20 @@ export function RecruitmentModal({
                 id="recruit-modal-title"
                 className="font-display text-2xl font-bold tracking-wider text-stone-100 leading-none truncate"
               >
-                {survivor.name.toUpperCase()}
+                {displayName.toUpperCase()}
               </h2>
             </div>
             <p className="text-xs text-stone-400 mt-1.5 truncate">
-              {survivor.locationLabel} · Preferred: {PROFESSION_CONFIGS[survivor.preferredProfession].label}
+              {formatTpl(recCopy.preferredSubtitle, {
+                loc: displayLocation,
+                role: tProfession(survivor.preferredProfession).label,
+              })}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close recruitment dialog"
+            aria-label={recCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -99,23 +112,26 @@ export function RecruitmentModal({
         <div className="flex-1 overflow-y-auto touch-pan-y px-4 py-4 sm:px-6 space-y-4">
           {/* Dialogue */}
           <div className="rounded-lg border border-stone-700/80 bg-[#0b0e15] p-3.5 space-y-2">
-            <p className="text-sm text-stone-100 leading-relaxed">&ldquo;{survivor.dialogue}&rdquo;</p>
+            <p className="text-sm text-stone-100 leading-relaxed">&ldquo;{displayDialogue}&rdquo;</p>
             {survivor.storyRemark && (
               <p className="text-xs text-sky-200/90 leading-relaxed border-t border-stone-800/80 pt-2">
                 {survivor.storyRemark}
               </p>
             )}
-            <p className="text-xs text-amber-300 font-medium">{survivor.needDescription}</p>
+            <p className="text-xs text-amber-300 font-medium">{displayNeed}</p>
           </div>
 
           {/* Requirements */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold uppercase tracking-wider text-stone-300">
-                Recruitment Terms
+                {recCopy.termsHeading}
               </span>
               <span className="font-mono-tabular text-stone-400">
-                Shop Staff: {staff.employees.length} / {staff.employeeCapacity}
+                {formatTpl(recCopy.staffCountLabel, {
+                  count: staff.employees.length,
+                  cap: staff.employeeCapacity,
+                })}
               </span>
             </div>
 
@@ -124,14 +140,17 @@ export function RecruitmentModal({
                 <div className="px-3.5 py-2.5 flex items-center justify-between text-xs sm:text-sm">
                   <span className="flex items-center gap-2 text-stone-200 font-medium">
                     <Coins className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-                    Advance Pay
+                    {recCopy.advancePayLabel}
                   </span>
                   <span
                     className={`font-mono-tabular font-bold ${
                       money >= survivor.costMoney ? 'text-emerald-300' : 'text-rose-300'
                     }`}
                   >
-                    {formatMoney(survivor.costMoney)} (Have {formatMoney(money)})
+                    {formatTpl(recCopy.costHaveAmount, {
+                      cost: formatMoney(survivor.costMoney),
+                      have: formatMoney(money),
+                    })}
                   </span>
                 </div>
               )}
@@ -145,15 +164,13 @@ export function RecruitmentModal({
                     key={resId}
                     className="px-3.5 py-2.5 flex items-center justify-between text-xs sm:text-sm"
                   >
-                    <span className="text-stone-200 font-medium">
-                      {RESOURCE_DEFINITIONS[resId].name}
-                    </span>
+                    <span className="text-stone-200 font-medium">{tResource(resId).name}</span>
                     <span
                       className={`font-mono-tabular font-bold ${
                         met ? 'text-emerald-300' : 'text-rose-300'
                       }`}
                     >
-                      Need {req} (Have {have})
+                      {formatTpl(recCopy.needHaveQty, { req, have })}
                     </span>
                   </div>
                 );
@@ -166,16 +183,20 @@ export function RecruitmentModal({
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold uppercase tracking-wider text-stone-300 flex items-center gap-1.5">
                 <Briefcase className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                Assign Profession
+                {recCopy.assignProfessionHeading}
               </span>
               <span className="font-mono-tabular text-stone-400">
-                Guards {staff.activeGuardCount}/{staff.maxGuards}
+                {formatTpl(recCopy.guardsCountLabel, {
+                  count: staff.activeGuardCount,
+                  max: staff.maxGuards,
+                })}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {PROFESSION_ORDER.map((profId) => {
                 const cfg = PROFESSION_CONFIGS[profId];
+                const pLoc = tProfession(profId);
                 const isSelected = selectedProfession === profId;
                 const guardLocked =
                   profId === 'guard' && staff.activeGuardCount >= staff.maxGuards;
@@ -185,7 +206,7 @@ export function RecruitmentModal({
                     type="button"
                     disabled={guardLocked}
                     onClick={() => setSelectedProfession(profId)}
-                    className={`rounded-lg border p-3 text-left transition-colors ${
+                    className={`rounded-lg border p-3 text-start transition-colors ${
                       isSelected
                         ? 'bg-amber-500/15 border-amber-400 text-stone-100 cursor-pointer'
                         : guardLocked
@@ -195,15 +216,17 @@ export function RecruitmentModal({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs sm:text-sm font-bold">
-                        {cfg.label}
+                        {pLoc.label}
                         {profId === survivor.preferredProfession ? ' ★' : ''}
                       </span>
-                      <span className="font-mono-tabular text-xs font-semibold text-amber-300">
-                        {formatMoney(cfg.salary)}/cycle
+                      <span className="font-mono-tabular text-xs font-semibold text-amber-300 shrink-0">
+                        {formatTpl(recCopy.salaryPerCycle, { salary: formatMoney(cfg.salary) })}
                       </span>
                     </div>
                     <p className="text-[11px] text-stone-400 mt-1 leading-snug">
-                      {guardLocked ? 'Guard cap reached (2 max)' : cfg.description}
+                      {guardLocked
+                        ? formatTpl(recCopy.guardCapReachedDesc, { max: staff.maxGuards })
+                        : pLoc.shortDesc}
                     </p>
                   </button>
                 );
@@ -225,16 +248,16 @@ export function RecruitmentModal({
             isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
           }`}
         >
-          <span className="text-xs text-stone-400 font-mono-tabular">
-            {isTouchMode ? 'Tap Recruit or Close' : 'Esc to close'}
+          <span className="text-xs text-stone-400 font-mono-tabular truncate">
+            {isTouchMode ? recCopy.footerTouch : recCopy.footerDesktop}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
               className="h-11 px-4 rounded-lg border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs sm:text-sm font-semibold cursor-pointer"
             >
-              Later
+              {recCopy.laterBtn}
             </button>
             <button
               type="button"
@@ -247,7 +270,7 @@ export function RecruitmentModal({
               }`}
             >
               <UserCheck className="w-4 h-4" aria-hidden="true" />
-              <span>Recruit</span>
+              <span>{recCopy.recruitBtn}</span>
             </button>
           </div>
         </div>

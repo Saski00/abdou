@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { Globe, X } from 'lucide-react';
 import {
   OrientationLockApplyResult,
   applyScreenOrientationPreference,
   useViewportLayout,
 } from '../game/responsiveLayout';
-import { GameSettings, ScreenOrientationMode, TouchControlsMode } from '../game/types';
+import { GameLanguage, GameSettings, ScreenOrientationMode, TouchControlsMode } from '../game/types';
+import { formatTpl, useI18n } from '../i18n';
 
 interface SettingsModalProps {
   settings: GameSettings;
@@ -22,42 +23,68 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
-  const [orientationHint, setOrientationHint] = useState<string | null>(null);
+  const { dir, t } = useI18n();
+  const [orientationHintKey, setOrientationHintKey] = useState<{
+    type: 'auto' | 'locked' | 'saved';
+    modeLabel?: string;
+  } | null>(null);
+
+  const languageOptions: { id: GameLanguage; label: string }[] = [
+    { id: 'en', label: t.settingsModal.languageEnglish },
+    { id: 'ar', label: t.settingsModal.languageArabic },
+  ];
 
   const touchModes: { id: TouchControlsMode; label: string }[] = [
-    { id: 'auto', label: 'Auto' },
-    { id: 'on', label: 'On' },
-    { id: 'off', label: 'Off' },
+    { id: 'auto', label: t.settingsModal.touchAuto },
+    { id: 'on', label: t.settingsModal.touchOn },
+    { id: 'off', label: t.settingsModal.touchOff },
   ];
 
   const orientationModes: { id: ScreenOrientationMode; label: string }[] = [
-    { id: 'auto', label: 'Auto' },
-    { id: 'portrait', label: 'Portrait' },
-    { id: 'landscape', label: 'Landscape' },
+    { id: 'auto', label: t.settingsModal.orientationAuto },
+    { id: 'portrait', label: t.settingsModal.orientationPortrait },
+    { id: 'landscape', label: t.settingsModal.orientationLandscape },
   ];
 
   const dayLengthOptions = [
-    { seconds: 900, label: '15m' },
-    { seconds: 300, label: '5m' },
-    { seconds: 120, label: '2m' },
+    { seconds: 900, min: 15 },
+    { seconds: 300, min: 5 },
+    { seconds: 120, min: 2 },
   ];
 
   const handleOrientationSelect = async (mode: ScreenOrientationMode) => {
     onChange({ ...settings, screenOrientation: mode });
     const res: OrientationLockApplyResult = await applyScreenOrientationPreference(mode);
     if (mode === 'auto') {
-      setOrientationHint('Auto-rotate enabled — rotates freely with your device.');
+      setOrientationHintKey({ type: 'auto' });
     } else if (res === 'locked') {
-      setOrientationHint(`Screen locked to ${mode} mode.`);
+      const modeLabel =
+        mode === 'landscape'
+          ? t.settingsModal.orientationLandscape
+          : t.settingsModal.orientationPortrait;
+      setOrientationHintKey({ type: 'locked', modeLabel });
     } else {
-      setOrientationHint(
-        'Saved. Browsers or non-fullscreen windows may keep rotating freely until fullscreen.'
-      );
+      setOrientationHintKey({ type: 'saved' });
     }
   };
 
+  const orientationHintText = orientationHintKey
+    ? orientationHintKey.type === 'auto'
+      ? t.settingsModal.orientationHintAuto
+      : orientationHintKey.type === 'locked'
+        ? formatTpl(t.settingsModal.orientationHintLocked, {
+            mode: orientationHintKey.modeLabel ?? '',
+          })
+        : t.settingsModal.orientationHintSaved
+    : null;
+
+  const controlRows = isTouchMode
+    ? t.settingsModal.touchControlRows
+    : t.settingsModal.desktopControlRows;
+
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
@@ -84,16 +111,23 @@ export function SettingsModal({
               id="settings-title"
               className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 leading-none"
             >
-              SETTINGS
+              {t.settingsModal.title}
             </h2>
             <p className="text-[11px] font-mono-tabular text-stone-400 mt-1">
-              View: {viewport.orientation === 'landscape' ? 'Landscape' : 'Portrait'} ({viewport.width}×{viewport.height})
+              {formatTpl(t.settingsModal.viewMeta, {
+                orientation:
+                  viewport.orientation === 'landscape'
+                    ? t.settingsModal.orientationLandscape
+                    : t.settingsModal.orientationPortrait,
+                w: viewport.width,
+                h: viewport.height,
+              })}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close settings"
+            aria-label={t.settingsModal.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -107,14 +141,55 @@ export function SettingsModal({
               : 'space-y-4'
           }
         >
+          {/* Language Selection */}
+          <div
+            className={`p-3 rounded-lg bg-[#141b27] border border-amber-500/35 ${
+              isCompactLandscape ? 'col-span-2' : ''
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Globe className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+                <div>
+                  <div className="text-sm font-semibold text-stone-100">
+                    {t.settingsModal.languageSectionTitle}
+                  </div>
+                  <div className="text-xs text-stone-400">
+                    {t.settingsModal.languageSectionDesc}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
+                {languageOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onChange({ ...settings, language: opt.id })}
+                    className={`min-h-[36px] px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      settings.language === opt.id
+                        ? 'bg-amber-500 text-stone-950 font-semibold'
+                        : 'text-stone-300 hover:text-stone-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Audio Volume */}
           <div>
             <div className="flex items-center justify-between text-sm mb-1.5">
               <label htmlFor="master-volume" className="font-medium text-stone-200">
-                Master Volume
+                {t.settingsModal.masterVolumeLabel}
               </label>
               <span className="font-mono-tabular text-xs text-stone-400">
-                {settings.muted ? 'Muted' : `${Math.round(settings.masterVolume * 100)}%`}
+                {settings.muted ? (
+                  t.settingsModal.mutedLabel
+                ) : (
+                  <bdi dir="ltr">{Math.round(settings.masterVolume * 100)}%</bdi>
+                )}
               </span>
             </div>
             <input
@@ -138,11 +213,11 @@ export function SettingsModal({
           <div>
             <div className="flex items-center justify-between text-sm mb-1.5">
               <label htmlFor="mouse-sens" className="font-medium text-stone-200">
-                Look Sensitivity
+                {t.settingsModal.lookSensLabel}
               </label>
-              <span className="font-mono-tabular text-xs text-stone-400">
+              <bdi dir="ltr" className="font-mono-tabular text-xs text-stone-400">
                 {settings.mouseSensitivity.toFixed(1)}x
-              </span>
+              </bdi>
             </div>
             <input
               id="mouse-sens"
@@ -164,9 +239,11 @@ export function SettingsModal({
           <div className={isCompactLandscape ? 'col-span-2' : ''}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-medium text-stone-200">Screen Orientation</div>
+                <div className="text-sm font-medium text-stone-200">
+                  {t.settingsModal.screenOrientationLabel}
+                </div>
                 <div className="text-xs text-stone-400">
-                  Auto rotates seamlessly; lock if supported
+                  {t.settingsModal.screenOrientationDesc}
                 </div>
               </div>
               <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
@@ -186,16 +263,20 @@ export function SettingsModal({
                 ))}
               </div>
             </div>
-            {orientationHint && (
-              <p className="text-[11px] text-amber-300/90 mt-1 leading-snug">{orientationHint}</p>
+            {orientationHintText && (
+              <p className="text-[11px] text-amber-300/90 mt-1 leading-snug">
+                {orientationHintText}
+              </p>
             )}
           </div>
 
           {/* Touch Controls Mode */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-stone-200">Touch Controls</div>
-              <div className="text-xs text-stone-400">Virtual stick &amp; camera drag</div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.touchControlsLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.touchControlsDesc}</div>
             </div>
             <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
               {touchModes.map((m) => (
@@ -218,8 +299,10 @@ export function SettingsModal({
           {/* Mute Toggle */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-stone-200">Audio Effects &amp; Wind</div>
-              <div className="text-xs text-stone-400">Procedural footsteps and ambience</div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.audioEffectsLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.audioEffectsDesc}</div>
             </div>
             <button
               type="button"
@@ -230,15 +313,17 @@ export function SettingsModal({
                   : 'bg-stone-800 text-stone-300 border border-stone-700'
               }`}
             >
-              {settings.muted ? 'Muted' : 'Enabled'}
+              {settings.muted ? t.settingsModal.mutedLabel : t.settingsModal.enabledLabel}
             </button>
           </div>
 
           {/* Dynamic Shadows Toggle */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-stone-200">Sun Shadows</div>
-              <div className="text-xs text-stone-400">Disable on weak GPUs for higher FPS</div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.shadowsLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.shadowsDesc}</div>
             </div>
             <button
               type="button"
@@ -249,15 +334,15 @@ export function SettingsModal({
                   : 'bg-stone-800 text-stone-300 border border-stone-700'
               }`}
             >
-              {settings.shadowsEnabled ? 'On' : 'Off'}
+              {settings.shadowsEnabled ? t.settingsModal.onLabel : t.settingsModal.offLabel}
             </button>
           </div>
 
           {/* Atmosphere Fog Density */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-stone-200">Fog &amp; Atmosphere</div>
-              <div className="text-xs text-stone-400">Distance fog visibility</div>
+              <div className="text-sm font-medium text-stone-200">{t.settingsModal.fogLabel}</div>
+              <div className="text-xs text-stone-400">{t.settingsModal.fogDesc}</div>
             </div>
             <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
               <button
@@ -269,7 +354,7 @@ export function SettingsModal({
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
               >
-                Atmospheric
+                {t.settingsModal.fogAtmospheric}
               </button>
               <button
                 type="button"
@@ -280,7 +365,7 @@ export function SettingsModal({
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
               >
-                Performance
+                {t.settingsModal.fogPerformance}
               </button>
             </div>
           </div>
@@ -288,8 +373,10 @@ export function SettingsModal({
           {/* Configurable Day Length */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-stone-200">Day Length</div>
-              <div className="text-xs text-stone-400">Real minutes per in-game day</div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.dayLengthLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.dayLengthDesc}</div>
             </div>
             <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
               {dayLengthOptions.map((opt) => (
@@ -303,7 +390,7 @@ export function SettingsModal({
                       : 'text-stone-400 hover:text-stone-200'
                   }`}
                 >
-                  {opt.label}
+                  {formatTpl(t.settingsModal.dayMinutesShort, { min: opt.min })}
                 </button>
               ))}
             </div>
@@ -316,61 +403,22 @@ export function SettingsModal({
             }`}
           >
             <div className="text-xs font-semibold text-stone-300 mb-2">
-              {isTouchMode ? 'Touch Controls' : 'Controls'}
+              {isTouchMode ? t.settingsModal.controlsHeadingTouch : t.settingsModal.controlsHeadingDesktop}
             </div>
-            {isTouchMode ? (
-              <div
-                className={`grid gap-y-1.5 text-xs text-stone-400 ${
-                  isCompactLandscape ? 'grid-cols-4 gap-x-4' : 'grid-cols-2'
-                }`}
-              >
-                <span>Move / Sprint</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Left Joystick</span>
-                <span>Look Around</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Drag Right Side</span>
-                <span>Attack (Melee)</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Attack Button</span>
-                <span>Collect / Open</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Interact Button</span>
-                <span>Inventory Pack</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Top Bag Button</span>
-                <span>Eat / Drink / Med / Rest</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Top-Left Quick Bar</span>
-                <span>Jump</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Jump Button</span>
-                <span>Flashlight</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Light Button</span>
-              </div>
-            ) : (
-              <div
-                className={`grid gap-y-1.5 text-xs text-stone-400 ${
-                  isCompactLandscape ? 'grid-cols-4 gap-x-4' : 'grid-cols-2'
-                }`}
-              >
-                <span>Move</span>
-                <span className="font-mono-tabular text-stone-200 text-right">WASD / Arrows</span>
-                <span>Look Around</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Mouse (Click Lock)</span>
-                <span>Attack (Melee)</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Left-Click / Q</span>
-                <span>Collect / Interact</span>
-                <span className="font-mono-tabular text-stone-200 text-right">E</span>
-                <span>Inventory Pack</span>
-                <span className="font-mono-tabular text-stone-200 text-right">I</span>
-                <span>Eat / Drink / Med</span>
-                <span className="font-mono-tabular text-stone-200 text-right">1 / 2 / 3</span>
-                <span>Rest (Recover Energy)</span>
-                <span className="font-mono-tabular text-stone-200 text-right">R</span>
-                <span>Sprint</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Hold Shift</span>
-                <span>Jump</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Space</span>
-                <span>Flashlight</span>
-                <span className="font-mono-tabular text-stone-200 text-right">F</span>
-                <span>Pause</span>
-                <span className="font-mono-tabular text-stone-200 text-right">Esc</span>
-              </div>
-            )}
+            <div
+              className={`grid gap-y-1.5 text-xs text-stone-400 ${
+                isCompactLandscape ? 'grid-cols-2 gap-x-6' : 'grid-cols-1'
+              }`}
+            >
+              {controlRows.map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-3">
+                  <span>{row.label}</span>
+                  <bdi dir="ltr" className="font-mono-tabular text-stone-200 text-end">
+                    {row.value}
+                  </bdi>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -380,7 +428,7 @@ export function SettingsModal({
             onClick={onClose}
             className="h-11 px-6 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-sm transition-colors cursor-pointer"
           >
-            Done
+            {t.settingsModal.doneBtn}
           </button>
         </div>
       </div>

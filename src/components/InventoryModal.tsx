@@ -15,11 +15,12 @@ import { useViewportLayout } from '../game/responsiveLayout';
 import {
   RESOURCE_DEFINITIONS,
   RESOURCE_ORDER,
-  RESOURCE_PURPOSE_HINTS,
+  getLocalizedResourcePurposeHint,
   getTotalInventoryItems,
 } from '../game/resources';
 import { CONSUMABLE_DEFINITIONS } from '../game/survivalSystem';
 import { HudSnapshot, ResourceId } from '../game/types';
+import { TranslationCatalog, formatTpl, tResource, useI18n } from '../i18n';
 
 interface InventoryModalProps {
   hud: HudSnapshot;
@@ -32,55 +33,33 @@ interface InventoryModalProps {
 
 type PackCategoryTab = 'all' | 'consumables' | 'medical' | 'materials' | 'gear';
 
-const CATEGORY_TABS: { id: PackCategoryTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'consumables', label: 'Food & Drink' },
-  { id: 'medical', label: 'Medical' },
-  { id: 'materials', label: 'Materials' },
-  { id: 'gear', label: 'Gear & Keys' },
-];
-
-const KEY_LABELS: Record<string, { label: string; hint: string }> = {
-  key_precinct_evidence: {
-    label: 'Evidence Room Key',
-    hint: 'Unlocks District 04 Police Precinct Evidence Room',
-  },
-  key_clinic_pharmacy: {
-    label: 'Clinic Pharmacy Key',
-    hint: 'Unlocks Mercy Field Clinic Pharmacy Vault',
-  },
-  key_research_lab: {
-    label: 'V4 Lab Access Keycard',
-    hint: 'Unlocks V4 Bio-Containment Lab Specimen Vault',
-  },
-};
-
 function getVitalCondition(
   kind: 'health' | 'hunger' | 'thirst' | 'energy',
   value: number,
+  invCopy: TranslationCatalog['inventoryModal'],
   isResting = false
 ): { label: string; toneClass: string } {
   if (kind === 'health') {
-    if (value <= 25) return { label: 'Critical', toneClass: 'text-rose-300' };
-    if (value <= 60) return { label: 'Injured', toneClass: 'text-amber-300' };
-    return { label: 'Healthy', toneClass: 'text-emerald-300' };
+    if (value <= 25) return { label: invCopy.condCritical, toneClass: 'text-rose-300' };
+    if (value <= 60) return { label: invCopy.condInjured, toneClass: 'text-amber-300' };
+    return { label: invCopy.condHealthy, toneClass: 'text-emerald-300' };
   }
   if (kind === 'hunger') {
-    if (value === 0) return { label: 'Starving', toneClass: 'text-rose-300' };
-    if (value <= 25) return { label: 'Critical', toneClass: 'text-rose-300' };
-    if (value <= 45) return { label: 'Hungry', toneClass: 'text-amber-300' };
-    return { label: 'Well-Fed', toneClass: 'text-stone-400' };
+    if (value === 0) return { label: invCopy.condStarving, toneClass: 'text-rose-300' };
+    if (value <= 25) return { label: invCopy.condCritical, toneClass: 'text-rose-300' };
+    if (value <= 45) return { label: invCopy.condHungry, toneClass: 'text-amber-300' };
+    return { label: invCopy.condWellFed, toneClass: 'text-stone-400' };
   }
   if (kind === 'thirst') {
-    if (value === 0) return { label: 'Dehydrated', toneClass: 'text-rose-300' };
-    if (value <= 25) return { label: 'Critical', toneClass: 'text-rose-300' };
-    if (value <= 45) return { label: 'Thirsty', toneClass: 'text-amber-300' };
-    return { label: 'Hydrated', toneClass: 'text-stone-400' };
+    if (value === 0) return { label: invCopy.condDehydrated, toneClass: 'text-rose-300' };
+    if (value <= 25) return { label: invCopy.condCritical, toneClass: 'text-rose-300' };
+    if (value <= 45) return { label: invCopy.condThirsty, toneClass: 'text-amber-300' };
+    return { label: invCopy.condHydrated, toneClass: 'text-stone-400' };
   }
-  if (isResting) return { label: 'Resting', toneClass: 'text-emerald-300' };
-  if (value <= 25) return { label: 'Exhausted', toneClass: 'text-amber-300' };
-  if (value <= 55) return { label: 'Tired', toneClass: 'text-stone-300' };
-  return { label: 'Rested', toneClass: 'text-stone-400' };
+  if (isResting) return { label: invCopy.condResting, toneClass: 'text-emerald-300' };
+  if (value <= 25) return { label: invCopy.condExhausted, toneClass: 'text-amber-300' };
+  if (value <= 55) return { label: invCopy.condTired, toneClass: 'text-stone-300' };
+  return { label: invCopy.condRested, toneClass: 'text-stone-400' };
 }
 
 function ResourceIcon({ id }: { id: ResourceId }) {
@@ -150,17 +129,27 @@ export function InventoryModal({
   onToggleFlashlight,
   onClose,
 }: InventoryModalProps) {
+  const { dir, t } = useI18n();
+  const invCopy = t.inventoryModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const [activeTab, setActiveTab] = useState<PackCategoryTab>('all');
 
+  const categoryTabs: { id: PackCategoryTab; label: string }[] = [
+    { id: 'all', label: invCopy.tabAll },
+    { id: 'consumables', label: invCopy.tabConsumables },
+    { id: 'medical', label: invCopy.tabMedical },
+    { id: 'materials', label: invCopy.tabMaterials },
+    { id: 'gear', label: invCopy.tabGear },
+  ];
+
   const { inventory } = hud;
   const totalCount = getTotalInventoryItems(inventory);
 
-  const healthCond = getVitalCondition('health', hud.health);
-  const hungerCond = getVitalCondition('hunger', hud.hunger);
-  const thirstCond = getVitalCondition('thirst', hud.thirst);
-  const energyCond = getVitalCondition('energy', hud.energy, hud.isResting);
+  const healthCond = getVitalCondition('health', hud.health, invCopy);
+  const hungerCond = getVitalCondition('hunger', hud.hunger, invCopy);
+  const thirstCond = getVitalCondition('thirst', hud.thirst, invCopy);
+  const energyCond = getVitalCondition('energy', hud.energy, invCopy, hud.isResting);
 
   const isTargetStatFull = (id: ResourceId): boolean => {
     if (id === 'canned_food') return hud.hunger >= hud.maxHunger;
@@ -183,6 +172,7 @@ export function InventoryModal({
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="inventory-title"
@@ -208,15 +198,16 @@ export function InventoryModal({
           <div className="min-w-0">
             <h2
               id="inventory-title"
-              className={`font-display font-bold tracking-wider text-stone-100 leading-none ${
+              className={`font-display font-bold tracking-wider text-stone-100 leading-none uppercase ${
                 isCompactLandscape ? 'text-2xl' : 'text-2xl sm:text-3xl'
               }`}
             >
-              PACK &amp; STATUS
+              {invCopy.title}
             </h2>
             <p className="text-xs text-stone-400 mt-1 font-mono-tabular truncate">
-              Pack{' '}
-              <span
+              {invCopy.packWord}{' '}
+              <bdi
+                dir="ltr"
                 className={
                   totalCount >= hud.packCapacity
                     ? 'text-rose-300 font-bold'
@@ -226,16 +217,19 @@ export function InventoryModal({
                 }
               >
                 {totalCount}/{hud.packCapacity}
-              </span>{' '}
-              · Cash <span className="text-emerald-300 font-semibold">${hud.money}</span> · Shop Lv{' '}
-              {hud.shop.shopLevel}
+              </bdi>{' '}
+              · {invCopy.cashWord}{' '}
+              <bdi dir="ltr" className="text-emerald-300 font-semibold">
+                ${hud.money}
+              </bdi>{' '}
+              · {invCopy.shopLvWord} <bdi dir="ltr">{hud.shop.shopLevel}</bdi>
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close pack and player status"
+            aria-label={invCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -248,9 +242,9 @@ export function InventoryModal({
             isCompactLandscape ? 'p-4 space-y-3' : 'p-4 sm:p-5 space-y-4'
           }`}
         >
-          {/* Detailed Player Status Panel (relocated off main HUD) */}
+          {/* Detailed Player Status Panel */}
           <section
-            aria-label="Player survival status"
+            aria-label={invCopy.title}
             className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3 space-y-2.5"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -266,7 +260,7 @@ export function InventoryModal({
                   ·
                 </span>
                 <span className="text-stone-400 truncate">
-                  {hud.isSafeHaven ? 'Safe Haven' : hud.currentRegionName}
+                  {hud.isSafeHaven ? invCopy.safeHavenLabel : hud.currentRegionName}
                 </span>
                 <span className="hidden sm:inline text-stone-600" aria-hidden="true">
                   ·
@@ -286,7 +280,7 @@ export function InventoryModal({
                 }`}
               >
                 <BedDouble className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{hud.isResting ? 'Stand Up' : 'Rest Now'}</span>
+                <span>{hud.isResting ? invCopy.standUpBtn : invCopy.restNowBtn}</span>
               </button>
             </div>
 
@@ -296,9 +290,11 @@ export function InventoryModal({
                 <div className="flex items-center justify-between text-[11px] mb-1">
                   <span className="flex items-center gap-1 text-stone-300 font-medium">
                     <HeartPulse className="w-3 h-3 text-rose-400" aria-hidden="true" />
-                    Health
+                    {invCopy.healthLabel}
                   </span>
-                  <span className="font-mono-tabular font-bold text-stone-100">{hud.health}%</span>
+                  <bdi dir="ltr" className="font-mono-tabular font-bold text-stone-100">
+                    {hud.health}%
+                  </bdi>
                 </div>
                 <div className="h-1.5 w-full bg-stone-900 rounded-sm overflow-hidden mb-1">
                   <div
@@ -316,9 +312,11 @@ export function InventoryModal({
                 <div className="flex items-center justify-between text-[11px] mb-1">
                   <span className="flex items-center gap-1 text-stone-300 font-medium">
                     <Utensils className="w-3 h-3 text-amber-400" aria-hidden="true" />
-                    Hunger
+                    {invCopy.hungerLabel}
                   </span>
-                  <span className="font-mono-tabular font-bold text-stone-100">{hud.hunger}%</span>
+                  <bdi dir="ltr" className="font-mono-tabular font-bold text-stone-100">
+                    {hud.hunger}%
+                  </bdi>
                 </div>
                 <div className="h-1.5 w-full bg-stone-900 rounded-sm overflow-hidden mb-1">
                   <div
@@ -338,9 +336,11 @@ export function InventoryModal({
                 <div className="flex items-center justify-between text-[11px] mb-1">
                   <span className="flex items-center gap-1 text-stone-300 font-medium">
                     <Droplet className="w-3 h-3 text-sky-400" aria-hidden="true" />
-                    Thirst
+                    {invCopy.thirstLabel}
                   </span>
-                  <span className="font-mono-tabular font-bold text-stone-100">{hud.thirst}%</span>
+                  <bdi dir="ltr" className="font-mono-tabular font-bold text-stone-100">
+                    {hud.thirst}%
+                  </bdi>
                 </div>
                 <div className="h-1.5 w-full bg-stone-900 rounded-sm overflow-hidden mb-1">
                   <div
@@ -360,9 +360,11 @@ export function InventoryModal({
                 <div className="flex items-center justify-between text-[11px] mb-1">
                   <span className="flex items-center gap-1 text-stone-300 font-medium">
                     <Zap className="w-3 h-3 text-emerald-400" aria-hidden="true" />
-                    Energy
+                    {invCopy.energyLabel}
                   </span>
-                  <span className="font-mono-tabular font-bold text-stone-100">{hud.energy}%</span>
+                  <bdi dir="ltr" className="font-mono-tabular font-bold text-stone-100">
+                    {hud.energy}%
+                  </bdi>
                 </div>
                 <div className="h-1.5 w-full bg-stone-900 rounded-sm overflow-hidden mb-1">
                   <div
@@ -373,14 +375,14 @@ export function InventoryModal({
                   />
                 </div>
                 <div className={`text-[10px] font-medium ${energyCond.toneClass}`}>
-                  {energyCond.label} · Stamina {hud.stamina}%
+                  {formatTpl(invCopy.staminaInline, { cond: energyCond.label, pct: hud.stamina })}
                 </div>
               </div>
             </div>
 
             {hud.staff.unpaidCount > 0 && (
               <div className="text-[11px] font-semibold text-rose-300 pt-0.5">
-                Shop Payroll Overdue: {hud.staff.unpaidCount} staff unpaid (settle at Shop Counter)
+                {formatTpl(invCopy.payrollOverdueBanner, { count: hud.staff.unpaidCount })}
               </div>
             )}
           </section>
@@ -388,25 +390,25 @@ export function InventoryModal({
           {/* Category Tabs */}
           <div
             role="tablist"
-            aria-label="Inventory categories"
+            aria-label={invCopy.title}
             className="flex flex-wrap items-center gap-1.5"
           >
-            {CATEGORY_TABS.map((t) => {
-              const selected = activeTab === t.id;
+            {categoryTabs.map((tabItem) => {
+              const selected = activeTab === tabItem.id;
               return (
                 <button
-                  key={t.id}
+                  key={tabItem.id}
                   role="tab"
                   type="button"
                   aria-selected={selected}
-                  onClick={() => setActiveTab(t.id)}
+                  onClick={() => setActiveTab(tabItem.id)}
                   className={`min-h-[40px] px-3 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                     selected
                       ? 'bg-amber-500 border-amber-300 text-stone-950'
                       : 'bg-[#141b27] border-stone-700/80 text-stone-300 hover:text-white hover:border-stone-500'
                   }`}
                 >
-                  {t.label}
+                  {tabItem.label}
                 </button>
               );
             })}
@@ -420,12 +422,13 @@ export function InventoryModal({
               }`}
             >
               {filteredResources.map((id) => {
-                const def = RESOURCE_DEFINITIONS[id];
+                const resText = tResource(id);
                 const consumable = CONSUMABLE_DEFINITIONS[id];
                 const qty = Math.max(0, inventory[id] ?? 0);
                 const hasAny = qty > 0;
                 const statFull = consumable ? isTargetStatFull(id) : false;
                 const canUse = Boolean(consumable && hasAny && !statFull);
+                const consumeLabel = resText.consumeActionLabel ?? consumable?.actionLabel ?? '';
 
                 return (
                   <div
@@ -442,10 +445,10 @@ export function InventoryModal({
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-stone-100 truncate">
-                          {def.name}
+                          {resText.name}
                         </div>
                         <div className="text-[11px] text-stone-400 truncate">
-                          {RESOURCE_PURPOSE_HINTS[id]}
+                          {getLocalizedResourcePurposeHint(id)}
                         </div>
                       </div>
                     </div>
@@ -462,7 +465,7 @@ export function InventoryModal({
                               : 'bg-stone-800 text-stone-500 border border-stone-700/70 cursor-not-allowed'
                           }`}
                         >
-                          {statFull && hasAny ? 'Full' : consumable.actionLabel}
+                          {statFull && hasAny ? invCopy.fullBtn : consumeLabel}
                         </button>
                       )}
 
@@ -473,7 +476,7 @@ export function InventoryModal({
                             : 'bg-stone-900 border-stone-800 text-stone-500'
                         }`}
                       >
-                        {qty}
+                        <bdi dir="ltr">{qty}</bdi>
                       </div>
                     </div>
                   </div>
@@ -496,12 +499,12 @@ export function InventoryModal({
                         {hud.weaponLabel}
                       </div>
                       <div className="text-[11px] text-stone-400 truncate">
-                        Equipped melee · {hud.zombiesDefeated} infected cleared
+                        {formatTpl(invCopy.equippedMeleeSub, { count: hud.zombiesDefeated })}
                       </div>
                     </div>
                   </div>
                   <span className="text-[11px] font-mono-tabular text-emerald-300 font-semibold shrink-0">
-                    Ready
+                    {invCopy.readyBadge}
                   </span>
                 </div>
 
@@ -517,10 +520,12 @@ export function InventoryModal({
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-semibold text-stone-100 truncate">
-                        Tactical Flashlight
+                        {invCopy.tacticalFlashlightTitle}
                       </div>
                       <div className="text-[11px] text-stone-400 truncate">
-                        {hud.flashlightOn ? 'Active beam (alerts nearby infected)' : 'Powered off (stealth)'}
+                        {hud.flashlightOn
+                          ? invCopy.flashlightBeamActive
+                          : invCopy.flashlightStealthOff}
                       </div>
                     </div>
                   </div>
@@ -533,7 +538,7 @@ export function InventoryModal({
                         : 'bg-[#161c29] border-stone-700 text-stone-200 hover:border-stone-500'
                     }`}
                   >
-                    {hud.flashlightOn ? 'Turn Off' : 'Turn On'}
+                    {hud.flashlightOn ? invCopy.turnOffBtn : invCopy.turnOnBtn}
                   </button>
                 </div>
               </div>
@@ -542,20 +547,18 @@ export function InventoryModal({
                 <div className="flex items-center justify-between text-[11px] text-stone-400">
                   <span className="flex items-center gap-1.5 font-semibold text-stone-300">
                     <KeyRound className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                    Keys &amp; Access Cards
+                    {invCopy.keysAccessTitle}
                   </span>
                   <span className="font-mono-tabular text-amber-300">
-                    {hud.collectedKeyIds.length}/3 Found
+                    {formatTpl(invCopy.keysFoundCount, { count: hud.collectedKeyIds.length })}
                   </span>
                 </div>
                 {hud.collectedKeyIds.length === 0 ? (
-                  <p className="text-[11px] text-stone-500 mt-1">
-                    No keys carried. Search offices and clinics for locked facility access.
-                  </p>
+                  <p className="text-[11px] text-stone-500 mt-1">{invCopy.noKeysHint}</p>
                 ) : (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {hud.collectedKeyIds.map((kid) => {
-                      const info = KEY_LABELS[kid];
+                      const info = invCopy.keyHints[kid];
                       return (
                         <div
                           key={kid}
@@ -580,14 +583,14 @@ export function InventoryModal({
           }`}
         >
           <span className="text-xs text-stone-400 font-mono-tabular truncate">
-            {isTouchMode ? 'Tap Close to resume exploring' : '1 Eat · 2 Drink · 3 Med · I/Esc Close'}
+            {isTouchMode ? invCopy.footerTouch : invCopy.footerDesktop}
           </span>
           <button
             type="button"
             onClick={onClose}
             className="h-10 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-sm transition-colors cursor-pointer shrink-0"
           >
-            Close
+            {invCopy.closeBtn}
           </button>
         </div>
       </div>

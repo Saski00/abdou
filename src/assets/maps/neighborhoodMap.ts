@@ -120,6 +120,8 @@ export interface ContainerInteractableConfig {
   z: number;
   rotationY: number;
   onSidewalk?: boolean;
+  requiresToolResource?: 'scrap_metal' | 'wood';
+  lockedToolHint?: string;
   loot?: {
     resourceId: 'canned_food' | 'water_bottle' | 'scrap_metal' | 'wood' | 'medical_supplies';
     amount: number;
@@ -587,7 +589,9 @@ export const NEIGHBORHOOD_MAP: NeighborhoodMapData = {
       z: -31.8,
       rotationY: -0.2,
       onSidewalk: false,
-      loot: { resourceId: 'scrap_metal', amount: 2 },
+      requiresToolResource: 'scrap_metal',
+      lockedToolHint: 'Scrap Metal (Pry Bar)',
+      loot: { resourceId: 'medical_supplies', amount: 2 },
     },
   ],
 

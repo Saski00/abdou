@@ -122,6 +122,7 @@ export interface WorldResourceInteractable {
   id: string;
   resourceId: ResourceId;
   amount: number;
+  defaultAmount: number;
   x: number;
   y: number;
   z: number;
@@ -175,7 +176,14 @@ export interface WorldContainerInteractable {
   isOpen: boolean;
   inspected: boolean;
   lootTaken: boolean;
+  requiresToolResource?: ResourceId;
+  lockedToolHint?: string;
+  unlocked: boolean;
   loot?: {
+    resourceId: ResourceId;
+    amount: number;
+  };
+  defaultLoot?: {
     resourceId: ResourceId;
     amount: number;
   };
@@ -791,6 +799,7 @@ export function buildNeighborhoodWorld(
       id: r.id,
       resourceId: r.resourceId,
       amount: r.amount,
+      defaultAmount: r.amount,
       x: r.x,
       y: baseY,
       z: r.z,
@@ -883,7 +892,11 @@ export function buildNeighborhoodWorld(
       isOpen: false,
       inspected: false,
       lootTaken: false,
-      loot: c.loot,
+      requiresToolResource: c.requiresToolResource,
+      lockedToolHint: c.lockedToolHint,
+      unlocked: !c.requiresToolResource,
+      loot: c.loot ? { ...c.loot } : undefined,
+      defaultLoot: c.loot ? { ...c.loot } : undefined,
     });
   }
 
@@ -1108,7 +1121,9 @@ export function buildNeighborhoodWorld(
         isOpen: false,
         inspected: false,
         lootTaken: false,
-        loot: c.loot,
+        unlocked: true,
+        loot: c.loot ? { ...c.loot } : undefined,
+        defaultLoot: c.loot ? { ...c.loot } : undefined,
       });
     }
 
@@ -1131,6 +1146,7 @@ export function buildNeighborhoodWorld(
         id: r.id,
         resourceId: r.resourceId,
         amount: r.amount,
+        defaultAmount: r.amount,
         x: b.x + r.x,
         y: ry,
         z: b.z + r.z,

@@ -1,7 +1,8 @@
 import { AlertTriangle, FileText, Package, Radio, RadioTower, X } from 'lucide-react';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { RESOURCE_DEFINITIONS, RESOURCE_ORDER } from '../game/resources';
+import { RESOURCE_ORDER } from '../game/resources';
 import { InventoryState, StoryObjectInspectionData } from '../game/types';
+import { formatTpl, tResource, useI18n } from '../i18n';
 
 interface StoryNoteModalProps {
   data: StoryObjectInspectionData;
@@ -18,6 +19,8 @@ export function StoryNoteModal({
   onPerformAction,
   onClose,
 }: StoryNoteModalProps) {
+  const { dir, t } = useI18n();
+  const noteCopy = t.storyNoteModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const Icon =
@@ -35,6 +38,7 @@ export function StoryNoteModal({
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="story-note-title"
@@ -72,7 +76,7 @@ export function StoryNoteModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close inspection"
+            aria-label={noteCopy.closeAria}
             className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
@@ -98,15 +102,13 @@ export function StoryNoteModal({
                     key={resId}
                     className="px-3.5 py-2.5 flex items-center justify-between text-xs sm:text-sm"
                   >
-                    <span className="text-stone-200 font-medium">
-                      {RESOURCE_DEFINITIONS[resId].name}
-                    </span>
+                    <span className="text-stone-200 font-medium">{tResource(resId).name}</span>
                     <span
                       className={`font-mono-tabular font-bold ${
                         met ? 'text-emerald-300' : 'text-rose-300'
                       }`}
                     >
-                      Need {req} (Have {have})
+                      {formatTpl(noteCopy.needHaveQty, { req, have })}
                     </span>
                   </div>
                 );
@@ -129,7 +131,7 @@ export function StoryNoteModal({
           }`}
         >
           <span className="text-xs text-stone-400 font-mono-tabular">
-            {isTouchMode ? 'Tap Close when ready' : 'Esc to close'}
+            {isTouchMode ? noteCopy.footerTouch : noteCopy.footerDesktop}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -137,7 +139,7 @@ export function StoryNoteModal({
               onClick={onClose}
               className="h-11 px-4 rounded-lg border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs sm:text-sm font-semibold cursor-pointer"
             >
-              Close
+              {noteCopy.closeBtn}
             </button>
             {data.actionLabel && (
               <button

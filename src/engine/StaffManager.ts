@@ -6,16 +6,17 @@ import {
   animateStaffRig,
   buildProceduralStaffModel,
   createStaffSharedGeometries,
+  updateStaffRigNameTag,
   updateStaffRigProfessionVisuals,
 } from '../assets/models/staffModel';
 import { ShopEconomySystem } from '../game/economy';
 import {
   EmployeeAgent,
-  PROFESSION_CONFIGS,
   StaffSystem,
   WorldSurvivorEntity,
 } from '../game/staffSystem';
 import { EmployeeProfession, InventoryState, StaffSnapshot } from '../game/types';
+import { getTranslations, tProfession, tSurvivor } from '../i18n';
 import { AssetManager } from './AssetManager';
 import {
   EmployeeInteractTarget,
@@ -94,17 +95,19 @@ export class StaffManager {
   }
 
   private rebuildAllViewsFromSystem(): void {
+    const t = getTranslations();
     for (const surv of this.system.worldSurvivors) {
       if (surv.recruited) continue;
       let rig: StaffCharacterRig | null = null;
+      const survName = tSurvivor(surv.id)?.name ?? surv.name;
       const group = this.assets.instantiateAsset(
         'npc.survivor',
         () => {
           const built = buildProceduralStaffModel(this.sharedGeos, {
             variant: surv.variant,
             kind: 'survivor',
-            name: surv.name,
-            subtitle: 'Survivor · Needs Help',
+            name: survName,
+            subtitle: t.gameMessages.staff.wildSurvivorBadge,
           });
           rig = built.rig;
           return built.group;
@@ -134,7 +137,8 @@ export class StaffManager {
             : 'npc.employee_collector';
 
     let rig: StaffCharacterRig | null = null;
-    const profCfg = PROFESSION_CONFIGS[agent.profession];
+    const empName = tSurvivor(agent.survivorId)?.name ?? agent.name;
+    const profShort = tProfession(agent.profession).shortLabel;
     const group = this.assets.instantiateAsset(
       assetKey,
       () => {
@@ -142,8 +146,8 @@ export class StaffManager {
           variant: agent.variant,
           kind: 'employee',
           profession: agent.profession,
-          name: agent.name,
-          subtitle: profCfg.shortLabel,
+          name: empName,
+          subtitle: profShort,
         });
         rig = built.rig;
         return built.group;
@@ -155,6 +159,25 @@ export class StaffManager {
     group.rotation.y = agent.yaw;
     this.root.add(group);
     this.employeeViews.push({ agent, group, rig });
+  }
+
+  public refreshLocalization(): void {
+    const t = getTranslations();
+    for (const v of this.survivorViews) {
+      if (!v.rig) continue;
+      const survName = tSurvivor(v.entity.id)?.name ?? v.entity.name;
+      updateStaffRigNameTag(
+        v.rig,
+        survName,
+        t.gameMessages.staff.wildSurvivorBadge,
+        '#38bdf8'
+      );
+    }
+    for (const v of this.employeeViews) {
+      if (!v.rig) continue;
+      const empName = tSurvivor(v.agent.survivorId)?.name ?? v.agent.name;
+      updateStaffRigProfessionVisuals(v.rig, empName, v.agent.profession);
+    }
   }
 
   public recruitSurvivor(
@@ -207,7 +230,8 @@ export class StaffManager {
 
     const view = this.employeeViews.find((v) => v.agent.id === employeeId);
     if (view?.rig) {
-      updateStaffRigProfessionVisuals(view.rig, view.agent.name, profession);
+      const empName = tSurvivor(view.agent.survivorId)?.name ?? view.agent.name;
+      updateStaffRigProfessionVisuals(view.rig, empName, profession);
     }
     this.sound.playUiClick(560);
     this.interactions.pushToast(res.message, 'world', 2.6);
@@ -359,7 +383,7 @@ export class StaffManager {
       list.push({
         kind: 'survivor',
         id: s.id,
-        name: s.name,
+        name: tSurvivor(s.id)?.name ?? s.name,
         x: s.x,
         y: s.y,
         z: s.z,
@@ -369,14 +393,15 @@ export class StaffManager {
   }
 
   public getEmployeeInteractTargets(): EmployeeInteractTarget[] {
+    const statusLabels = getTranslations().gameMessages.staff.statusLabels;
     const list: EmployeeInteractTarget[] = [];
     for (const e of this.system.employees) {
       list.push({
         kind: 'employee',
         id: e.id,
-        name: e.name,
-        professionLabel: PROFESSION_CONFIGS[e.profession].label,
-        statusLabel: e.statusLabel,
+        name: tSurvivor(e.survivorId)?.name ?? e.name,
+        professionLabel: tProfession(e.profession).label,
+        statusLabel: statusLabels[e.status] ?? e.statusLabel,
         x: e.x,
         y: e.y,
         z: e.z,

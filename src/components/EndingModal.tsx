@@ -2,6 +2,7 @@ import { Award, RadioTower } from 'lucide-react';
 import { formatMoney } from '../game/economy';
 import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
+import { formatTpl, useI18n } from '../i18n';
 
 interface EndingModalProps {
   hud: HudSnapshot;
@@ -16,9 +17,11 @@ export function EndingModal({
 }: EndingModalProps) {
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
+  const { dir, t } = useI18n();
 
   return (
     <div
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="ending-modal-title"
@@ -42,62 +45,58 @@ export function EndingModal({
         >
           <div className="flex items-center gap-2.5 text-amber-400 text-xs font-mono-tabular uppercase tracking-widest mb-1.5">
             <RadioTower className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>148.6 MHz · District 04 Beacon Online</span>
+            <span>{t.endingModal.badge}</span>
           </div>
           <h2
             id="ending-modal-title"
             className="font-display text-3xl sm:text-4xl font-bold tracking-wider text-stone-100 leading-none"
           >
-            THE ASHFALL SIGNAL RESTORED
+            {t.endingModal.title}
           </h2>
-          <p className="text-sm text-stone-300 mt-2.5 leading-relaxed">
-            Your repaired relay cuts across the ash clouds above Main Boulevard. Within minutes,
-            survivor outposts along the valley confirm the 148.6 MHz all-clear carrier—marking The
-            Last Shop as District 04&apos;s anchor haven for trade, shelter, and rebuilding.
-          </p>
+          <p className="text-sm text-stone-300 mt-2.5 leading-relaxed">{t.endingModal.body}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto touch-pan-y px-5 py-4 sm:px-7 space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Days Survived</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statDaysSurvived}</div>
               <div className="font-mono-tabular text-lg font-bold text-amber-300 mt-0.5">
-                Day {hud.day}
+                {formatTpl(t.endingModal.statDayValue, { day: hud.day })}
               </div>
             </div>
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Shop Level</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statShopLevel}</div>
               <div className="font-mono-tabular text-lg font-bold text-stone-100 mt-0.5">
-                Lv {hud.shop.shopLevel}
+                {formatTpl(t.endingModal.statLvValue, { level: hud.shop.shopLevel })}
               </div>
             </div>
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Cash Balance</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statCashBalance}</div>
               <div className="font-mono-tabular text-lg font-bold text-emerald-300 mt-0.5">
-                {formatMoney(hud.money)}
+                <bdi dir="ltr">{formatMoney(hud.money)}</bdi>
               </div>
             </div>
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Total Revenue</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statTotalRevenue}</div>
               <div className="font-mono-tabular text-lg font-bold text-emerald-300 mt-0.5">
-                {formatMoney(hud.shop.totalRevenueEarned)}
+                <bdi dir="ltr">{formatMoney(hud.shop.totalRevenueEarned)}</bdi>
               </div>
             </div>
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Shop Staff</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statShopStaff}</div>
               <div className="font-mono-tabular text-lg font-bold text-sky-300 mt-0.5">
-                {hud.staff.employees.length} Hired
+                {formatTpl(t.endingModal.statHiredValue, { count: hud.staff.employees.length })}
               </div>
             </div>
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
-              <div className="text-[11px] text-stone-400">Story Clues</div>
+              <div className="text-[11px] text-stone-400">{t.endingModal.statStoryClues}</div>
               <div className="font-mono-tabular text-lg font-bold text-amber-300 mt-0.5">
-                {hud.missions.clues.length} Logged
+                {formatTpl(t.endingModal.statLoggedValue, { count: hud.missions.clues.length })}
               </div>
             </div>
           </div>
@@ -105,9 +104,10 @@ export function EndingModal({
           <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 flex items-start gap-2.5 text-xs sm:text-sm text-emerald-200">
             <Award className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" aria-hidden="true" />
             <span>
-              Main Story Complete ({hud.missions.mainCompletedCount}/{hud.missions.mainTotalCount}).
-              District 04 remains open—keep growing your store, finishing side missions, and
-              managing staff.
+              {formatTpl(t.endingModal.mainStoryCompleteBanner, {
+                done: hud.missions.mainCompletedCount,
+                total: hud.missions.mainTotalCount,
+              })}
             </span>
           </div>
         </div>
@@ -122,14 +122,14 @@ export function EndingModal({
             onClick={onReturnToMenu}
             className="h-11 px-5 rounded-lg border border-stone-700 bg-[#141b27] hover:bg-[#1c2536] text-stone-200 text-xs sm:text-sm font-semibold cursor-pointer transition-colors"
           >
-            Save &amp; Main Menu
+            {t.endingModal.saveAndMenuBtn}
           </button>
           <button
             type="button"
             onClick={onContinuePlaying}
             className="h-11 px-5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs sm:text-sm font-bold cursor-pointer transition-colors"
           >
-            Continue Exploring &amp; Trading
+            {t.endingModal.continueExploringBtn}
           </button>
         </div>
       </div>

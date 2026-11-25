@@ -1,5 +1,7 @@
 export type GameScreenState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
 
+export type GameLanguage = 'en' | 'ar';
+
 export type TouchControlsMode = 'auto' | 'on' | 'off';
 
 export type ScreenOrientationMode = 'auto' | 'portrait' | 'landscape';
@@ -321,6 +323,7 @@ export interface FeedbackToast {
 }
 
 export interface GameSettings {
+  language: GameLanguage;
   masterVolume: number;
   muted: boolean;
   mouseSensitivity: number;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PROFESSION_CONFIGS } from '../../game/staffSystem';
 import { EmployeeProfession, EmployeeStatus } from '../../game/types';
+import { tProfession } from '../../i18n';
 
 export interface StaffSharedGeometries {
   torso: THREE.BoxGeometry;
@@ -101,13 +102,13 @@ function createNameTagTexture(
     ctx.stroke();
 
     ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 24px system-ui, sans-serif';
+    ctx.font = 'bold 24px Cairo, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(title, canvas.width / 2, 29);
 
     ctx.fillStyle = accentColor;
-    ctx.font = '600 17px system-ui, sans-serif';
+    ctx.font = '600 17px Cairo, system-ui, sans-serif';
     ctx.fillText(subtitle, canvas.width / 2, 51);
   }
 
@@ -321,12 +322,28 @@ export function buildProceduralStaffModel(
   return { group: root, rig };
 }
 
+export function updateStaffRigNameTag(
+  rig: StaffCharacterRig,
+  title: string,
+  subtitle: string,
+  accentColor: string
+): void {
+  if (rig.labelMat && rig.labelTex) {
+    rig.labelTex.dispose();
+    const nextTex = createNameTagTexture(title, subtitle, accentColor);
+    rig.labelTex = nextTex;
+    rig.labelMat.map = nextTex;
+    rig.labelMat.needsUpdate = true;
+  }
+}
+
 export function updateStaffRigProfessionVisuals(
   rig: StaffCharacterRig,
   name: string,
   profession: EmployeeProfession
 ): void {
   const cfg = PROFESSION_CONFIGS[profession];
+  const profT = tProfession(profession);
   rig.vestMat.color.setHex(cfg.coatColorHex);
   rig.capMat.color.setHex(cfg.hatColorHex);
   rig.packMesh.visible = profession === 'resource_collector';
@@ -341,13 +358,7 @@ export function updateStaffRigProfessionVisuals(
           ? '#2dd4bf'
           : '#a3e635';
 
-  if (rig.labelMat && rig.labelTex) {
-    rig.labelTex.dispose();
-    const nextTex = createNameTagTexture(name, cfg.shortLabel, accentColor);
-    rig.labelTex = nextTex;
-    rig.labelMat.map = nextTex;
-    rig.labelMat.needsUpdate = true;
-  }
+  updateStaffRigNameTag(rig, name, profT.shortLabel, accentColor);
 }
 
 export function animateStaffRig(

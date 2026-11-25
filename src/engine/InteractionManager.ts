@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { SoundEngine } from '../assets/audio/soundEngine';
 import {
-  RESOURCE_DEFINITIONS,
   addInventoryResourceCapped,
   createInitialInventory,
   formatResourceCollectedLabel,
@@ -9,6 +8,23 @@ import {
 } from '../game/resources';
 import { SavedWorldInteractablesState } from '../game/saveSystem';
 import { FeedbackToast, InteractionPrompt, InventoryState, ResourceId } from '../game/types';
+import {
+  formatTpl,
+  getTranslations,
+  tContainerName,
+  tDoorName,
+  tExamineProp,
+  tFurniture,
+  tKeyName,
+  tLockedHint,
+  tResource,
+  tResourceName,
+  tSearchProp,
+  tShopStationName,
+  tStoryObject,
+  tVehicle,
+  tWorkbenchName,
+} from '../i18n';
 import {
   WorldContainerInteractable,
   WorldDoorInteractable,
@@ -98,6 +114,7 @@ export class InteractionManager {
   private packCapacityProvider: () => number = () => 16;
   private collectedKeyIds = new Set<string>();
   private unlockedDoorIds = new Set<string>();
+  private unlockedContainerIds = new Set<string>();
   private animatingSet = new Set<WorldDoorInteractable | WorldContainerInteractable>();
 
   // Lightweight pooled 3D visual cue meshes (only 2 meshes total, zero per-frame allocations)
@@ -199,12 +216,22 @@ export class InteractionManager {
       .map((item) => item.id);
   }
 
+  public getSearchedPropIds(): string[] {
+    return this.interactables
+      .filter((item) => item.kind === 'searchable_prop' && item.searched)
+      .map((item) => item.id);
+  }
+
   public getCollectedKeyIds(): string[] {
     return Array.from(this.collectedKeyIds).sort();
   }
 
   public getUnlockedDoorIds(): string[] {
     return Array.from(this.unlockedDoorIds).sort();
+  }
+
+  public getUnlockedContainerIds(): string[] {
+    return Array.from(this.unlockedContainerIds).sort();
   }
 
   public exportWorldState(): SavedWorldInteractablesState {
@@ -216,6 +243,7 @@ export class InteractionManager {
       searchedContainerIds: this.getSearchedContainerIds(),
       collectedKeyIds: this.getCollectedKeyIds(),
       unlockedDoorIds: this.getUnlockedDoorIds(),
+      unlockedContainerIds: this.getUnlockedContainerIds(),
       searchedExtraIds: this.interactables
         .filter((i) => (i.kind === 'vehicle' || i.kind === 'searchable_prop') && i.searched)
         .map((i) => i.id),
@@ -235,16 +263,23 @@ export class InteractionManager {
     }
     if (!worldState || typeof worldState !== 'object') return;
 
+    const legacyRaw = worldState as Partial<SavedWorldInteractablesState> & {
+      openedContainerIds?: string[];
+    };
     const collectedSet = new Set(worldState.collectedResourceIds ?? []);
     const openDoors = new Set(worldState.openDoorIds ?? []);
-    const searchedContainers = new Set(worldState.searchedContainerIds ?? []);
+    const searchedContainers = new Set(
+      worldState.searchedContainerIds ?? legacyRaw.openedContainerIds ?? []
+    );
     const collectedKeys = new Set(worldState.collectedKeyIds ?? []);
     const unlockedDoors = new Set(worldState.unlockedDoorIds ?? []);
+    const unlockedContainers = new Set(worldState.unlockedContainerIds ?? []);
     const searchedExtras = new Set(worldState.searchedExtraIds ?? []);
     const examinedIds = new Set(worldState.examinedObjectIds ?? []);
 
     this.collectedKeyIds = new Set(collectedKeys);
     this.unlockedDoorIds = new Set(unlockedDoors);
+    this.unlockedContainerIds = new Set(unlockedContainers);
 
     for (const item of this.interactables) {
       if (item.kind === 'resource' && collectedSet.has(item.id)) {
@@ -264,17 +299,24 @@ export class InteractionManager {
           item.collider.active = false;
           item.pivot.rotation.y = item.openSwingAngle;
         }
-      } else if (item.kind === 'container' && searchedContainers.has(item.id)) {
-        item.inspected = true;
-        item.lootTaken = true;
-        item.isOpen = true;
-        if (item.lidPivot) {
-          if (item.animKind === 'drawer') {
-            item.lidPivot.position.z = 0.46;
-          } else if (item.animKind === 'door') {
-            item.lidPivot.rotation.y = -1.45;
-          } else {
-            item.lidPivot.rotation.x = -1.3;
+      } else if (item.kind === 'container') {
+        if (unlockedContainers.has(item.id)) {
+          item.unlocked = true;
+        }
+        if (searchedContainers.has(item.id)) {
+          item.unlocked = true;
+          this.unlockedContainerIds.add(item.id);
+          item.inspected = true;
+          item.lootTaken = true;
+          item.isOpen = true;
+          if (item.lidPivot) {
+            if (item.animKind === 'drawer') {
+              item.lidPivot.position.z = 0.46;
+            } else if (item.animKind === 'door') {
+              item.lidPivot.rotation.y = -1.45;
+            } else {
+              item.lidPivot.rotation.x = -1.3;
+            }
           }
         }
       } else if (
@@ -299,11 +341,13 @@ export class InteractionManager {
     this.pulseAge = -1;
     this.collectedKeyIds.clear();
     this.unlockedDoorIds.clear();
+    this.unlockedContainerIds.clear();
     this.animatingSet.clear();
 
     for (const item of this.interactables) {
       if (item.kind === 'resource') {
         item.collected = false;
+        item.amount = item.defaultAmount;
         item.group.visible = true;
       } else if (item.kind === 'key') {
         item.collected = false;
@@ -317,6 +361,8 @@ export class InteractionManager {
         item.isOpen = false;
         item.inspected = false;
         item.lootTaken = false;
+        item.unlocked = !item.requiresToolResource;
+        item.loot = item.defaultLoot ? { ...item.defaultLoot } : undefined;
         if (item.lidPivot) {
           if (item.animKind === 'drawer') {
             item.lidPivot.position.z = 0.22;
@@ -463,15 +509,17 @@ export class InteractionManager {
       const minDot = item.kind === 'vehicle' ? 0.08 : 0.2;
       if (dist > CLOSE_PROXIMITY_OVERRIDE && dot < minDot) continue;
 
-      // Prioritize loose tabletop pickups/keys cleanly over underlying benches or furniture
+      // Prioritize loose tabletop pickups/keys & story objects cleanly over underlying benches or furniture
       const priorityBias =
         item.kind === 'resource' || item.kind === 'key'
           ? -1.05
-          : item.kind === 'examine'
-            ? 0.3
-            : item.kind === 'vehicle' || item.kind === 'workbench'
-              ? 0.18
-              : 0;
+          : item.kind === 'story_object'
+            ? -0.35
+            : item.kind === 'examine'
+              ? 0.3
+              : item.kind === 'vehicle' || item.kind === 'workbench'
+                ? 0.18
+                : 0;
 
       const score = dist - Math.max(0, dot) * 0.9 + priorityBias;
       if (score < bestScore) {
@@ -589,6 +637,7 @@ export class InteractionManager {
   public interact(): boolean {
     const item = this.targeted;
     if (!item) return false;
+    const t = getTranslations();
 
     if (item.kind === 'resource') {
       if (item.collected) return false;
@@ -602,7 +651,10 @@ export class InteractionManager {
       if (addRes.added <= 0) {
         this.sound.playUiClick(340);
         this.pushToast(
-          `Pack full (${this.getTotalItems()}/${cap}) — store or sell items at The Last Shop`,
+          formatTpl(t.gameMessages.toasts.packFull, {
+            used: this.getTotalItems(),
+            cap,
+          }),
           'warning',
           2.8
         );
@@ -617,7 +669,10 @@ export class InteractionManager {
       if (addRes.overflow > 0) {
         item.amount = addRes.overflow;
         this.pushToast(
-          `${formatResourceCollectedLabel(item.resourceId, addRes.added)} · Pack full (${addRes.overflow} left here)`,
+          formatTpl(t.gameMessages.toasts.packFullOverflowHere, {
+            label: formatResourceCollectedLabel(item.resourceId, addRes.added),
+            rem: addRes.overflow,
+          }),
           'warning',
           3.0
         );
@@ -638,13 +693,20 @@ export class InteractionManager {
       this.collectedKeyIds.add(item.id);
       this.sound.playPickup();
       this.triggerPulse(item.x, item.y + 0.04, item.z);
-      this.pushToast(`Collected ${item.name}`, 'resource', 3.0);
+      this.pushToast(
+        formatTpl(t.gameMessages.toasts.pickedUpKey, {
+          key: tKeyName(item.id, item.name),
+        }),
+        'resource',
+        3.0
+      );
       this.targeted = null;
       this.targetRing.visible = false;
       return true;
     }
 
     if (item.kind === 'door') {
+      const doorName = tDoorName(item.id, item.name);
       if (!item.isOpen && item.lockedKeyId && !item.unlocked) {
         if (this.collectedKeyIds.has(item.lockedKeyId)) {
           item.unlocked = true;
@@ -653,13 +715,18 @@ export class InteractionManager {
           item.collider.active = false;
           this.animatingSet.add(item);
           this.sound.playDoorToggle(true);
-          this.pushToast(`Unlocked ${item.name}`, 'resource', 2.8);
+          this.pushToast(
+            formatTpl(t.gameMessages.toasts.unlockedSimple, { door: doorName }),
+            'resource',
+            2.8
+          );
           this.onDoorOpened?.(item.id);
           return true;
         }
         this.sound.playUiClick(240);
+        const hint = tLockedHint(item.lockedKeyId, item.lockedHint ?? item.lockedKeyId);
         this.pushToast(
-          `Locked — Requires ${item.lockedHint ?? item.lockedKeyId}`,
+          formatTpl(t.gameMessages.toasts.lockedRequiresDash, { hint }),
           'warning',
           3.2
         );
@@ -676,7 +743,10 @@ export class InteractionManager {
           item.z2
         );
         if (distToGate < 0.72) {
-          this.pushToast(`Step clear of ${item.name} to close it`, 'world');
+          this.pushToast(
+            formatTpl(t.gameMessages.toasts.doorStepClear, { door: doorName }),
+            'world'
+          );
           return false;
         }
       }
@@ -684,7 +754,13 @@ export class InteractionManager {
       item.collider.active = !item.isOpen;
       this.animatingSet.add(item);
       this.sound.playDoorToggle(item.isOpen);
-      this.pushToast(`${item.isOpen ? 'Opened' : 'Closed'} ${item.name}`, 'world');
+      this.pushToast(
+        formatTpl(
+          item.isOpen ? t.gameMessages.toasts.doorOpened : t.gameMessages.toasts.doorClosed,
+          { door: doorName }
+        ),
+        'world'
+      );
       if (item.isOpen) {
         this.onDoorOpened?.(item.id);
       }
@@ -699,7 +775,7 @@ export class InteractionManager {
 
     if (item.kind === 'workbench') {
       this.sound.playUiClick(560);
-      this.onWorkbenchOpened?.(item.name);
+      this.onWorkbenchOpened?.(tWorkbenchName(item.id, item.name));
       return true;
     }
 
@@ -712,11 +788,19 @@ export class InteractionManager {
     if (item.kind === 'examine') {
       item.examined = true;
       this.sound.playUiClick(500);
-      this.onExamineNote?.(item.noteTitle, item.noteText);
+      const ex = tExamineProp(item.id) ?? tFurniture(item.id);
+      this.onExamineNote?.(ex?.noteTitle ?? item.noteTitle, ex?.noteText ?? item.noteText);
       return true;
     }
 
     if (item.kind === 'vehicle' || item.kind === 'searchable_prop') {
+      const vLoc = item.kind === 'vehicle' ? tVehicle(item.id) : null;
+      const spLoc = item.kind === 'searchable_prop' ? tSearchProp(item.id) : null;
+      const itemName = vLoc?.name ?? spLoc?.name ?? item.name;
+      const initialNote = vLoc?.lootMessage ?? spLoc?.initialNote ?? item.initialNote;
+      const inspectedNote =
+        vLoc?.alreadySearchedMessage ?? spLoc?.inspectedNote ?? item.inspectedNote;
+
       if (!item.searched && item.loot && !item.lootTaken) {
         const cap = this.packCapacityProvider();
         const addRes = addInventoryResourceCapped(
@@ -728,7 +812,11 @@ export class InteractionManager {
         if (addRes.added <= 0) {
           this.sound.playUiClick(340);
           this.pushToast(
-            `${item.name}: Pack full (${this.getTotalItems()}/${cap}) — store or sell supplies first`,
+            formatTpl(t.gameMessages.toasts.itemPackFull, {
+              name: itemName,
+              used: this.getTotalItems(),
+              cap,
+            }),
             'warning',
             3.0
           );
@@ -743,7 +831,11 @@ export class InteractionManager {
         if (addRes.overflow > 0) {
           item.loot.amount = addRes.overflow;
           this.pushToast(
-            `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)} · Pack full (${addRes.overflow} left)`,
+            formatTpl(t.gameMessages.toasts.itemPackFullPartial, {
+              name: itemName,
+              label: formatResourceCollectedLabel(item.loot.resourceId, addRes.added),
+              rem: addRes.overflow,
+            }),
             'warning',
             3.0
           );
@@ -751,10 +843,17 @@ export class InteractionManager {
           item.searched = true;
           item.lootTaken = true;
           this.pushToast(
-            `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)}`,
+            formatTpl(t.gameMessages.toasts.itemCollectedLabel, {
+              name: itemName,
+              pry: '',
+              label: formatResourceCollectedLabel(item.loot.resourceId, addRes.added),
+            }),
             'resource'
           );
-          this.onExamineNote?.(item.name, item.initialNote);
+          this.onExamineNote?.(itemName, initialNote);
+          if (item.kind === 'searchable_prop') {
+            this.onContainerSearched?.(item.id);
+          }
         }
         return true;
       }
@@ -763,11 +862,17 @@ export class InteractionManager {
       if (!item.searched) {
         item.searched = true;
         item.lootTaken = true;
-        this.onExamineNote?.(item.name, item.initialNote);
-        this.pushToast(`${item.name}: Empty`, 'world');
+        this.onExamineNote?.(itemName, initialNote);
+        this.pushToast(formatTpl(t.gameMessages.toasts.itemEmpty, { name: itemName }), 'world');
+        if (item.kind === 'searchable_prop') {
+          this.onContainerSearched?.(item.id);
+        }
       } else {
-        this.onExamineNote?.(item.name, item.inspectedNote);
-        this.pushToast(`${item.name}: Already searched`, 'world');
+        this.onExamineNote?.(itemName, inspectedNote);
+        this.pushToast(
+          formatTpl(t.gameMessages.toasts.itemAlreadySearched, { name: itemName }),
+          'world'
+        );
       }
       return true;
     }
@@ -796,7 +901,29 @@ export class InteractionManager {
       return true;
     }
 
-    // Container
+    // Container (with optional tool-pry requirement)
+    const cName = tContainerName(item.id, item.name);
+    let priedJustNow = false;
+    if (item.requiresToolResource && !item.unlocked) {
+      const hasTool = (this.inventory[item.requiresToolResource] ?? 0) > 0;
+      if (!hasTool) {
+        this.sound.playUiClick(240);
+        const hint = tLockedHint(
+          item.requiresToolResource,
+          item.lockedToolHint ?? tResource(item.requiresToolResource).name
+        );
+        this.pushToast(
+          formatTpl(t.gameMessages.toasts.lockedRequiresDash, { hint }),
+          'warning',
+          3.0
+        );
+        return false;
+      }
+      item.unlocked = true;
+      this.unlockedContainerIds.add(item.id);
+      priedJustNow = true;
+    }
+
     this.sound.playContainerOpen();
 
     if (item.loot && !item.lootTaken) {
@@ -812,7 +939,11 @@ export class InteractionManager {
         item.isOpen = true;
         this.animatingSet.add(item);
         this.pushToast(
-          `${item.name}: Pack full (${this.getTotalItems()}/${cap}) — stock or store supplies first`,
+          formatTpl(t.gameMessages.toasts.itemPackFullStock, {
+            name: cName,
+            used: this.getTotalItems(),
+            cap,
+          }),
           'warning',
           3.0
         );
@@ -825,10 +956,16 @@ export class InteractionManager {
       this.triggerPulse(item.x, item.y + 0.45, item.z);
       this.onResourceCollected?.(item.loot.resourceId, addRes.added);
 
+      const pryPrefix = priedJustNow ? t.gameMessages.toasts.pryPrefix : '';
       if (addRes.overflow > 0) {
         item.loot.amount = addRes.overflow;
         this.pushToast(
-          `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)} · Pack full (${addRes.overflow} still inside)`,
+          formatTpl(t.gameMessages.toasts.itemContainerPartial, {
+            name: cName,
+            pry: pryPrefix,
+            label: formatResourceCollectedLabel(item.loot.resourceId, addRes.added),
+            rem: addRes.overflow,
+          }),
           'warning',
           3.0
         );
@@ -836,7 +973,11 @@ export class InteractionManager {
         item.inspected = true;
         item.lootTaken = true;
         this.pushToast(
-          `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)}`,
+          formatTpl(t.gameMessages.toasts.itemCollectedLabel, {
+            name: cName,
+            pry: pryPrefix,
+            label: formatResourceCollectedLabel(item.loot.resourceId, addRes.added),
+          }),
           'resource'
         );
       }
@@ -848,7 +989,10 @@ export class InteractionManager {
     item.isOpen = !item.isOpen;
     this.animatingSet.add(item);
     this.pushToast(
-      `${item.name}: Already searched (${item.isOpen ? 'Empty' : 'Closed'})`,
+      formatTpl(
+        item.isOpen ? t.gameMessages.toasts.itemEmpty : t.gameMessages.toasts.itemClosed,
+        { name: cName }
+      ),
       'world'
     );
     this.onContainerSearched?.(item.id);
@@ -859,14 +1003,15 @@ export class InteractionManager {
   public getPrompt(): InteractionPrompt | null {
     const item = this.targeted;
     if (!item) return null;
+    const t = getTranslations();
 
     if (item.kind === 'resource') {
-      const def = RESOURCE_DEFINITIONS[item.resourceId];
-      const countText = item.amount > 1 ? `${item.amount} ${def.pluralName}` : def.name;
+      const unitName = tResourceName(item.resourceId, item.amount);
+      const countText = item.amount > 1 ? `${item.amount} ${unitName}` : unitName;
       return {
         id: item.id,
         name: countText,
-        actionLabel: 'Collect',
+        actionLabel: t.gameMessages.actions.collect,
         kind: 'resource',
         amount: item.amount,
       };
@@ -875,26 +1020,29 @@ export class InteractionManager {
     if (item.kind === 'key') {
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: item.keyKind === 'keycard' ? 'Take Keycard' : 'Take Key',
+        name: tKeyName(item.id, item.name),
+        actionLabel: t.gameMessages.actions.pickUp,
         kind: 'key',
       };
     }
 
     if (item.kind === 'door') {
+      const doorName = tDoorName(item.id, item.name);
       if (!item.isOpen && item.lockedKeyId && !item.unlocked) {
         const hasKey = this.collectedKeyIds.has(item.lockedKeyId);
         return {
           id: item.id,
-          name: hasKey ? item.name : `${item.name} (Locked)`,
-          actionLabel: hasKey ? 'Unlock' : 'Locked',
+          name: hasKey
+            ? doorName
+            : formatTpl(t.gameMessages.prompts.lockedSuffix, { name: doorName }),
+          actionLabel: hasKey ? t.gameMessages.actions.unlock : t.gameMessages.actions.checkLock,
           kind: 'door',
         };
       }
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: item.isOpen ? 'Close' : 'Open',
+        name: doorName,
+        actionLabel: item.isOpen ? t.gameMessages.actions.close : t.gameMessages.actions.open,
         kind: 'door',
       };
     }
@@ -902,8 +1050,11 @@ export class InteractionManager {
     if (item.kind === 'shop_station') {
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: item.stationKind === 'counter' ? 'Manage' : 'Open',
+        name: tShopStationName(item.id, item.name),
+        actionLabel:
+          item.stationKind === 'counter'
+            ? t.gameMessages.actions.manage
+            : t.gameMessages.actions.open,
         kind: item.stationKind === 'counter' ? 'shop_counter' : 'shop_storage',
       };
     }
@@ -911,8 +1062,8 @@ export class InteractionManager {
     if (item.kind === 'workbench') {
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: 'Craft',
+        name: tWorkbenchName(item.id, item.name),
+        actionLabel: t.gameMessages.actions.use,
         kind: 'workbench',
       };
     }
@@ -920,44 +1071,64 @@ export class InteractionManager {
     if (item.kind === 'bed') {
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: this.isRestingProvider() ? 'Stand Up' : 'Rest',
+        name: tFurniture(item.id)?.name ?? item.name,
+        actionLabel: this.isRestingProvider()
+          ? t.gameMessages.actions.standUpFrom
+          : t.gameMessages.actions.restOn,
         kind: 'bed',
       };
     }
 
     if (item.kind === 'examine') {
+      const ex = tExamineProp(item.id) ?? tFurniture(item.id);
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: item.actionLabel,
+        name: ex?.name ?? item.name,
+        actionLabel: ex?.actionLabel ?? item.actionLabel,
         kind: 'examine',
       };
     }
 
     if (item.kind === 'vehicle') {
+      const v = tVehicle(item.id);
+      const partialRemaining =
+        !item.searched &&
+        Boolean(item.loot && item.defaultLoot && item.loot.amount < item.defaultLoot.amount);
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: !item.searched ? 'Search' : 'Inspect',
+        name: v?.name ?? item.name,
+        actionLabel: item.searched
+          ? t.gameMessages.actions.examine
+          : partialRemaining
+            ? t.gameMessages.actions.lootRemaining
+            : t.gameMessages.actions.search,
         kind: 'vehicle',
       };
     }
 
     if (item.kind === 'searchable_prop') {
+      const sp = tSearchProp(item.id);
+      const partialRemaining =
+        !item.searched &&
+        Boolean(item.loot && item.defaultLoot && item.loot.amount < item.defaultLoot.amount);
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: !item.searched ? item.searchAction : item.emptyAction,
+        name: sp?.name ?? item.name,
+        actionLabel: item.searched
+          ? sp?.emptyAction ?? item.emptyAction
+          : partialRemaining
+            ? t.gameMessages.actions.lootRemaining
+            : sp?.searchAction ?? item.searchAction,
         kind: 'container',
       };
     }
 
     if (item.kind === 'story_object') {
+      const so = tStoryObject(item.id);
       return {
         id: item.id,
-        name: item.name,
-        actionLabel: item.actionLabel,
+        name: so?.name ?? item.name,
+        actionLabel: so?.actionLabel ?? item.actionLabel,
         kind: 'story_object',
       };
     }
@@ -965,8 +1136,11 @@ export class InteractionManager {
     if (item.kind === 'customer') {
       return {
         id: item.id,
-        name: `${item.name} (${item.statusLabel})`,
-        actionLabel: 'Greet',
+        name: formatTpl(t.gameMessages.prompts.customerRoleTag, {
+          name: item.name,
+          status: item.statusLabel,
+        }),
+        actionLabel: t.gameMessages.actions.serve,
         kind: 'customer',
       };
     }
@@ -974,8 +1148,8 @@ export class InteractionManager {
     if (item.kind === 'survivor') {
       return {
         id: item.id,
-        name: `${item.name} (Survivor)`,
-        actionLabel: 'Talk / Recruit',
+        name: formatTpl(t.gameMessages.prompts.survivorRoleTag, { name: item.name }),
+        actionLabel: t.gameMessages.actions.talkTo,
         kind: 'survivor',
       };
     }
@@ -983,20 +1157,47 @@ export class InteractionManager {
     if (item.kind === 'employee') {
       return {
         id: item.id,
-        name: `${item.name} (${item.professionLabel})`,
-        actionLabel: 'Manage',
+        name: formatTpl(t.gameMessages.prompts.employeeRoleTag, {
+          name: item.name,
+          role: item.professionLabel,
+        }),
+        actionLabel: t.gameMessages.actions.manage,
         kind: 'employee',
+      };
+    }
+
+    const cName = tContainerName(item.id, item.name);
+    if (item.requiresToolResource && !item.unlocked) {
+      const hasTool = (this.inventory[item.requiresToolResource] ?? 0) > 0;
+      const reqName = tResource(item.requiresToolResource).name;
+      return {
+        id: item.id,
+        name: hasTool
+          ? cName
+          : formatTpl(t.gameMessages.prompts.needsToolSuffix, { name: cName, tool: reqName }),
+        actionLabel: hasTool ? t.gameMessages.actions.pryOpen : t.gameMessages.actions.checkLock,
+        kind: 'container',
+      };
+    }
+
+    if (!item.inspected && !item.lootTaken) {
+      const partialRemaining = Boolean(
+        item.loot && item.defaultLoot && item.loot.amount < item.defaultLoot.amount
+      );
+      return {
+        id: item.id,
+        name: cName,
+        actionLabel: partialRemaining
+          ? t.gameMessages.actions.lootRemaining
+          : t.gameMessages.actions.search,
+        kind: 'container',
       };
     }
 
     return {
       id: item.id,
-      name: item.name,
-      actionLabel: !item.inspected
-        ? 'Search'
-        : item.isOpen
-          ? 'Close (Empty)'
-          : 'Searched (Empty)',
+      name: formatTpl(t.gameMessages.prompts.emptySuffix, { name: cName }),
+      actionLabel: item.isOpen ? t.gameMessages.actions.close : t.gameMessages.actions.open,
       kind: 'container',
     };
   }
