@@ -8,6 +8,10 @@ import {
   resolveCircleOBB,
   resolveCircleSegment,
 } from '../game/collision';
+import {
+  clampTouchLookDelta,
+  computeTouchLookRadiansPerPx,
+} from '../game/responsiveLayout';
 import { WorldColliders } from './WorldBuilder';
 
 const EYE_HEIGHT = 1.68;
@@ -111,10 +115,14 @@ export class FirstPersonController {
   }
 
   public addTouchLookDelta(dx: number, dy: number): void {
-    const touchRate = 0.0042 * this.sensitivity;
-    this.targetYaw -= dx * touchRate;
+    const clamped = clampTouchLookDelta(dx, dy);
+    if (clamped.dx === 0 && clamped.dy === 0) return;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 390;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 844;
+    const touchRate = computeTouchLookRadiansPerPx(vw, vh, this.sensitivity);
+    this.targetYaw -= clamped.dx * touchRate;
     this.targetPitch = clamp(
-      this.targetPitch - dy * touchRate,
+      this.targetPitch - clamped.dy * touchRate,
       -Math.PI * 0.45,
       Math.PI * 0.45
     );

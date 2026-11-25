@@ -9,7 +9,11 @@ import {
 } from '../game/resources';
 import { SavedWorldInteractablesState } from '../game/saveSystem';
 import { FeedbackToast, InteractionPrompt, InventoryState, ResourceId } from '../game/types';
-import { WorldInteractable } from './WorldBuilder';
+import {
+  WorldContainerInteractable,
+  WorldDoorInteractable,
+  WorldInteractable,
+} from './WorldBuilder';
 
 const INTERACT_RANGE = 2.85;
 const CLOSE_PROXIMITY_OVERRIDE = 1.25;
@@ -87,7 +91,14 @@ export class InteractionManager {
   private onContainerSearched: ((containerId: string) => void) | null = null;
   private onDoorOpened: ((doorId: string) => void) | null = null;
   private onStoryObjectInteract: ((objectId: string) => void) | null = null;
+  private onWorkbenchOpened: ((workbenchName: string) => void) | null = null;
+  private onExamineNote: ((title: string, message: string) => void) | null = null;
+  private onBedRestToggle: (() => void) | null = null;
+  private isRestingProvider: () => boolean = () => false;
   private packCapacityProvider: () => number = () => 16;
+  private collectedKeyIds = new Set<string>();
+  private unlockedDoorIds = new Set<string>();
+  private animatingSet = new Set<WorldDoorInteractable | WorldContainerInteractable>();
 
   // Lightweight pooled 3D visual cue meshes (only 2 meshes total, zero per-frame allocations)
   private targetRing: THREE.Mesh;
@@ -164,6 +175,18 @@ export class InteractionManager {
     this.onStoryObjectInteract = callbacks.onStoryObjectInteract;
   }
 
+  public setEnvironmentCallbacks(callbacks: {
+    onWorkbenchOpened: (workbenchName: string) => void;
+    onExamineNote: (title: string, message: string) => void;
+    onBedRestToggle: () => void;
+    isRestingProvider: () => boolean;
+  }): void {
+    this.onWorkbenchOpened = callbacks.onWorkbenchOpened;
+    this.onExamineNote = callbacks.onExamineNote;
+    this.onBedRestToggle = callbacks.onBedRestToggle;
+    this.isRestingProvider = callbacks.isRestingProvider;
+  }
+
   public getOpenDoorIds(): string[] {
     return this.interactables
       .filter((item) => item.kind === 'door' && item.isOpen)
@@ -176,6 +199,14 @@ export class InteractionManager {
       .map((item) => item.id);
   }
 
+  public getCollectedKeyIds(): string[] {
+    return Array.from(this.collectedKeyIds).sort();
+  }
+
+  public getUnlockedDoorIds(): string[] {
+    return Array.from(this.unlockedDoorIds).sort();
+  }
+
   public exportWorldState(): SavedWorldInteractablesState {
     return {
       collectedResourceIds: this.interactables
@@ -183,6 +214,14 @@ export class InteractionManager {
         .map((i) => i.id),
       openDoorIds: this.getOpenDoorIds(),
       searchedContainerIds: this.getSearchedContainerIds(),
+      collectedKeyIds: this.getCollectedKeyIds(),
+      unlockedDoorIds: this.getUnlockedDoorIds(),
+      searchedExtraIds: this.interactables
+        .filter((i) => (i.kind === 'vehicle' || i.kind === 'searchable_prop') && i.searched)
+        .map((i) => i.id),
+      examinedObjectIds: this.interactables
+        .filter((i) => i.kind === 'examine' && i.examined)
+        .map((i) => i.id),
     };
   }
 
@@ -199,15 +238,32 @@ export class InteractionManager {
     const collectedSet = new Set(worldState.collectedResourceIds ?? []);
     const openDoors = new Set(worldState.openDoorIds ?? []);
     const searchedContainers = new Set(worldState.searchedContainerIds ?? []);
+    const collectedKeys = new Set(worldState.collectedKeyIds ?? []);
+    const unlockedDoors = new Set(worldState.unlockedDoorIds ?? []);
+    const searchedExtras = new Set(worldState.searchedExtraIds ?? []);
+    const examinedIds = new Set(worldState.examinedObjectIds ?? []);
+
+    this.collectedKeyIds = new Set(collectedKeys);
+    this.unlockedDoorIds = new Set(unlockedDoors);
 
     for (const item of this.interactables) {
       if (item.kind === 'resource' && collectedSet.has(item.id)) {
         item.collected = true;
         item.group.visible = false;
-      } else if (item.kind === 'door' && openDoors.has(item.id)) {
-        item.isOpen = true;
-        item.collider.active = false;
-        item.pivot.rotation.y = item.openSwingAngle;
+      } else if (item.kind === 'key' && collectedKeys.has(item.id)) {
+        item.collected = true;
+        item.group.visible = false;
+      } else if (item.kind === 'door') {
+        if (unlockedDoors.has(item.id)) {
+          item.unlocked = true;
+        }
+        if (openDoors.has(item.id)) {
+          item.isOpen = true;
+          item.unlocked = true;
+          this.unlockedDoorIds.add(item.id);
+          item.collider.active = false;
+          item.pivot.rotation.y = item.openSwingAngle;
+        }
       } else if (item.kind === 'container' && searchedContainers.has(item.id)) {
         item.inspected = true;
         item.lootTaken = true;
@@ -221,6 +277,14 @@ export class InteractionManager {
             item.lidPivot.rotation.x = -1.3;
           }
         }
+      } else if (
+        (item.kind === 'vehicle' || item.kind === 'searchable_prop') &&
+        searchedExtras.has(item.id)
+      ) {
+        item.searched = true;
+        item.lootTaken = true;
+      } else if (item.kind === 'examine' && examinedIds.has(item.id)) {
+        item.examined = true;
       }
     }
   }
@@ -233,13 +297,20 @@ export class InteractionManager {
     this.targetRing.visible = false;
     this.pulseRing.visible = false;
     this.pulseAge = -1;
+    this.collectedKeyIds.clear();
+    this.unlockedDoorIds.clear();
+    this.animatingSet.clear();
 
     for (const item of this.interactables) {
       if (item.kind === 'resource') {
         item.collected = false;
         item.group.visible = true;
+      } else if (item.kind === 'key') {
+        item.collected = false;
+        item.group.visible = true;
       } else if (item.kind === 'door') {
         item.isOpen = false;
+        item.unlocked = !item.lockedKeyId;
         item.collider.active = true;
         item.pivot.rotation.y = 0;
       } else if (item.kind === 'container') {
@@ -255,6 +326,12 @@ export class InteractionManager {
             item.lidPivot.rotation.x = 0;
           }
         }
+      } else if (item.kind === 'vehicle' || item.kind === 'searchable_prop') {
+        item.searched = false;
+        item.lootTaken = false;
+        item.loot = item.defaultLoot ? { ...item.defaultLoot } : undefined;
+      } else if (item.kind === 'examine') {
+        item.examined = false;
       }
     }
   }
@@ -271,8 +348,8 @@ export class InteractionManager {
       }
     }
 
-    // 2. Smoothly animate doors & container lids
-    for (const item of this.interactables) {
+    // 2. Smoothly animate only active doors & container lids (zero idle loop cost)
+    for (const item of this.animatingSet) {
       if (item.kind === 'door') {
         const targetAngle = item.isOpen ? item.openSwingAngle : 0;
         if (Math.abs(item.pivot.rotation.y - targetAngle) > 0.002) {
@@ -282,6 +359,9 @@ export class InteractionManager {
             12,
             dt
           );
+        } else {
+          item.pivot.rotation.y = targetAngle;
+          this.animatingSet.delete(item);
         }
       } else if (item.kind === 'container' && item.lidPivot) {
         if (item.animKind === 'drawer') {
@@ -293,6 +373,9 @@ export class InteractionManager {
               14,
               dt
             );
+          } else {
+            item.lidPivot.position.z = targetZ;
+            this.animatingSet.delete(item);
           }
         } else if (item.animKind === 'door') {
           const targetY = item.isOpen ? -1.45 : 0;
@@ -303,6 +386,9 @@ export class InteractionManager {
               14,
               dt
             );
+          } else {
+            item.lidPivot.rotation.y = targetY;
+            this.animatingSet.delete(item);
           }
         } else {
           const targetLid = item.isOpen ? -1.3 : 0;
@@ -313,8 +399,13 @@ export class InteractionManager {
               14,
               dt
             );
+          } else {
+            item.lidPivot.rotation.x = targetLid;
+            this.animatingSet.delete(item);
           }
         }
+      } else {
+        this.animatingSet.delete(item);
       }
     }
 
@@ -333,7 +424,7 @@ export class InteractionManager {
       }
     }
 
-    // 4. Find closest valid interactable in front of player
+    // 4. Find closest valid interactable in front of player (AABB pre-filter avoids distance math for far items)
     const fwdX = -Math.sin(yaw);
     const fwdZ = -Math.cos(yaw);
 
@@ -342,22 +433,47 @@ export class InteractionManager {
 
     for (const item of this.interactables) {
       if (item.kind === 'resource' && item.collected) continue;
+      if (item.kind === 'key' && item.collected) continue;
 
-      const dist =
-        item.kind === 'door'
-          ? distanceToSegment2D(playerX, playerZ, item.x1, item.z1, item.x2, item.z2)
-          : Math.hypot(item.x - playerX, item.z - playerZ);
-
-      if (dist > INTERACT_RANGE) continue;
+      const radiusOffset =
+        item.kind === 'vehicle' ||
+        item.kind === 'searchable_prop' ||
+        item.kind === 'workbench' ||
+        item.kind === 'examine' ||
+        item.kind === 'bed'
+          ? item.interactRadiusOffset
+          : 0;
+      const maxReach = item.kind === 'door' ? INTERACT_RANGE + 1.6 : INTERACT_RANGE + radiusOffset;
 
       const dx = item.x - playerX;
       const dz = item.z - playerZ;
+      if (Math.abs(dx) > maxReach || Math.abs(dz) > maxReach) continue;
+
+      const rawDist =
+        item.kind === 'door'
+          ? distanceToSegment2D(playerX, playerZ, item.x1, item.z1, item.x2, item.z2)
+          : Math.hypot(dx, dz);
+      const dist = Math.max(0, rawDist - radiusOffset);
+
+      if (dist > INTERACT_RANGE) continue;
+
       const len = Math.hypot(dx, dz) || 1;
       const dot = (dx / len) * fwdX + (dz / len) * fwdZ;
 
-      if (dist > CLOSE_PROXIMITY_OVERRIDE && dot < 0.2) continue;
+      const minDot = item.kind === 'vehicle' ? 0.08 : 0.2;
+      if (dist > CLOSE_PROXIMITY_OVERRIDE && dot < minDot) continue;
 
-      const score = dist - Math.max(0, dot) * 0.9;
+      // Prioritize loose tabletop pickups/keys cleanly over underlying benches or furniture
+      const priorityBias =
+        item.kind === 'resource' || item.kind === 'key'
+          ? -1.05
+          : item.kind === 'examine'
+            ? 0.3
+            : item.kind === 'vehicle' || item.kind === 'workbench'
+              ? 0.18
+              : 0;
+
+      const score = dist - Math.max(0, dot) * 0.9 + priorityBias;
       if (score < bestScore) {
         bestScore = score;
         bestItem = item;
@@ -435,17 +551,31 @@ export class InteractionManager {
       const ringScale =
         bestItem.kind === 'door'
           ? 1.55
-          : bestItem.kind === 'container'
-            ? 1.4
-            : bestItem.kind === 'customer' || bestItem.kind === 'survivor' || bestItem.kind === 'employee'
-              ? 1.35
-              : bestItem.kind === 'shop_station'
-                ? bestItem.stationKind === 'counter'
-                  ? 1.15
-                  : 1.45
-                : bestItem.kind === 'story_object'
+          : bestItem.kind === 'vehicle'
+            ? 1.7
+            : bestItem.kind === 'bed'
+              ? 1.45
+              : bestItem.kind === 'workbench'
+                ? 1.35
+                : bestItem.kind === 'searchable_prop'
                   ? 1.25
-                  : 1.0;
+                  : bestItem.kind === 'examine'
+                    ? 1.15
+                    : bestItem.kind === 'container'
+                      ? 1.4
+                      : bestItem.kind === 'customer' ||
+                          bestItem.kind === 'survivor' ||
+                          bestItem.kind === 'employee'
+                        ? 1.35
+                        : bestItem.kind === 'shop_station'
+                          ? bestItem.stationKind === 'counter'
+                            ? 1.15
+                            : 1.45
+                          : bestItem.kind === 'story_object'
+                            ? 1.25
+                            : bestItem.kind === 'key'
+                              ? 0.85
+                              : 1.0;
       this.targetRing.scale.setScalar(ringScale);
     } else {
       this.targetRing.visible = false;
@@ -501,7 +631,41 @@ export class InteractionManager {
       return true;
     }
 
+    if (item.kind === 'key') {
+      if (item.collected) return false;
+      item.collected = true;
+      item.group.visible = false;
+      this.collectedKeyIds.add(item.id);
+      this.sound.playPickup();
+      this.triggerPulse(item.x, item.y + 0.04, item.z);
+      this.pushToast(`Collected ${item.name}`, 'resource', 3.0);
+      this.targeted = null;
+      this.targetRing.visible = false;
+      return true;
+    }
+
     if (item.kind === 'door') {
+      if (!item.isOpen && item.lockedKeyId && !item.unlocked) {
+        if (this.collectedKeyIds.has(item.lockedKeyId)) {
+          item.unlocked = true;
+          this.unlockedDoorIds.add(item.id);
+          item.isOpen = true;
+          item.collider.active = false;
+          this.animatingSet.add(item);
+          this.sound.playDoorToggle(true);
+          this.pushToast(`Unlocked ${item.name}`, 'resource', 2.8);
+          this.onDoorOpened?.(item.id);
+          return true;
+        }
+        this.sound.playUiClick(240);
+        this.pushToast(
+          `Locked — Requires ${item.lockedHint ?? item.lockedKeyId}`,
+          'warning',
+          3.2
+        );
+        return false;
+      }
+
       if (item.isOpen) {
         const distToGate = distanceToSegment2D(
           this.lastPlayerX,
@@ -518,6 +682,7 @@ export class InteractionManager {
       }
       item.isOpen = !item.isOpen;
       item.collider.active = !item.isOpen;
+      this.animatingSet.add(item);
       this.sound.playDoorToggle(item.isOpen);
       this.pushToast(`${item.isOpen ? 'Opened' : 'Closed'} ${item.name}`, 'world');
       if (item.isOpen) {
@@ -529,6 +694,81 @@ export class InteractionManager {
     if (item.kind === 'shop_station') {
       this.sound.playUiClick(540);
       this.onShopStationOpened?.(item.stationKind);
+      return true;
+    }
+
+    if (item.kind === 'workbench') {
+      this.sound.playUiClick(560);
+      this.onWorkbenchOpened?.(item.name);
+      return true;
+    }
+
+    if (item.kind === 'bed') {
+      this.sound.playUiClick(480);
+      this.onBedRestToggle?.();
+      return true;
+    }
+
+    if (item.kind === 'examine') {
+      item.examined = true;
+      this.sound.playUiClick(500);
+      this.onExamineNote?.(item.noteTitle, item.noteText);
+      return true;
+    }
+
+    if (item.kind === 'vehicle' || item.kind === 'searchable_prop') {
+      if (!item.searched && item.loot && !item.lootTaken) {
+        const cap = this.packCapacityProvider();
+        const addRes = addInventoryResourceCapped(
+          this.inventory,
+          item.loot.resourceId,
+          item.loot.amount,
+          cap
+        );
+        if (addRes.added <= 0) {
+          this.sound.playUiClick(340);
+          this.pushToast(
+            `${item.name}: Pack full (${this.getTotalItems()}/${cap}) — store or sell supplies first`,
+            'warning',
+            3.0
+          );
+          return false;
+        }
+
+        this.inventory = addRes.nextInventory;
+        this.sound.playContainerOpen();
+        this.triggerPulse(item.x, item.y + 0.45, item.z);
+        this.onResourceCollected?.(item.loot.resourceId, addRes.added);
+
+        if (addRes.overflow > 0) {
+          item.loot.amount = addRes.overflow;
+          this.pushToast(
+            `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)} · Pack full (${addRes.overflow} left)`,
+            'warning',
+            3.0
+          );
+        } else {
+          item.searched = true;
+          item.lootTaken = true;
+          this.pushToast(
+            `${item.name}: ${formatResourceCollectedLabel(item.loot.resourceId, addRes.added)}`,
+            'resource'
+          );
+          this.onExamineNote?.(item.name, item.initialNote);
+        }
+        return true;
+      }
+
+      this.sound.playUiClick(460);
+      if (!item.searched) {
+        item.searched = true;
+        item.lootTaken = true;
+        this.onExamineNote?.(item.name, item.initialNote);
+        this.pushToast(`${item.name}: Empty`, 'world');
+      } else {
+        this.onExamineNote?.(item.name, item.inspectedNote);
+        this.pushToast(`${item.name}: Already searched`, 'world');
+      }
       return true;
     }
 
@@ -570,6 +810,7 @@ export class InteractionManager {
 
       if (addRes.added <= 0) {
         item.isOpen = true;
+        this.animatingSet.add(item);
         this.pushToast(
           `${item.name}: Pack full (${this.getTotalItems()}/${cap}) — stock or store supplies first`,
           'warning',
@@ -580,6 +821,7 @@ export class InteractionManager {
 
       this.inventory = addRes.nextInventory;
       item.isOpen = true;
+      this.animatingSet.add(item);
       this.triggerPulse(item.x, item.y + 0.45, item.z);
       this.onResourceCollected?.(item.loot.resourceId, addRes.added);
 
@@ -604,6 +846,7 @@ export class InteractionManager {
 
     item.inspected = true;
     item.isOpen = !item.isOpen;
+    this.animatingSet.add(item);
     this.pushToast(
       `${item.name}: Already searched (${item.isOpen ? 'Empty' : 'Closed'})`,
       'world'
@@ -629,7 +872,25 @@ export class InteractionManager {
       };
     }
 
+    if (item.kind === 'key') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: item.keyKind === 'keycard' ? 'Take Keycard' : 'Take Key',
+        kind: 'key',
+      };
+    }
+
     if (item.kind === 'door') {
+      if (!item.isOpen && item.lockedKeyId && !item.unlocked) {
+        const hasKey = this.collectedKeyIds.has(item.lockedKeyId);
+        return {
+          id: item.id,
+          name: hasKey ? item.name : `${item.name} (Locked)`,
+          actionLabel: hasKey ? 'Unlock' : 'Locked',
+          kind: 'door',
+        };
+      }
       return {
         id: item.id,
         name: item.name,
@@ -644,6 +905,51 @@ export class InteractionManager {
         name: item.name,
         actionLabel: item.stationKind === 'counter' ? 'Manage' : 'Open',
         kind: item.stationKind === 'counter' ? 'shop_counter' : 'shop_storage',
+      };
+    }
+
+    if (item.kind === 'workbench') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: 'Craft',
+        kind: 'workbench',
+      };
+    }
+
+    if (item.kind === 'bed') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: this.isRestingProvider() ? 'Stand Up' : 'Rest',
+        kind: 'bed',
+      };
+    }
+
+    if (item.kind === 'examine') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: item.actionLabel,
+        kind: 'examine',
+      };
+    }
+
+    if (item.kind === 'vehicle') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: !item.searched ? 'Search' : 'Inspect',
+        kind: 'vehicle',
+      };
+    }
+
+    if (item.kind === 'searchable_prop') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: !item.searched ? item.searchAction : item.emptyAction,
+        kind: 'container',
       };
     }
 

@@ -1,22 +1,36 @@
 import { X } from 'lucide-react';
+import { useViewportLayout } from '../game/responsiveLayout';
 
 interface CreditsModalProps {
   onClose: () => void;
 }
 
 export function CreditsModal({ onClose }: CreditsModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="credits-title"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#070a0f]/82 px-4 py-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-[#070a0f]/82 px-3 py-3 sm:px-4 sm:py-4"
+      style={{
+        paddingTop: 'max(14px, env(safe-area-inset-top))',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(12px, env(safe-area-inset-left))',
+        paddingRight: 'max(12px, env(safe-area-inset-right))',
+      }}
     >
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto touch-pan-y bg-[#10151f] border border-stone-700/70 rounded-xl p-6 shadow-2xl">
-        <div className="flex items-center justify-between gap-4 mb-5">
+      <div
+        className={`w-full max-w-md max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#10151f] border border-stone-700/70 rounded-xl shadow-2xl ${
+          isCompactLandscape ? 'p-4' : 'p-6'
+        }`}
+      >
+        <div className={`flex items-center justify-between gap-4 ${isCompactLandscape ? 'mb-3' : 'mb-5'}`}>
           <h2
             id="credits-title"
-            className="font-display text-3xl font-bold tracking-wider text-stone-100"
+            className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100"
           >
             CREDITS
           </h2>
@@ -24,7 +38,7 @@ export function CreditsModal({ onClose }: CreditsModalProps) {
             type="button"
             onClick={onClose}
             aria-label="Close credits"
-            className="h-10 w-10 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer"
+            className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -54,11 +68,11 @@ export function CreditsModal({ onClose }: CreditsModalProps) {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        <div className={`${isCompactLandscape ? 'mt-4' : 'mt-6'} flex justify-end`}>
           <button
             type="button"
             onClick={onClose}
-            className="h-10 px-6 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-100 font-medium text-sm transition-colors cursor-pointer"
+            className="h-11 px-6 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-100 font-medium text-sm transition-colors cursor-pointer"
           >
             Close
           </button>

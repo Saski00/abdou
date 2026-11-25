@@ -24,6 +24,7 @@ import {
   getNextStorageUpgradeConfig,
   getShopLevelConfig,
 } from '../game/economy';
+import { useViewportLayout } from '../game/responsiveLayout';
 import { RESOURCE_ORDER, RESOURCE_PURPOSE_HINTS, getTotalInventoryItems } from '../game/resources';
 import { PROFESSION_CONFIGS, PROFESSION_ORDER } from '../game/staffSystem';
 import { EmployeeProfession, HudSnapshot, ResourceId, ShopModalTab } from '../game/types';
@@ -79,6 +80,8 @@ export function ShopModal({
   onPayUnpaidWages,
   onClose,
 }: ShopModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
   const [activeTab, setActiveTab] = useState<ShopModalTab>(initialTab);
   const [quantities, setQuantities] = useState<Record<ResourceId, number>>(DEFAULT_QUANTITIES);
 
@@ -130,20 +133,30 @@ export function ShopModal({
         paddingRight: 'max(12px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-2xl max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden">
+      <div
+        className={`w-full max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden ${
+          isCompactLandscape ? 'max-w-3xl' : 'max-w-2xl'
+        }`}
+      >
         {/* Top Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-stone-800 flex items-start justify-between gap-3 shrink-0">
+        <div
+          className={`border-b border-stone-800 flex items-start justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3.5 sm:px-6 sm:py-4'
+          }`}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Store className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
               <h2
                 id="shop-modal-title"
-                className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 leading-none truncate"
+                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate ${
+                  isCompactLandscape ? 'text-xl' : 'text-2xl sm:text-3xl'
+                }`}
               >
                 THE LAST SHOP
               </h2>
             </div>
-            <p className="text-xs text-stone-400 mt-1.5 truncate">
+            <p className="text-xs text-stone-400 mt-1 truncate">
               Safe Haven · Lv {shop.shopLevel} ({shop.shopLevelName}) · {shop.shopStatusReason}
             </p>
           </div>
@@ -171,7 +184,11 @@ export function ShopModal({
         </div>
 
         {/* Shop Overview Strip */}
-        <div className="px-4 py-3 sm:px-6 bg-[#0b0e15] border-b border-stone-800 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+        <div
+          className={`bg-[#0b0e15] border-b border-stone-800 grid grid-cols-2 sm:grid-cols-4 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-1.5 gap-2' : 'px-4 py-3 sm:px-6 gap-3'
+          }`}
+        >
           <div>
             <div className="text-[11px] text-stone-400">Cash Balance</div>
             <div className="font-mono-tabular text-lg font-bold text-emerald-300">
@@ -208,7 +225,7 @@ export function ShopModal({
         </div>
 
         {/* Interactive Mode Tabs */}
-        <div className="px-4 pt-3 sm:px-6 shrink-0">
+        <div className={`${isCompactLandscape ? 'px-4 pt-2' : 'px-4 pt-3 sm:px-6'} shrink-0`}>
           <div
             role="tablist"
             aria-label="Shop management sections"
@@ -1219,7 +1236,11 @@ export function ShopModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 sm:px-6 border-t border-stone-800 flex items-center justify-between gap-4 shrink-0">
+        <div
+          className={`border-t border-stone-800 flex items-center justify-between gap-4 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
+          }`}
+        >
           <span className="text-xs text-stone-400 font-mono-tabular">
             {isTouchMode ? 'Tap Close to return to shop floor' : 'Esc to close and resume'}
           </span>

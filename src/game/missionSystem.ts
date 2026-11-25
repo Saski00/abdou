@@ -145,6 +145,45 @@ export const STORY_OBJECTS: StoryObjectConfig[] = [
     unlockedInMissionId: 'm10_ashfall_beacon',
     transmitMissionId: 'm10_ashfall_beacon',
   },
+  {
+    id: 'story_police_blotter',
+    name: 'Precinct Incident Blotter',
+    subtitle: "Police Precinct Captain's Office",
+    actionLabel: 'Read',
+    category: 'document',
+    x: -26.15,
+    y: INTERIOR_Y + 0.78,
+    z: 46.3,
+    rotationY: 0.28,
+    initialBody:
+      'Shift Captain Morales logbook: "01:40 — Quarantine squad confiscated unmarked V4 containment seals from Depot 04 and locked them in our Evidence Room. Left the brass Evidence Room Key right here on my desk before rolling out to reinforce North Roadblock."',
+  },
+  {
+    id: 'story_clinic_triage',
+    name: 'Chief Medical Triage Log',
+    subtitle: 'Mercy Field Clinic Exam Room',
+    actionLabel: 'Read',
+    category: 'document',
+    x: 19.25,
+    y: INTERIOR_Y + 0.78,
+    z: 46.15,
+    rotationY: -0.22,
+    initialBody:
+      'Triage clipboard signed by Dr. Patel: "V4 spore exposure spikes respiratory stress within minutes. Locked remaining sterile trauma kits—and the V4 Lab Access Keycard—inside the Clinic Pharmacy room. Pharmacy key sits beside this log."',
+  },
+  {
+    id: 'story_lab_terminal',
+    name: 'V4 Containment Archive Terminal',
+    subtitle: 'Research Lab Specimen Vault',
+    actionLabel: 'Inspect',
+    category: 'document',
+    x: 35.5,
+    y: INTERIOR_Y + 0.78,
+    z: -46.8,
+    rotationY: 0.35,
+    initialBody:
+      'Battery-backed laboratory terminal: "PROJECT V4 SUMMARY — Pathogen strain stabilizes at <15% viability under sustained dry airflow and sunlight. Civil broadcast repeater on 148.6 MHz clears district shelters for organized medical relief convoys."',
+  },
 ];
 
 export const STORY_CLUE_DEFINITIONS: Record<
@@ -204,6 +243,24 @@ export const STORY_CLUE_DEFINITIONS: Record<
     title: '09 · Outbound Trade Lanes',
     source: 'Last Shop Guild Notes',
     body: 'With a Level 2+ storefront and active staff, regional supply runners can sustain District 04 indefinitely once the beacon goes live.',
+  },
+  clue_precinct_report: {
+    id: 'clue_precinct_report',
+    title: '10 · Confiscated Evidence',
+    source: 'Police Precinct Blotter',
+    body: 'District police flagged unmarked Class-V4 canisters hours before the blackout and sealed their evidence locker before deploying north.',
+  },
+  clue_clinic_triage: {
+    id: 'clue_clinic_triage',
+    title: '11 · Pharmacy Clearance',
+    source: 'Mercy Clinic Triage Log',
+    body: 'Emergency physicians recovered a V4 Bio-Containment Lab Access Keycard inside Mercy Clinic Pharmacy before evacuating.',
+  },
+  clue_v4_containment: {
+    id: 'clue_v4_containment',
+    title: '12 · V4 Pathogen Profile',
+    source: 'Research Lab Specimen Vault',
+    body: 'Lab archives confirm V4 spores decay rapidly in dry daylight—making The Last Shop corridor viable for long-term recovery.',
   },
 };
 
@@ -718,6 +775,127 @@ export const MISSION_DEFINITIONS: MissionDefinition[] = [
       clueTitle: STORY_CLUE_DEFINITIONS.clue_caravan_routes.title,
     },
     clueUnlockId: 'clue_caravan_routes',
+  },
+  {
+    id: 's4_precinct_evidence',
+    order: 104,
+    category: 'side',
+    chapterLabel: 'Side Mission',
+    title: 'Precinct Evidence Locker',
+    targetZoneId: 'police_precinct',
+    description:
+      "Search the District 04 Police Precinct south of Main Blvd, read Captain Morales's blotter, and grab the Evidence Room Key to unlock the seized locker.",
+    unlockAfterMissionIds: ['m2_street_supplies'],
+    objectives: [
+      {
+        id: 'obj_s4_enter',
+        description: 'Enter District 04 Police Precinct',
+        type: 'enter_zone',
+        target: 1,
+        targetId: 'police_precinct',
+      },
+      {
+        id: 'obj_s4_blotter',
+        description: 'Read the Precinct Incident Blotter',
+        type: 'interact_story_object',
+        target: 1,
+        targetId: 'story_police_blotter',
+      },
+      {
+        id: 'obj_s4_door',
+        description: 'Unlock & open the Evidence Locker Door',
+        type: 'open_door',
+        target: 1,
+        targetId: 'door_police_evidence',
+      },
+    ],
+    rewards: {
+      money: 95,
+      resources: { canned_food: 2, scrap_metal: 2 },
+      clueTitle: STORY_CLUE_DEFINITIONS.clue_precinct_report.title,
+    },
+    clueUnlockId: 'clue_precinct_report',
+  },
+  {
+    id: 's5_clinic_triage',
+    order: 105,
+    category: 'side',
+    chapterLabel: 'Side Mission',
+    title: 'Clinic Triage & Pharmacy',
+    targetZoneId: 'mercy_clinic',
+    description:
+      'Investigate Mercy Field Clinic in the Medical District, recover the Pharmacy Key from the Triage Room, and unlock the pharmacy for rare medical stores & the V4 Lab Keycard.',
+    unlockAfterMissionIds: ['m4_diner_clues'],
+    objectives: [
+      {
+        id: 'obj_s5_enter',
+        description: 'Enter Mercy Field Clinic',
+        type: 'enter_zone',
+        target: 1,
+        targetId: 'mercy_clinic',
+      },
+      {
+        id: 'obj_s5_log',
+        description: 'Read the Chief Medical Triage Log',
+        type: 'interact_story_object',
+        target: 1,
+        targetId: 'story_clinic_triage',
+      },
+      {
+        id: 'obj_s5_door',
+        description: 'Unlock & open the Clinic Pharmacy Door',
+        type: 'open_door',
+        target: 1,
+        targetId: 'door_clinic_pharmacy',
+      },
+    ],
+    rewards: {
+      money: 115,
+      resources: { medical_supplies: 2, water_bottle: 2 },
+      clueTitle: STORY_CLUE_DEFINITIONS.clue_clinic_triage.title,
+      unlockText: 'Research Facility Lab Mission unlocked',
+    },
+    clueUnlockId: 'clue_clinic_triage',
+  },
+  {
+    id: 's6_containment_lab',
+    order: 106,
+    category: 'side',
+    chapterLabel: 'Side Mission',
+    title: 'Inside the V4 Lab Vault',
+    targetZoneId: 'research_lab',
+    description:
+      'Use the V4 Lab Access Keycard from Mercy Clinic Pharmacy to enter the gated Research Facility in the northeast, unlock the Specimen Vault, and inspect its archive terminal.',
+    unlockAfterMissionIds: ['s5_clinic_triage'],
+    objectives: [
+      {
+        id: 'obj_s6_enter',
+        description: 'Enter V4 Bio-Containment Lab',
+        type: 'enter_zone',
+        target: 1,
+        targetId: 'research_lab',
+      },
+      {
+        id: 'obj_s6_vault',
+        description: 'Unlock & open the V4 Specimen Vault Door',
+        type: 'open_door',
+        target: 1,
+        targetId: 'door_lab_vault',
+      },
+      {
+        id: 'obj_s6_terminal',
+        description: 'Inspect the V4 Containment Archive Terminal',
+        type: 'interact_story_object',
+        target: 1,
+        targetId: 'story_lab_terminal',
+      },
+    ],
+    rewards: {
+      money: 180,
+      resources: { medical_supplies: 3, scrap_metal: 2 },
+      clueTitle: STORY_CLUE_DEFINITIONS.clue_v4_containment.title,
+    },
+    clueUnlockId: 'clue_v4_containment',
   },
 ];
 

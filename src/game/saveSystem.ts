@@ -4,6 +4,7 @@ import type {
   EmployeeStatus,
   InventoryState,
   WeatherKind,
+  WorldRegionId,
 } from './types';
 
 export const SAVE_STORAGE_KEY = 'last_shop_save_v1';
@@ -69,6 +70,10 @@ export interface SavedWorldInteractablesState {
   collectedResourceIds: string[];
   openDoorIds: string[];
   searchedContainerIds: string[];
+  collectedKeyIds?: string[];
+  unlockedDoorIds?: string[];
+  searchedExtraIds?: string[];
+  examinedObjectIds?: string[];
 }
 
 export interface SavedZombieState {
@@ -96,6 +101,8 @@ export interface SavedGameData {
   zombies: SavedZombieState;
   missions: SerializedMissionState;
   discoveredLocationIds?: string[];
+  discoveredRegionIds?: WorldRegionId[];
+  claimedDiscoveryRewardIds?: string[];
   guidance?: {
     completedIds: string[];
     dismissedIds: string[];

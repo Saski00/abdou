@@ -15,12 +15,17 @@ import { RecruitmentModal } from './components/RecruitmentModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ShopModal } from './components/ShopModal';
 import { StoryNoteModal } from './components/StoryNoteModal';
+import { WorkbenchModal } from './components/WorkbenchModal';
 import { DEFAULT_ECONOMY_CONFIG, createInitialShopSnapshot } from './game/economy';
 import { createInitialMissionSnapshot } from './game/missionSystem';
 import { createInitialInventory } from './game/resources';
 import { SavedGameSummary, getSavedGameSummary, hasSavedGame } from './game/saveSystem';
+import {
+  applyScreenOrientationPreference,
+  useViewportLayout,
+} from './game/responsiveLayout';
+import { loadSettingsFromStorage, saveSettingsToStorage } from './game/settingsStorage';
 import { createInitialStaffSnapshot } from './game/staffSystem';
-import { DEFAULT_DAY_LENGTH_SECONDS } from './game/timeSystem';
 import {
   EmployeeProfession,
   GameScreenState,
@@ -42,18 +47,8 @@ type ActiveModal =
   | 'MISSIONS'
   | 'MAP'
   | 'STORY_NOTE'
+  | 'WORKBENCH'
   | 'ENDING';
-
-const INITIAL_SETTINGS: GameSettings = {
-  masterVolume: 0.55,
-  muted: false,
-  mouseSensitivity: 1.0,
-  shadowsEnabled: true,
-  lightingQuality: 'atmospheric',
-  flashlightOn: true,
-  touchControls: 'auto',
-  dayLengthSeconds: DEFAULT_DAY_LENGTH_SECONDS,
-};
 
 const INITIAL_HUD: HudSnapshot = {
   health: 100,
@@ -88,6 +83,9 @@ const INITIAL_HUD: HudSnapshot = {
   missions: createInitialMissionSnapshot(false),
   latestToast: null,
   damagePulseId: 0,
+  attackPulseId: 0,
+  inActiveCombat: false,
+  weaponLabel: 'Steel Pipe',
   zombiesDefeated: 0,
   deathReason: null,
   playerX: -11.5,
@@ -99,7 +97,11 @@ const INITIAL_HUD: HudSnapshot = {
   currentLocationName: 'District 04 Streets',
   currentLocationSubtitle: 'Outside The Last Shop',
   currentLocationDanger: null,
+  currentRegionId: 'main_street',
+  currentRegionName: 'Main Street',
   discoveredLocationIds: ['last_shop'],
+  discoveredRegionIds: ['main_street'],
+  collectedKeyIds: [],
   guidanceHint: null,
 };
 
@@ -112,7 +114,8 @@ export default function App() {
   const [shopInitialTab, setShopInitialTab] = useState<ShopModalTab>('counter');
   const [recruitSurvivorId, setRecruitSurvivorId] = useState<string | null>(null);
   const [storyNoteData, setStoryNoteData] = useState<StoryObjectInspectionData | null>(null);
-  const [settings, setSettings] = useState<GameSettings>(INITIAL_SETTINGS);
+  const [workbenchName, setWorkbenchName] = useState<string>('Supply Workbench');
+  const [settings, setSettings] = useState<GameSettings>(() => loadSettingsFromStorage());
   const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
   const [sessionToken, setSessionToken] = useState(0);
   const [loadToken, setLoadToken] = useState(0);
@@ -120,6 +123,7 @@ export default function App() {
     getSavedGameSummary()
   );
 
+  const viewport = useViewportLayout();
   const isTouchMode = useTouchDevice(settings.touchControls);
   const isInventoryOpen = screenState === 'PLAYING' && activeModal === 'INVENTORY';
   const isShopOpen = screenState === 'PLAYING' && activeModal === 'SHOP';
@@ -127,7 +131,18 @@ export default function App() {
   const isMissionsOpen = screenState === 'PLAYING' && activeModal === 'MISSIONS';
   const isMapOpen = screenState === 'PLAYING' && activeModal === 'MAP';
   const isStoryNoteOpen = screenState === 'PLAYING' && activeModal === 'STORY_NOTE';
+  const isWorkbenchOpen = screenState === 'PLAYING' && activeModal === 'WORKBENCH';
   const isEndingOpen = screenState === 'PLAYING' && activeModal === 'ENDING';
+
+  useEffect(() => {
+    soundEngine.setSettings(settings.masterVolume, settings.muted);
+  }, [soundEngine, settings.masterVolume, settings.muted]);
+
+  useEffect(() => {
+    if (settings.screenOrientation !== 'auto') {
+      void applyScreenOrientationPreference(settings.screenOrientation);
+    }
+  }, [settings.screenOrientation]);
 
   useEffect(() => {
     if (screenState === 'MENU') {
@@ -233,6 +248,20 @@ export default function App() {
     [screenState, soundEngine]
   );
 
+  const handleWorkbenchRequested = useCallback(
+    (name: string) => {
+      if (screenState !== 'PLAYING') return;
+      soundEngine.playUiClick(560);
+      setWorkbenchName(name || 'Supply Workbench');
+      setActiveModal('WORKBENCH');
+    },
+    [screenState, soundEngine]
+  );
+
+  const handleCraftRecipe = useCallback((recipeId: string) => {
+    engineBridgeRef.current?.craftWorkbenchRecipe(recipeId);
+  }, []);
+
   const handleEndingTriggered = useCallback(() => {
     soundEngine.playUiClick(660);
     setStoryNoteData(null);
@@ -280,6 +309,7 @@ export default function App() {
     setSettings((prev) => {
       const next = { ...prev, muted: !prev.muted };
       soundEngine.setSettings(next.masterVolume, next.muted);
+      saveSettingsToStorage(next);
       return next;
     });
   }, [soundEngine]);
@@ -287,13 +317,19 @@ export default function App() {
   const handleSettingsChange = useCallback(
     (next: GameSettings) => {
       soundEngine.setSettings(next.masterVolume, next.muted);
+      saveSettingsToStorage(next);
       setSettings(next);
     },
     [soundEngine]
   );
 
   const handleFlashlightToggled = useCallback((on: boolean) => {
-    setSettings((prev) => (prev.flashlightOn === on ? prev : { ...prev, flashlightOn: on }));
+    setSettings((prev) => {
+      if (prev.flashlightOn === on) return prev;
+      const next = { ...prev, flashlightOn: on };
+      saveSettingsToStorage(next);
+      return next;
+    });
   }, []);
 
   const handleTouchMove = useCallback((x: number, y: number, sprint: boolean) => {
@@ -433,6 +469,7 @@ export default function App() {
     isMissionsOpen ||
     isMapOpen ||
     isStoryNoteOpen ||
+    isWorkbenchOpen ||
     isEndingOpen;
 
   const activeRecruitSurvivor =
@@ -454,6 +491,7 @@ export default function App() {
         missionsOpen={isMissionsOpen}
         mapOpen={isMapOpen}
         storyNoteOpen={isStoryNoteOpen}
+        workbenchOpen={isWorkbenchOpen}
         endingOpen={isEndingOpen}
         engineBridgeRef={engineBridgeRef}
         onHudChange={setHud}
@@ -464,6 +502,7 @@ export default function App() {
         onShopRequested={handleShopRequested}
         onSurvivorInteractRequested={handleSurvivorInteractRequested}
         onStoryObjectInspectRequested={handleStoryObjectInspectRequested}
+        onWorkbenchRequested={handleWorkbenchRequested}
         onEndingTriggered={handleEndingTriggered}
         onFlashlightToggled={handleFlashlightToggled}
         onGameOver={handleGameOver}
@@ -492,6 +531,7 @@ export default function App() {
         <MobileControls
           flashlightOn={hud.flashlightOn}
           interactionPrompt={hud.interactionPrompt}
+          viewport={viewport}
           onMove={handleTouchMove}
           onLookDelta={handleTouchLookDelta}
           onJump={handleTouchJump}
@@ -507,6 +547,7 @@ export default function App() {
           muted={settings.muted}
           isPlaying={screenState === 'PLAYING'}
           isTouchMode={isTouchMode}
+          viewport={viewport}
           isInventoryOpen={anyGameplayModalOpen}
           isMissionsOpen={isMissionsOpen}
           isMapOpen={isMapOpen}
@@ -530,6 +571,8 @@ export default function App() {
           hud={hud}
           isTouchMode={isTouchMode}
           onConsumeItem={handleConsumeItem}
+          onToggleRest={handleToggleRest}
+          onToggleFlashlight={handleTouchFlashlight}
           onClose={() => {
             soundEngine.playUiClick(460);
             setActiveModal('NONE');
@@ -569,6 +612,21 @@ export default function App() {
           onClose={() => {
             soundEngine.playUiClick(460);
             setStoryNoteData(null);
+            setActiveModal('NONE');
+          }}
+        />
+      )}
+
+      {isWorkbenchOpen && (
+        <WorkbenchModal
+          workbenchName={workbenchName}
+          inventory={hud.inventory}
+          totalInventoryItems={hud.totalInventoryItems}
+          packCapacity={hud.packCapacity}
+          isTouchMode={isTouchMode}
+          onCraftRecipe={handleCraftRecipe}
+          onClose={() => {
+            soundEngine.playUiClick(460);
             setActiveModal('NONE');
           }}
         />

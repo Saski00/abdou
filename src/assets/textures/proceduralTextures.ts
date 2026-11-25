@@ -18,6 +18,11 @@ export interface ProceduralTextureSet {
   signMainBlvd: THREE.CanvasTexture;
   signCentralAve: THREE.CanvasTexture;
   signQuarantine: THREE.CanvasTexture;
+  signPolicePrecinct: THREE.CanvasTexture;
+  signFieldClinic: THREE.CanvasTexture;
+  signResearchLab: THREE.CanvasTexture;
+  signDistrictNorth: THREE.CanvasTexture;
+  signDistrictCross: THREE.CanvasTexture;
   hazardStripe: THREE.CanvasTexture;
   dispose: () => void;
 }
@@ -405,6 +410,71 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     maxAnisotropy
   );
 
+  const signPolicePrecinct = createSignboardTexture(
+    {
+      bg: '#132136',
+      border: '#3b82f6',
+      text: 'POLICE PRECINCT 04',
+      textColor: '#dbeafe',
+      subText: 'DISPATCH & EVIDENCE',
+      subColor: '#93c5fd',
+      fontSize: 42,
+    },
+    maxAnisotropy
+  );
+
+  const signFieldClinic = createSignboardTexture(
+    {
+      bg: '#142a2e',
+      border: '#06b6d4',
+      text: 'MERCY FIELD CLINIC',
+      textColor: '#e0f2fe',
+      subText: 'TRIAGE & MEDICAL BAY',
+      subColor: '#67e8f9',
+      fontSize: 42,
+    },
+    maxAnisotropy
+  );
+
+  const signResearchLab = createSignboardTexture(
+    {
+      bg: '#1b1b24',
+      border: '#f59e0b',
+      text: 'V4 CONTAINMENT LAB',
+      textColor: '#fde68a',
+      subText: 'RESTRICTED RESEARCH SECTOR',
+      subColor: '#fca5a5',
+      fontSize: 42,
+    },
+    maxAnisotropy
+  );
+
+  const signDistrictNorth = createSignboardTexture(
+    {
+      bg: '#172536',
+      border: '#eab308',
+      text: '<- SHOP / MERCER  |  AUTO / LAB ->',
+      textColor: '#fde68a',
+      width: 384,
+      height: 64,
+      fontSize: 22,
+    },
+    maxAnisotropy
+  );
+
+  const signDistrictCross = createSignboardTexture(
+    {
+      bg: '#1c1917',
+      border: '#38bdf8',
+      text: '<- ROADBLOCK  |  POLICE / CLINIC ->',
+      textColor: '#bae6fd',
+      width: 384,
+      height: 64,
+      fontSize: 22,
+    },
+    maxAnisotropy
+  );
+
   // Hazard caution tape / barrier texture
   const hzCanvas = document.createElement('canvas');
   hzCanvas.width = 256;
@@ -442,6 +512,11 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     signMainBlvd,
     signCentralAve,
     signQuarantine,
+    signPolicePrecinct,
+    signFieldClinic,
+    signResearchLab,
+    signDistrictNorth,
+    signDistrictCross,
     hazardStripe,
   ];
 
@@ -463,6 +538,11 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     signMainBlvd,
     signCentralAve,
     signQuarantine,
+    signPolicePrecinct,
+    signFieldClinic,
+    signResearchLab,
+    signDistrictNorth,
+    signDistrictCross,
     hazardStripe,
     dispose: () => {
       for (const tex of all) tex.dispose();

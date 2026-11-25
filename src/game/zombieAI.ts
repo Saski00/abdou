@@ -106,8 +106,8 @@ export const INITIAL_ZOMBIE_SPAWNS: ZombieSpawnConfig[] = [
   },
   {
     id: 'z_vale_approach',
-    homeX: 21.0,
-    homeZ: -13.5,
+    homeX: 22.8,
+    homeZ: -15.5,
     yaw: -1.1,
   },
   {
@@ -115,6 +115,42 @@ export const INITIAL_ZOMBIE_SPAWNS: ZombieSpawnConfig[] = [
     homeX: 24.0,
     homeZ: -26.5,
     yaw: 0.9,
+  },
+  {
+    id: 'z_industrial_bay',
+    homeX: 19.0,
+    homeZ: 25.5,
+    yaw: -1.4,
+  },
+  {
+    id: 'z_police_lot',
+    homeX: -31.5,
+    homeZ: 39.2,
+    yaw: 1.2,
+  },
+  {
+    id: 'z_clinic_st',
+    homeX: 16.5,
+    homeZ: 35.5,
+    yaw: -2.2,
+  },
+  {
+    id: 'z_military_post',
+    homeX: -2.2,
+    homeZ: -34.0,
+    yaw: 0.3,
+  },
+  {
+    id: 'z_lab_gate',
+    homeX: 27.0,
+    homeZ: -33.5,
+    yaw: -0.7,
+  },
+  {
+    id: 'z_lab_courtyard',
+    homeX: 22.2,
+    homeZ: -45.5,
+    yaw: 2.5,
   },
 ];
 
@@ -536,12 +572,16 @@ export function stepZombiesAI(
     const distToPlayer = Math.hypot(playerX - z.x, playerZ - z.z);
     const distFromHome = Math.hypot(z.x - z.homeX, z.z - z.homeZ);
 
-    // 1. Staggered Sensor / AI Transition Update
+    // 1. Staggered Sensor / AI Transition Update (throttled when far from player & idle/roaming)
     z.sensorTimer -= dt;
     if (z.sensorTimer <= 0) {
-      z.sensorTimer = cfg.sensorIntervalSec;
+      const farIdleOrRoam =
+        distToPlayer > 38 && (z.state === 'idle' || z.state === 'roaming');
+      z.sensorTimer = farIdleOrRoam ? 0.65 : cfg.sensorIntervalSec;
 
-      if (playerDead) {
+      if (farIdleOrRoam) {
+        // Distant idle/roaming zombies skip expensive 2D ray/LOS checks until player nears
+      } else if (playerDead) {
         if (z.state === 'chasing' || z.state === 'attacking' || z.state === 'investigating') {
           z.state = 'returning';
           z.targetX = z.homeX;

@@ -154,5 +154,5 @@ export function formatResourceCollectedLabel(id: ResourceId, amount: number): st
   const def = RESOURCE_DEFINITIONS[id];
   const count = Math.max(1, Math.floor(amount));
   const label = count === 1 ? def.name : def.pluralName;
-  return `Collected ${count} ${label}`;
+  return `+${count} ${label}`;
 }

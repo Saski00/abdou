@@ -29,6 +29,15 @@ export interface MaterialPalette {
   signMainBlvd: THREE.MeshStandardMaterial;
   signCentralAve: THREE.MeshStandardMaterial;
   signQuarantine: THREE.MeshStandardMaterial;
+  signPolicePrecinct: THREE.MeshStandardMaterial;
+  signFieldClinic: THREE.MeshStandardMaterial;
+  signResearchLab: THREE.MeshStandardMaterial;
+  signDistrictNorth: THREE.MeshStandardMaterial;
+  signDistrictCross: THREE.MeshStandardMaterial;
+  beaconBlue: THREE.MeshStandardMaterial;
+  beaconCyan: THREE.MeshStandardMaterial;
+  beaconRed: THREE.MeshStandardMaterial;
+  beaconAmber: THREE.MeshStandardMaterial;
   hazardStripe: THREE.MeshStandardMaterial;
   safetyOrange: THREE.MeshStandardMaterial;
   tarpBlue: THREE.MeshStandardMaterial;
@@ -143,43 +152,131 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
   });
   const signValeStore = new THREE.MeshStandardMaterial({
     map: textures.signValeStore,
-    roughness: 0.72,
+    emissive: 0xffffff,
+    emissiveMap: textures.signValeStore,
+    emissiveIntensity: 0.36,
+    roughness: 0.65,
     metalness: 0.1,
   });
   const signDepot04 = new THREE.MeshStandardMaterial({
     map: textures.signDepot04,
-    roughness: 0.78,
+    emissive: 0xe2e8f0,
+    emissiveMap: textures.signDepot04,
+    emissiveIntensity: 0.28,
+    roughness: 0.7,
     metalness: 0.15,
   });
   const signStarlightDiner = new THREE.MeshStandardMaterial({
     map: textures.signStarlightDiner,
-    roughness: 0.65,
+    emissive: 0xffffff,
+    emissiveMap: textures.signStarlightDiner,
+    emissiveIntensity: 0.48,
+    roughness: 0.55,
     metalness: 0.12,
   });
   const signRedlineAuto = new THREE.MeshStandardMaterial({
     map: textures.signRedlineAuto,
-    roughness: 0.72,
+    emissive: 0xffffff,
+    emissiveMap: textures.signRedlineAuto,
+    emissiveIntensity: 0.38,
+    roughness: 0.65,
     metalness: 0.15,
   });
   const signMercerFlats = new THREE.MeshStandardMaterial({
     map: textures.signMercerFlats,
-    roughness: 0.82,
+    emissive: 0xcbd5e1,
+    emissiveMap: textures.signMercerFlats,
+    emissiveIntensity: 0.25,
+    roughness: 0.78,
     metalness: 0.08,
   });
   const signMainBlvd = new THREE.MeshStandardMaterial({
     map: textures.signMainBlvd,
+    emissive: 0xd1fae5,
+    emissiveMap: textures.signMainBlvd,
+    emissiveIntensity: 0.26,
     roughness: 0.45,
     metalness: 0.25,
   });
   const signCentralAve = new THREE.MeshStandardMaterial({
     map: textures.signCentralAve,
+    emissive: 0xd1fae5,
+    emissiveMap: textures.signCentralAve,
+    emissiveIntensity: 0.26,
     roughness: 0.45,
     metalness: 0.25,
   });
   const signQuarantine = new THREE.MeshStandardMaterial({
     map: textures.signQuarantine,
-    roughness: 0.6,
+    emissive: 0xfef08a,
+    emissiveMap: textures.signQuarantine,
+    emissiveIntensity: 0.42,
+    roughness: 0.52,
     metalness: 0.2,
+  });
+  const signPolicePrecinct = new THREE.MeshStandardMaterial({
+    map: textures.signPolicePrecinct,
+    emissive: 0xbfdbfe,
+    emissiveMap: textures.signPolicePrecinct,
+    emissiveIntensity: 0.48,
+    roughness: 0.52,
+    metalness: 0.18,
+  });
+  const signFieldClinic = new THREE.MeshStandardMaterial({
+    map: textures.signFieldClinic,
+    emissive: 0xa5f3fc,
+    emissiveMap: textures.signFieldClinic,
+    emissiveIntensity: 0.48,
+    roughness: 0.5,
+    metalness: 0.14,
+  });
+  const signResearchLab = new THREE.MeshStandardMaterial({
+    map: textures.signResearchLab,
+    emissive: 0xfde68a,
+    emissiveMap: textures.signResearchLab,
+    emissiveIntensity: 0.5,
+    roughness: 0.48,
+    metalness: 0.22,
+  });
+  const signDistrictNorth = new THREE.MeshStandardMaterial({
+    map: textures.signDistrictNorth,
+    emissive: 0xfef08a,
+    emissiveMap: textures.signDistrictNorth,
+    emissiveIntensity: 0.34,
+    roughness: 0.45,
+    metalness: 0.2,
+  });
+  const signDistrictCross = new THREE.MeshStandardMaterial({
+    map: textures.signDistrictCross,
+    emissive: 0xbae6fd,
+    emissiveMap: textures.signDistrictCross,
+    emissiveIntensity: 0.34,
+    roughness: 0.45,
+    metalness: 0.2,
+  });
+  const beaconBlue = new THREE.MeshStandardMaterial({
+    color: 0x3b82f6,
+    emissive: 0x2563eb,
+    emissiveIntensity: 2.4,
+    roughness: 0.2,
+  });
+  const beaconCyan = new THREE.MeshStandardMaterial({
+    color: 0x22d3ee,
+    emissive: 0x06b6d4,
+    emissiveIntensity: 2.0,
+    roughness: 0.22,
+  });
+  const beaconRed = new THREE.MeshStandardMaterial({
+    color: 0xf87171,
+    emissive: 0xdc2626,
+    emissiveIntensity: 2.2,
+    roughness: 0.22,
+  });
+  const beaconAmber = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xd97706,
+    emissiveIntensity: 2.1,
+    roughness: 0.22,
   });
   const hazardStripe = new THREE.MeshStandardMaterial({
     map: textures.hazardStripe,
@@ -253,6 +350,15 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     signMainBlvd,
     signCentralAve,
     signQuarantine,
+    signPolicePrecinct,
+    signFieldClinic,
+    signResearchLab,
+    signDistrictNorth,
+    signDistrictCross,
+    beaconBlue,
+    beaconCyan,
+    beaconRed,
+    beaconAmber,
     hazardStripe,
     safetyOrange,
     tarpBlue,
@@ -289,6 +395,15 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     signMainBlvd,
     signCentralAve,
     signQuarantine,
+    signPolicePrecinct,
+    signFieldClinic,
+    signResearchLab,
+    signDistrictNorth,
+    signDistrictCross,
+    beaconBlue,
+    beaconCyan,
+    beaconRed,
+    beaconAmber,
     hazardStripe,
     safetyOrange,
     tarpBlue,
@@ -944,19 +1059,28 @@ export function buildWoodFenceSegment(
 
 export function buildStreetSignpostModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 3.15, 8), mats.lampMetal);
-  pole.position.y = 1.575;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 3.25, 8), mats.lampMetal);
+  pole.position.y = 1.625;
   pole.castShadow = true;
   group.add(pole);
 
   const bladeMain = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.05), mats.signMainBlvd);
-  bladeMain.position.set(0.32, 2.95, 0);
+  bladeMain.position.set(0.32, 3.05, 0);
   group.add(bladeMain);
 
   const bladeCentral = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.05), mats.signCentralAve);
-  bladeCentral.position.set(0, 2.66, 0.32);
+  bladeCentral.position.set(0, 2.75, 0.32);
   bladeCentral.rotation.y = Math.PI * 0.5;
   group.add(bladeCentral);
+
+  const bladeDirEW = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.28, 0.05), mats.signDistrictNorth);
+  bladeDirEW.position.set(0, 2.38, 0);
+  group.add(bladeDirEW);
+
+  const bladeDirNS = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.28, 0.05), mats.signDistrictCross);
+  bladeDirNS.position.set(0, 2.06, 0);
+  bladeDirNS.rotation.y = Math.PI * 0.5;
+  group.add(bladeDirNS);
 
   return group;
 }

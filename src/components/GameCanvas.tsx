@@ -38,6 +38,7 @@ export interface TouchEngineBridge {
   payUnpaidWages: () => void;
   trackMission: (missionId: string | null) => void;
   performStoryObjectAction: (objectId: string) => StoryObjectInspectionData | null;
+  craftWorkbenchRecipe: (recipeId: string) => boolean;
   dismissGuidanceHint: (hintId: string) => void;
   saveCurrentGame: (showToast?: boolean) => boolean;
 }
@@ -54,6 +55,7 @@ interface GameCanvasProps {
   missionsOpen: boolean;
   mapOpen: boolean;
   storyNoteOpen: boolean;
+  workbenchOpen: boolean;
   endingOpen: boolean;
   engineBridgeRef: MutableRefObject<TouchEngineBridge | null>;
   onHudChange: (hud: HudSnapshot) => void;
@@ -64,6 +66,7 @@ interface GameCanvasProps {
   onShopRequested: (tab: ShopModalTab) => void;
   onSurvivorInteractRequested: (survivorId: string) => void;
   onStoryObjectInspectRequested: (data: StoryObjectInspectionData) => void;
+  onWorkbenchRequested: (workbenchName: string) => void;
   onEndingTriggered: () => void;
   onFlashlightToggled: (on: boolean) => void;
   onGameOver: (reason: string) => void;
@@ -82,6 +85,7 @@ export function GameCanvas({
   missionsOpen,
   mapOpen,
   storyNoteOpen,
+  workbenchOpen,
   endingOpen,
   engineBridgeRef,
   onHudChange,
@@ -92,6 +96,7 @@ export function GameCanvas({
   onShopRequested,
   onSurvivorInteractRequested,
   onStoryObjectInspectRequested,
+  onWorkbenchRequested,
   onEndingTriggered,
   onFlashlightToggled,
   onGameOver,
@@ -110,6 +115,7 @@ export function GameCanvas({
     onShopRequested,
     onSurvivorInteractRequested,
     onStoryObjectInspectRequested,
+    onWorkbenchRequested,
     onEndingTriggered,
     onFlashlightToggled,
     onGameOver,
@@ -124,6 +130,7 @@ export function GameCanvas({
     onShopRequested,
     onSurvivorInteractRequested,
     onStoryObjectInspectRequested,
+    onWorkbenchRequested,
     onEndingTriggered,
     onFlashlightToggled,
     onGameOver,
@@ -145,6 +152,8 @@ export function GameCanvas({
         callbacksRef.current.onSurvivorInteractRequested(survivorId),
       onStoryObjectInspectRequested: (data) =>
         callbacksRef.current.onStoryObjectInspectRequested(data),
+      onWorkbenchRequested: (workbenchName) =>
+        callbacksRef.current.onWorkbenchRequested(workbenchName),
       onEndingTriggered: () => callbacksRef.current.onEndingTriggered(),
       onFlashlightToggled: (on) => callbacksRef.current.onFlashlightToggled(on),
       onGameOver: (reason) => callbacksRef.current.onGameOver(reason),
@@ -182,6 +191,7 @@ export function GameCanvas({
       payUnpaidWages: () => engine.payUnpaidWagesNow(),
       trackMission: (missionId) => engine.trackMission(missionId),
       performStoryObjectAction: (objectId) => engine.performStoryObjectAction(objectId),
+      craftWorkbenchRecipe: (recipeId) => engine.craftWorkbenchRecipe(recipeId),
       dismissGuidanceHint: (hintId) => engine.dismissGuidanceHint(hintId),
       saveCurrentGame: (showToast = true) => engine.saveCurrentGame(showToast),
     };
@@ -224,6 +234,10 @@ export function GameCanvas({
   useEffect(() => {
     engineRef.current?.setStoryNoteOpen(storyNoteOpen);
   }, [storyNoteOpen]);
+
+  useEffect(() => {
+    engineRef.current?.setWorkbenchOpen(workbenchOpen);
+  }, [workbenchOpen]);
 
   useEffect(() => {
     engineRef.current?.setEndingOpen(endingOpen);

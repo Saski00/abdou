@@ -38,10 +38,13 @@ import {
   ResourceId,
   ShopModalTab,
   StoryObjectInspectionData,
+  WorldRegionId,
 } from '../game/types';
 import { WeatherSystem } from '../game/weatherSystem';
 import { GuidanceSystem } from '../game/guidanceSystem';
-import { LOCATION_BY_ID, getLocationAtPosition } from '../game/worldLocations';
+import { craftWorkbenchRecipe as runWorkbenchRecipe } from '../game/craftingSystem';
+import { computeResponsiveCameraFov } from '../game/responsiveLayout';
+import { LOCATION_BY_ID, REGION_BY_ID, getLocationAtPosition, getRegionAtPosition } from '../game/worldLocations';
 import { AssetManager } from './AssetManager';
 import { AtmosphereManager } from './AtmosphereManager';
 import { CustomerManager } from './CustomerManager';
@@ -58,6 +61,7 @@ export interface Engine3DCallbacks {
   onMissionsToggleRequested: () => void;
   onMapToggleRequested: () => void;
   onShopRequested: (tab: ShopModalTab) => void;
+  onWorkbenchRequested: (workbenchName: string) => void;
   onSurvivorInteractRequested: (survivorId: string) => void;
   onStoryObjectInspectRequested: (data: StoryObjectInspectionData) => void;
   onEndingTriggered: () => void;
@@ -122,6 +126,8 @@ export class Game3DEngine {
   private ashMat: THREE.PointsMaterial;
 
   private frameId = 0;
+  private resizeRafId = 0;
+  private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
   private lastTime = 0;
   private elapsedTime = 0;
@@ -136,17 +142,23 @@ export class Game3DEngine {
   private missionsOpen = false;
   private mapOpen = false;
   private storyNoteOpen = false;
+  private workbenchOpen = false;
   private endingOpen = false;
   private activeContextTitle: string | null = null;
   private activeContextMessage: string | null = null;
   private contextTimer = 0;
   private zoneCooldowns = new Map<string, number>();
   private discoveredLocationIds = new Set<string>(['last_shop']);
+  private discoveredRegionIds = new Set<WorldRegionId>(['main_street']);
+  private claimedDiscoveryRewardIds = new Set<string>(['last_shop']);
   private currentLocationId: string | null = null;
+  private lastRegionId: WorldRegionId | null = 'main_street';
   private insideShop = false;
   private lastShopChimeAt = -99;
   private lastHudKey = '';
   private damagePulseId = 0;
+  private attackPulseId = 0;
+  private recentCombatTimer = 0;
   private moveNoiseCooldown = 0;
   private lastSalesSnapshotCount = 0;
   private lastReplenishDay = 1;
@@ -204,7 +216,12 @@ export class Game3DEngine {
     this.scene.background = new THREE.Color(skyColor);
     this.scene.fog = new THREE.FogExp2(skyColor, 0.022);
 
-    this.camera = new THREE.PerspectiveCamera(72, width / height, 0.1, 160);
+    this.camera = new THREE.PerspectiveCamera(
+      computeResponsiveCameraFov(width, height, 72),
+      width / height,
+      0.1,
+      160
+    );
 
     // Procedural Studio Environment Map for realistic PBR metal/glass reflections
     const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -275,9 +292,9 @@ export class Game3DEngine {
     const ashCount = 160;
     this.ashPositions = new Float32Array(ashCount * 3);
     for (let i = 0; i < ashCount; i++) {
-      this.ashPositions[i * 3] = (Math.random() - 0.5) * 65;
+      this.ashPositions[i * 3] = (Math.random() - 0.5) * 92;
       this.ashPositions[i * 3 + 1] = 0.4 + Math.random() * 8;
-      this.ashPositions[i * 3 + 2] = (Math.random() - 0.5) * 65;
+      this.ashPositions[i * 3 + 2] = (Math.random() - 0.5) * 92;
     }
     const ashGeo = new THREE.BufferGeometry();
     ashGeo.setAttribute('position', new THREE.BufferAttribute(this.ashPositions, 3));
@@ -381,6 +398,18 @@ export class Game3DEngine {
         this.handleStoryObjectInteract(objectId);
       },
     });
+    this.interactions.setEnvironmentCallbacks({
+      onWorkbenchOpened: (workbenchName) => {
+        this.callbacks.onWorkbenchRequested(workbenchName);
+      },
+      onExamineNote: (title, message) => {
+        this.showContextMessage(title, message, 5.2);
+      },
+      onBedRestToggle: () => {
+        this.toggleRest();
+      },
+      isRestingProvider: () => this.survival.isResting,
+    });
 
     // Set initial scenic twilight atmosphere for menu
     this.timeSystem.setHour(17.9, 1);
@@ -457,6 +486,7 @@ export class Game3DEngine {
       this.missionsOpen ||
       this.mapOpen ||
       this.storyNoteOpen ||
+      this.workbenchOpen ||
       this.endingOpen
     );
   }
@@ -489,6 +519,8 @@ export class Game3DEngine {
     this.audioAtmoTimer = 0;
     this.autosaveTimer = 0;
     this.damagePulseId = 0;
+    this.attackPulseId = 0;
+    this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
     this.lastSalesSnapshotCount = 0;
     this.inventoryOpen = false;
@@ -497,10 +529,14 @@ export class Game3DEngine {
     this.missionsOpen = false;
     this.mapOpen = false;
     this.storyNoteOpen = false;
+    this.workbenchOpen = false;
     this.endingOpen = false;
     this.zoneCooldowns.clear();
     this.discoveredLocationIds = new Set(['last_shop']);
+    this.discoveredRegionIds = new Set(['main_street']);
+    this.claimedDiscoveryRewardIds = new Set(['last_shop']);
     this.currentLocationId = null;
+    this.lastRegionId = 'main_street';
     this.insideShop = false;
     this.lastShopChimeAt = -99;
     this.playerDistanceMoved = 0;
@@ -578,6 +614,8 @@ export class Game3DEngine {
       zombies: this.zombies.exportState(),
       missions: this.missions.exportState(),
       discoveredLocationIds: Array.from(this.discoveredLocationIds),
+      discoveredRegionIds: Array.from(this.discoveredRegionIds),
+      claimedDiscoveryRewardIds: Array.from(this.claimedDiscoveryRewardIds),
       guidance: this.guidance.exportState(),
     };
 
@@ -608,11 +646,14 @@ export class Game3DEngine {
     this.missionsOpen = false;
     this.mapOpen = false;
     this.storyNoteOpen = false;
+    this.workbenchOpen = false;
     this.endingOpen = false;
     this.zoneCooldowns.clear();
     this.audioAtmoTimer = 0;
     this.autosaveTimer = 0;
     this.damagePulseId = 0;
+    this.attackPulseId = 0;
+    this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
 
     this.timeSystem.setHour(
@@ -642,6 +683,26 @@ export class Game3DEngine {
     for (const zId of this.missions.getVisitedZones()) {
       if (LOCATION_BY_ID[zId]) this.discoveredLocationIds.add(zId);
     }
+    this.discoveredRegionIds = new Set(['main_street']);
+    if (Array.isArray(saved.discoveredRegionIds)) {
+      for (const rId of saved.discoveredRegionIds) {
+        if (REGION_BY_ID[rId]) this.discoveredRegionIds.add(rId);
+      }
+    }
+    for (const locId of this.discoveredLocationIds) {
+      const def = LOCATION_BY_ID[locId];
+      if (def) this.discoveredRegionIds.add(def.regionId);
+    }
+    this.claimedDiscoveryRewardIds = new Set(['last_shop']);
+    if (Array.isArray(saved.claimedDiscoveryRewardIds)) {
+      for (const id of saved.claimedDiscoveryRewardIds) {
+        if (LOCATION_BY_ID[id]) this.claimedDiscoveryRewardIds.add(id);
+      }
+    } else {
+      for (const id of this.discoveredLocationIds) {
+        this.claimedDiscoveryRewardIds.add(id);
+      }
+    }
 
     const px = saved.player?.x ?? NEIGHBORHOOD_MAP.playerSpawn.x;
     const pz = saved.player?.z ?? NEIGHBORHOOD_MAP.playerSpawn.z;
@@ -649,7 +710,10 @@ export class Game3DEngine {
     this.lastTrackedZ = pz;
     this.playerDistanceMoved = 10;
     this.insideShop = this.checkInsideLastShop(px, pz);
-    this.currentLocationId = getLocationAtPosition(px, pz)?.id ?? (this.insideShop ? 'last_shop' : null);
+    const loadedLoc = getLocationAtPosition(px, pz);
+    this.currentLocationId = loadedLoc?.id ?? (this.insideShop ? 'last_shop' : null);
+    this.lastRegionId = loadedLoc ? loadedLoc.regionId : getRegionAtPosition(px, pz).id;
+    this.discoveredRegionIds.add(this.lastRegionId);
 
     this.controller.spawnAt(
       px,
@@ -753,6 +817,41 @@ export class Game3DEngine {
       this.screenState === 'PLAYING' && !this.isModalBlockingInput()
     );
     this.emitHud(true);
+  }
+
+  public setWorkbenchOpen(open: boolean): void {
+    this.workbenchOpen = open;
+    if (open) {
+      this.controller.clearInputs();
+      this.controller.exitPointerLock();
+    }
+    this.zombies.setFirstPersonWeaponVisible(
+      this.screenState === 'PLAYING' && !this.isModalBlockingInput()
+    );
+    this.emitHud(true);
+  }
+
+  public craftWorkbenchRecipe(recipeId: string): boolean {
+    if (this.screenState !== 'PLAYING') return false;
+    this.sound.unlock();
+    this.sound.startAmbience();
+    const cap = getPackCapacity(this.economy.getShopLevel());
+    const res = runWorkbenchRecipe(recipeId, this.interactions.inventory, cap);
+    if (res.ok) {
+      this.interactions.inventory = res.nextInventory;
+      this.sound.playStockTransfer();
+      this.zombies.emitNoise({
+        x: this.controller.position.x,
+        z: this.controller.position.z,
+        radius: 8.5,
+        source: 'interact',
+      });
+    } else {
+      this.sound.playUiClick(340);
+    }
+    this.interactions.pushToast(res.message, res.tone, 2.5);
+    this.emitHud(true);
+    return res.ok;
   }
 
   public setEndingOpen(open: boolean): void {
@@ -1120,13 +1219,22 @@ export class Game3DEngine {
     if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
     this.sound.unlock();
     this.sound.startAmbience();
+    const targetKind = this.interactions.targeted?.kind;
     if (this.interactions.interact()) {
-      this.zombies.emitNoise({
-        x: this.controller.position.x,
-        z: this.controller.position.z,
-        radius: 12.5,
-        source: 'interact',
-      });
+      const emitsPhysicalNoise =
+        targetKind === 'door' ||
+        targetKind === 'container' ||
+        targetKind === 'vehicle' ||
+        targetKind === 'searchable_prop' ||
+        targetKind === 'resource';
+      if (emitsPhysicalNoise) {
+        this.zombies.emitNoise({
+          x: this.controller.position.x,
+          z: this.controller.position.z,
+          radius: 12.5,
+          source: 'interact',
+        });
+      }
       this.emitHud(true);
     } else if (this.interactions.latestToast) {
       this.emitHud(true);
@@ -1146,6 +1254,8 @@ export class Game3DEngine {
     if (!triggered || !result) return;
 
     this.hasAttacked = true;
+    this.attackPulseId += 1;
+    this.recentCombatTimer = 2.8;
     if (result.killed) {
       this.interactions.pushToast('Infected defeated', 'resource', 2.2);
       this.processMissionEvent({ type: 'kill_zombie', surgeId: killedSurgeId });
@@ -1183,7 +1293,8 @@ export class Game3DEngine {
   }
 
   public toggleFlashlight(): void {
-    if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
+    const blockedByOtherModal = this.isModalBlockingInput() && !this.inventoryOpen;
+    if (this.screenState !== 'PLAYING' || blockedByOtherModal) return;
     const next = !this.settings.flashlightOn;
     this.settings.flashlightOn = next;
     this.flashlight.visible = next;
@@ -1212,7 +1323,8 @@ export class Game3DEngine {
   }
 
   public toggleRest(): void {
-    if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
+    const blockedByOtherModal = this.isModalBlockingInput() && !this.inventoryOpen;
+    if (this.screenState !== 'PLAYING' || blockedByOtherModal) return;
     this.sound.unlock();
     this.sound.startAmbience();
     const res = this.survival.toggleRest();
@@ -1228,6 +1340,7 @@ export class Game3DEngine {
     this.missionsOpen = false;
     this.mapOpen = false;
     this.storyNoteOpen = false;
+    this.workbenchOpen = false;
     this.endingOpen = false;
     this.activeContextTitle = null;
     this.activeContextMessage = null;
@@ -1423,10 +1536,15 @@ export class Game3DEngine {
       this.settings.flashlightOn
     );
 
+    if (this.recentCombatTimer > 0) {
+      this.recentCombatTimer = Math.max(0, this.recentCombatTimer - dt);
+    }
+
     if (zombieTick.playerDamage > 0) {
       const dealt = this.survival.takeDamage(zombieTick.playerDamage, 'Killed by infected');
       if (dealt > 0) {
         this.damagePulseId += 1;
+        this.recentCombatTimer = 3.5;
         this.interactions.pushToast(
           `Attacked by infected (-${Math.round(dealt)} HP)`,
           'warning',
@@ -1471,13 +1589,64 @@ export class Game3DEngine {
     const loc = getLocationAtPosition(px, pz);
     this.currentLocationId = loc?.id ?? (this.insideShop ? 'last_shop' : null);
     let forceHudFromDiscovery = false;
+    let justDiscoveredLocation = false;
     if (loc && !this.discoveredLocationIds.has(loc.id)) {
       this.discoveredLocationIds.add(loc.id);
+      this.discoveredRegionIds.add(loc.regionId);
+      const regionDef = REGION_BY_ID[loc.regionId];
+      let rewardText = '';
+      if (loc.discoveryReward && !this.claimedDiscoveryRewardIds.has(loc.id)) {
+        this.claimedDiscoveryRewardIds.add(loc.id);
+        if (loc.discoveryReward.money && loc.discoveryReward.money > 0) {
+          this.economy.grantMissionReward(
+            loc.discoveryReward.money,
+            `Discovery: ${loc.name} (+${formatMoney(loc.discoveryReward.money)})`,
+            timeSnap.formattedTime
+          );
+        }
+        if (loc.discoveryReward.resources) {
+          for (const id of RESOURCE_ORDER) {
+            const qty = loc.discoveryReward.resources[id] ?? 0;
+            if (qty > 0) {
+              this.interactions.inventory = addInventoryResource(
+                this.interactions.inventory,
+                id,
+                qty
+              );
+            }
+          }
+        }
+        rewardText = ` · ${loc.discoveryReward.label}`;
+      }
       this.interactions.pushToast(
-        `Discovered: ${loc.name} · ${loc.subtitle}`,
-        'world',
-        3.0
+        `Discovered: ${loc.name} (${regionDef.name})${rewardText}`,
+        loc.discoveryReward ? 'resource' : 'world',
+        3.6
       );
+      if (!this.missions.getVisitedZones().includes(loc.id)) {
+        this.processMissionEvent({ type: 'enter_zone', zoneId: loc.id });
+      }
+      forceHudFromDiscovery = true;
+      justDiscoveredLocation = true;
+    }
+
+    const activeRegion = loc ? REGION_BY_ID[loc.regionId] : getRegionAtPosition(px, pz);
+    if (activeRegion.id !== this.lastRegionId) {
+      this.lastRegionId = activeRegion.id;
+      const firstRegionVisit = !this.discoveredRegionIds.has(activeRegion.id);
+      if (firstRegionVisit) {
+        this.discoveredRegionIds.add(activeRegion.id);
+        this.sound.playUiClick(580);
+      }
+      if (!justDiscoveredLocation) {
+        this.interactions.pushToast(
+          firstRegionVisit
+            ? `Region Discovered: ${activeRegion.name} — ${activeRegion.subtitle}`
+            : `Entering ${activeRegion.name}`,
+          'world',
+          firstRegionVisit ? 3.2 : 2.1
+        );
+      }
       forceHudFromDiscovery = true;
     }
 
@@ -1619,8 +1788,31 @@ export class Game3DEngine {
   }
 
   private processMissionEvent(event: MissionEvent): void {
-    const outcome = this.missions.recordEvent(event, this.buildMissionContext());
+    const preCtx = this.buildMissionContext();
+    const preSnap = this.missions.getSnapshot(preCtx, false);
+    const prevCompletedObjIds = new Set(
+      (preSnap.trackedMission?.objectives ?? []).filter((o) => o.completed).map((o) => o.id)
+    );
+    const prevTrackedId = preSnap.trackedMissionId;
+
+    const outcome = this.missions.recordEvent(event, preCtx);
     this.applyMissionOutcome(outcome);
+
+    if (
+      outcome.newlyCompletedMissions.length === 0 &&
+      !outcome.triggerSurgeId &&
+      prevTrackedId
+    ) {
+      const postSnap = this.missions.getSnapshot(this.buildMissionContext(), false);
+      if (postSnap.trackedMissionId === prevTrackedId && postSnap.trackedMission) {
+        const newlyDoneObj = postSnap.trackedMission.objectives.find(
+          (o) => o.completed && !prevCompletedObjIds.has(o.id)
+        );
+        if (newlyDoneObj) {
+          this.interactions.pushToast(`Objective Complete: ${newlyDoneObj.description}`, 'world', 2.8);
+        }
+      }
+    }
   }
 
   private applyMissionOutcome(outcome: MissionProcessOutcome): void {
@@ -1708,8 +1900,8 @@ export class Game3DEngine {
       pos[idx + 1] -= 0.25 * dt;
       pos[idx + 2] += 0.25 * dt;
 
-      if (pos[idx] > 35) pos[idx] = -35;
-      if (pos[idx + 2] > 35) pos[idx + 2] = -35;
+      if (pos[idx] > 48) pos[idx] = -48;
+      if (pos[idx + 2] > 48) pos[idx + 2] = -48;
       if (pos[idx + 1] < 0.2) pos[idx + 1] = 8.0;
     }
     this.ashPoints.geometry.attributes.position.needsUpdate = true;
@@ -1858,24 +2050,29 @@ export class Game3DEngine {
         : null;
 
     const currentLoc = this.currentLocationId ? LOCATION_BY_ID[this.currentLocationId] : null;
+    const regionDef = currentLoc ? REGION_BY_ID[currentLoc.regionId] : getRegionAtPosition(px, pz);
     const currentLocationName = currentLoc
       ? currentLoc.name
       : indoors
         ? 'Building Interior'
-        : 'District 04 Streets';
+        : `${regionDef.name} Streets`;
     const currentLocationSubtitle = currentLoc
       ? currentLoc.subtitle
       : indoors
         ? 'Abandoned Shelter'
-        : 'Open Neighborhood';
+        : regionDef.subtitle;
     const currentLocationDanger = this.insideShop
       ? 'safe'
       : currentLoc?.dangerLevel ?? null;
     const discoveredIds = Array.from(this.discoveredLocationIds);
+    const discoveredRegionIds = Array.from(this.discoveredRegionIds);
+    const collectedKeyIds = this.interactions.getCollectedKeyIds();
+    const collectedKeySig = collectedKeyIds.join(',');
     const quantX = Math.round(px * 2) * 0.5;
     const quantZ = Math.round(pz * 2) * 0.5;
     const quantYaw = Math.round(this.controller.yaw * 10) * 0.1;
 
+    const effectiveCombat = inActiveCombat || this.recentCombatTimer > 0;
     const key = [
       hp,
       hunger,
@@ -1885,6 +2082,8 @@ export class Game3DEngine {
       stam,
       this.controller.isExhausted,
       this.controller.isSprinting,
+      effectiveCombat,
+      this.attackPulseId,
       timeSnap.day,
       timeSnap.formattedTime,
       timeSnap.phase,
@@ -1931,7 +2130,10 @@ export class Game3DEngine {
       this.currentLocationId ?? '',
       currentLocationName,
       currentLocationDanger ?? '',
+      regionDef.id,
       discoveredIds.length,
+      discoveredRegionIds.length,
+      collectedKeySig,
       guidanceHint?.id ?? '',
       guidanceHint?.message ?? '',
     ].join('|');
@@ -1972,6 +2174,9 @@ export class Game3DEngine {
       missions: missionSnap,
       latestToast: toast,
       damagePulseId: this.damagePulseId,
+      attackPulseId: this.attackPulseId,
+      inActiveCombat: effectiveCombat,
+      weaponLabel: 'Steel Pipe',
       zombiesDefeated: this.zombies.zombiesDefeated,
       deathReason: this.survival.deathReason,
       playerX: px,
@@ -1983,7 +2188,11 @@ export class Game3DEngine {
       currentLocationName,
       currentLocationSubtitle,
       currentLocationDanger,
+      currentRegionId: regionDef.id,
+      currentRegionName: regionDef.name,
       discoveredLocationIds: discoveredIds,
+      discoveredRegionIds,
+      collectedKeyIds,
       guidanceHint,
     });
   }
@@ -2003,6 +2212,7 @@ export class Game3DEngine {
       !this.shopOpen &&
       !this.recruitOpen &&
       !this.storyNoteOpen &&
+      !this.workbenchOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2017,6 +2227,7 @@ export class Game3DEngine {
       !this.shopOpen &&
       !this.recruitOpen &&
       !this.storyNoteOpen &&
+      !this.workbenchOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2031,6 +2242,7 @@ export class Game3DEngine {
       !this.shopOpen &&
       !this.recruitOpen &&
       !this.storyNoteOpen &&
+      !this.workbenchOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2044,6 +2256,7 @@ export class Game3DEngine {
       !this.shopOpen &&
       !this.recruitOpen &&
       !this.storyNoteOpen &&
+      !this.workbenchOpen &&
       !this.endingOpen
     ) {
       if (e.code === 'Digit1') {
@@ -2140,11 +2353,28 @@ export class Game3DEngine {
   };
 
   private handleResize = (): void => {
-    const width = Math.max(320, this.container.clientWidth || window.innerWidth);
+    if (this.disposed) return;
+    const width = Math.max(240, this.container.clientWidth || window.innerWidth);
     const height = Math.max(240, this.container.clientHeight || window.innerHeight);
+    this.renderer.setPixelRatio(
+      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 1.75)
+    );
     this.camera.aspect = width / height;
+    const nextFov = computeResponsiveCameraFov(width, height, 72);
+    if (Math.abs(this.camera.fov - nextFov) > 0.05) {
+      this.camera.fov = nextFov;
+    }
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+  };
+
+  private handleOrientationChange = (): void => {
+    this.controller.clearInputs();
+    this.handleResize();
+    cancelAnimationFrame(this.resizeRafId);
+    this.resizeRafId = requestAnimationFrame(() => {
+      this.handleResize();
+    });
   };
 
   private handleContextLost = (e: Event): void => {
@@ -2162,8 +2392,12 @@ export class Game3DEngine {
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('blur', this.handleWindowBlur);
     window.addEventListener('resize', this.handleResize);
-    window.addEventListener('orientationchange', this.handleResize);
+    window.addEventListener('orientationchange', this.handleOrientationChange);
     window.visualViewport?.addEventListener('resize', this.handleResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(this.container);
+    }
     window.addEventListener('mouseup', this.handleMouseUp);
     window.addEventListener('mousemove', this.handleMouseMove);
     dom.addEventListener('mousedown', this.handleMouseDown);
@@ -2175,14 +2409,17 @@ export class Game3DEngine {
   public dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.frameId);
+    cancelAnimationFrame(this.resizeRafId);
     clearTimeout(this.frameId);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
 
     const dom = this.renderer.domElement;
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('resize', this.handleResize);
-    window.removeEventListener('orientationchange', this.handleResize);
+    window.removeEventListener('orientationchange', this.handleOrientationChange);
     window.visualViewport?.removeEventListener('resize', this.handleResize);
     window.removeEventListener('mouseup', this.handleMouseUp);
     window.removeEventListener('mousemove', this.handleMouseMove);

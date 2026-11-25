@@ -1,5 +1,6 @@
 import { Award, RadioTower } from 'lucide-react';
 import { formatMoney } from '../game/economy';
+import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
 
 interface EndingModalProps {
@@ -13,19 +14,32 @@ export function EndingModal({
   onContinuePlaying,
   onReturnToMenu,
 }: EndingModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="ending-modal-title"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#06090f]/88 px-3 py-4 sm:px-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-[#06090f]/88 px-3 py-3 sm:px-4 sm:py-4"
       style={{
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+        paddingTop: 'max(14px, env(safe-area-inset-top))',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(12px, env(safe-area-inset-left))',
+        paddingRight: 'max(12px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-xl max-h-[92dvh] flex flex-col bg-[#10151f] border border-amber-500/70 rounded-xl shadow-2xl overflow-hidden">
-        <div className="px-5 py-5 sm:px-7 border-b border-stone-800 bg-[#141b27]">
+      <div
+        className={`w-full max-h-[92dvh] flex flex-col bg-[#10151f] border border-amber-500/70 rounded-xl shadow-2xl overflow-hidden ${
+          isCompactLandscape ? 'max-w-2xl' : 'max-w-xl'
+        }`}
+      >
+        <div
+          className={`border-b border-stone-800 bg-[#141b27] shrink-0 ${
+            isCompactLandscape ? 'px-4 py-3' : 'px-5 py-5 sm:px-7'
+          }`}
+        >
           <div className="flex items-center gap-2.5 text-amber-400 text-xs font-mono-tabular uppercase tracking-widest mb-1.5">
             <RadioTower className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>148.6 MHz · District 04 Beacon Online</span>
@@ -98,7 +112,11 @@ export function EndingModal({
           </div>
         </div>
 
-        <div className="px-5 py-4 sm:px-7 border-t border-stone-800 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2.5">
+        <div
+          className={`border-t border-stone-800 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2.5 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2.5' : 'px-5 py-4 sm:px-7'
+          }`}
+        >
           <button
             type="button"
             onClick={onReturnToMenu}

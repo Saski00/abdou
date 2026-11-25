@@ -1,3 +1,4 @@
+import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
 
 interface GameOverModalProps {
@@ -13,6 +14,9 @@ export function GameOverModal({
   onRestart,
   onReturnToMenu,
 }: GameOverModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
+
   return (
     <div
       role="dialog"
@@ -20,22 +24,34 @@ export function GameOverModal({
       aria-labelledby="gameover-title"
       className="fixed inset-0 z-40 flex items-center justify-center bg-[#070507]/88 px-4 py-4"
       style={{
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-        paddingLeft: 'max(16px, env(safe-area-inset-left))',
-        paddingRight: 'max(16px, env(safe-area-inset-right))',
+        paddingTop: 'max(14px, env(safe-area-inset-top))',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(14px, env(safe-area-inset-left))',
+        paddingRight: 'max(14px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto touch-pan-y bg-[#120d11] border border-rose-500/60 rounded-xl p-6 shadow-2xl">
+      <div
+        className={`w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#120d11] border border-rose-500/60 rounded-xl shadow-2xl ${
+          isCompactLandscape ? 'max-w-lg p-4' : 'max-w-md p-6'
+        }`}
+      >
         <h2
           id="gameover-title"
-          className="font-display text-4xl font-bold tracking-wider text-rose-400 leading-none"
+          className={`font-display font-bold tracking-wider text-rose-400 leading-none ${
+            isCompactLandscape ? 'text-3xl' : 'text-4xl'
+          }`}
         >
           YOU DIED
         </h2>
-        <p className="text-sm text-stone-300 mt-2 mb-5">{reason}</p>
+        <p className={`text-sm text-stone-300 mt-1.5 ${isCompactLandscape ? 'mb-3' : 'mb-5'}`}>
+          {reason}
+        </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-6 p-3.5 rounded-lg bg-[#0b090c] border border-stone-800">
+        <div
+          className={`grid gap-3 p-3 rounded-lg bg-[#0b090c] border border-stone-800 ${
+            isCompactLandscape ? 'grid-cols-4 mb-3' : 'grid-cols-2 mb-6 p-3.5'
+          }`}
+        >
           <div>
             <div className="text-[11px] text-stone-400">Survived</div>
             <div className="font-mono-tabular text-base font-bold text-stone-100">
@@ -62,7 +78,7 @@ export function GameOverModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className={isCompactLandscape ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'}>
           <button
             type="button"
             onClick={onRestart}

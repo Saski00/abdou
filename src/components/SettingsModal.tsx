@@ -1,5 +1,11 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
-import { GameSettings, TouchControlsMode } from '../game/types';
+import {
+  OrientationLockApplyResult,
+  applyScreenOrientationPreference,
+  useViewportLayout,
+} from '../game/responsiveLayout';
+import { GameSettings, ScreenOrientationMode, TouchControlsMode } from '../game/types';
 
 interface SettingsModalProps {
   settings: GameSettings;
@@ -14,10 +20,20 @@ export function SettingsModal({
   onChange,
   onClose,
 }: SettingsModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
+  const [orientationHint, setOrientationHint] = useState<string | null>(null);
+
   const touchModes: { id: TouchControlsMode; label: string }[] = [
     { id: 'auto', label: 'Auto' },
     { id: 'on', label: 'On' },
     { id: 'off', label: 'Off' },
+  ];
+
+  const orientationModes: { id: ScreenOrientationMode; label: string }[] = [
+    { id: 'auto', label: 'Auto' },
+    { id: 'portrait', label: 'Portrait' },
+    { id: 'landscape', label: 'Landscape' },
   ];
 
   const dayLengthOptions = [
@@ -26,32 +42,71 @@ export function SettingsModal({
     { seconds: 120, label: '2m' },
   ];
 
+  const handleOrientationSelect = async (mode: ScreenOrientationMode) => {
+    onChange({ ...settings, screenOrientation: mode });
+    const res: OrientationLockApplyResult = await applyScreenOrientationPreference(mode);
+    if (mode === 'auto') {
+      setOrientationHint('Auto-rotate enabled — rotates freely with your device.');
+    } else if (res === 'locked') {
+      setOrientationHint(`Screen locked to ${mode} mode.`);
+    } else {
+      setOrientationHint(
+        'Saved. Browsers or non-fullscreen windows may keep rotating freely until fullscreen.'
+      );
+    }
+  };
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#070a0f]/82 px-4 py-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-[#070a0f]/82 px-3 py-3 sm:px-4 sm:py-4"
+      style={{
+        paddingTop: 'max(14px, env(safe-area-inset-top))',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(12px, env(safe-area-inset-left))',
+        paddingRight: 'max(12px, env(safe-area-inset-right))',
+      }}
     >
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto touch-pan-y bg-[#10151f] border border-stone-700/70 rounded-xl p-5 sm:p-6 shadow-2xl">
-        <div className="flex items-center justify-between gap-4 mb-5">
-          <h2
-            id="settings-title"
-            className="font-display text-3xl font-bold tracking-wider text-stone-100"
-          >
-            SETTINGS
-          </h2>
+      <div
+        className={`w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#10151f] border border-stone-700/70 rounded-xl shadow-2xl ${
+          isCompactLandscape ? 'max-w-2xl p-4' : 'max-w-md p-5 sm:p-6'
+        }`}
+      >
+        <div
+          className={`flex items-center justify-between gap-4 ${
+            isCompactLandscape ? 'mb-3' : 'mb-5'
+          }`}
+        >
+          <div>
+            <h2
+              id="settings-title"
+              className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 leading-none"
+            >
+              SETTINGS
+            </h2>
+            <p className="text-[11px] font-mono-tabular text-stone-400 mt-1">
+              View: {viewport.orientation === 'landscape' ? 'Landscape' : 'Portrait'} ({viewport.width}×{viewport.height})
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close settings"
-            className="h-10 w-10 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer"
+            className="h-11 w-11 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div
+          className={
+            isCompactLandscape
+              ? 'grid grid-cols-2 gap-x-5 gap-y-3 items-start'
+              : 'space-y-4'
+          }
+        >
           {/* Audio Volume */}
           <div>
             <div className="flex items-center justify-between text-sm mb-1.5">
@@ -105,8 +160,39 @@ export function SettingsModal({
             />
           </div>
 
+          {/* Screen Orientation Preference */}
+          <div className={isCompactLandscape ? 'col-span-2' : ''}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium text-stone-200">Screen Orientation</div>
+                <div className="text-xs text-stone-400">
+                  Auto rotates seamlessly; lock if supported
+                </div>
+              </div>
+              <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
+                {orientationModes.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => void handleOrientationSelect(m.id)}
+                    className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      settings.screenOrientation === m.id
+                        ? 'bg-amber-500 text-stone-950 font-semibold'
+                        : 'text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {orientationHint && (
+              <p className="text-[11px] text-amber-300/90 mt-1 leading-snug">{orientationHint}</p>
+            )}
+          </div>
+
           {/* Touch Controls Mode */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-stone-200">Touch Controls</div>
               <div className="text-xs text-stone-400">Virtual stick &amp; camera drag</div>
@@ -117,7 +203,7 @@ export function SettingsModal({
                   key={m.id}
                   type="button"
                   onClick={() => onChange({ ...settings, touchControls: m.id })}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
                     settings.touchControls === m.id
                       ? 'bg-stone-700 text-white'
                       : 'text-stone-400 hover:text-stone-200'
@@ -130,7 +216,7 @@ export function SettingsModal({
           </div>
 
           {/* Mute Toggle */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-stone-200">Audio Effects &amp; Wind</div>
               <div className="text-xs text-stone-400">Procedural footsteps and ambience</div>
@@ -138,7 +224,7 @@ export function SettingsModal({
             <button
               type="button"
               onClick={() => onChange({ ...settings, muted: !settings.muted })}
-              className={`h-9 px-4 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`h-10 px-4 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 !settings.muted
                   ? 'bg-amber-500 text-stone-950'
                   : 'bg-stone-800 text-stone-300 border border-stone-700'
@@ -149,15 +235,15 @@ export function SettingsModal({
           </div>
 
           {/* Dynamic Shadows Toggle */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-stone-200">Sun Shadows</div>
-              <div className="text-xs text-stone-400">Disable on weak hardware for higher FPS</div>
+              <div className="text-xs text-stone-400">Disable on weak GPUs for higher FPS</div>
             </div>
             <button
               type="button"
               onClick={() => onChange({ ...settings, shadowsEnabled: !settings.shadowsEnabled })}
-              className={`h-9 px-4 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`h-10 px-4 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 settings.shadowsEnabled
                   ? 'bg-amber-500 text-stone-950'
                   : 'bg-stone-800 text-stone-300 border border-stone-700'
@@ -168,7 +254,7 @@ export function SettingsModal({
           </div>
 
           {/* Atmosphere Fog Density */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-stone-200">Fog &amp; Atmosphere</div>
               <div className="text-xs text-stone-400">Distance fog visibility</div>
@@ -177,7 +263,7 @@ export function SettingsModal({
               <button
                 type="button"
                 onClick={() => onChange({ ...settings, lightingQuality: 'atmospheric' })}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
                   settings.lightingQuality === 'atmospheric'
                     ? 'bg-stone-700 text-white'
                     : 'text-stone-400 hover:text-stone-200'
@@ -188,7 +274,7 @@ export function SettingsModal({
               <button
                 type="button"
                 onClick={() => onChange({ ...settings, lightingQuality: 'performance' })}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
                   settings.lightingQuality === 'performance'
                     ? 'bg-stone-700 text-white'
                     : 'text-stone-400 hover:text-stone-200'
@@ -200,7 +286,7 @@ export function SettingsModal({
           </div>
 
           {/* Configurable Day Length */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-stone-200">Day Length</div>
               <div className="text-xs text-stone-400">Real minutes per in-game day</div>
@@ -211,7 +297,7 @@ export function SettingsModal({
                   key={opt.seconds}
                   type="button"
                   onClick={() => onChange({ ...settings, dayLengthSeconds: opt.seconds })}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium font-mono-tabular transition-colors cursor-pointer whitespace-nowrap ${
+                  className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium font-mono-tabular transition-colors cursor-pointer whitespace-nowrap ${
                     settings.dayLengthSeconds === opt.seconds
                       ? 'bg-stone-700 text-white'
                       : 'text-stone-400 hover:text-stone-200'
@@ -224,12 +310,20 @@ export function SettingsModal({
           </div>
 
           {/* Controls Quick Reference */}
-          <div className="pt-4 border-t border-stone-800">
+          <div
+            className={`pt-3 border-t border-stone-800 ${
+              isCompactLandscape ? 'col-span-2' : ''
+            }`}
+          >
             <div className="text-xs font-semibold text-stone-300 mb-2">
               {isTouchMode ? 'Touch Controls' : 'Controls'}
             </div>
             {isTouchMode ? (
-              <div className="grid grid-cols-2 gap-y-1.5 text-xs text-stone-400">
+              <div
+                className={`grid gap-y-1.5 text-xs text-stone-400 ${
+                  isCompactLandscape ? 'grid-cols-4 gap-x-4' : 'grid-cols-2'
+                }`}
+              >
                 <span>Move / Sprint</span>
                 <span className="font-mono-tabular text-stone-200 text-right">Left Joystick</span>
                 <span>Look Around</span>
@@ -248,7 +342,11 @@ export function SettingsModal({
                 <span className="font-mono-tabular text-stone-200 text-right">Light Button</span>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-y-1.5 text-xs text-stone-400">
+              <div
+                className={`grid gap-y-1.5 text-xs text-stone-400 ${
+                  isCompactLandscape ? 'grid-cols-4 gap-x-4' : 'grid-cols-2'
+                }`}
+              >
                 <span>Move</span>
                 <span className="font-mono-tabular text-stone-200 text-right">WASD / Arrows</span>
                 <span>Look Around</span>
@@ -276,7 +374,7 @@ export function SettingsModal({
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        <div className={`${isCompactLandscape ? 'mt-4' : 'mt-6'} flex justify-end`}>
           <button
             type="button"
             onClick={onClose}

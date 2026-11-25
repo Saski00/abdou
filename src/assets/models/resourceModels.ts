@@ -467,3 +467,65 @@ export function buildSupplyContainerModel(
   group.userData.lidPivot = lidPivot;
   return group;
 }
+
+export function buildKeyPickupModel(
+  keyKind: 'key' | 'keycard',
+  resMats: ResourceMaterialPalette,
+  mats: MaterialPalette
+): THREE.Group {
+  const group = new THREE.Group();
+
+  if (keyKind === 'keycard') {
+    const card = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.02, 0.19),
+      resMats.medCaseWhite
+    );
+    card.position.y = 0.014;
+    card.castShadow = true;
+
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.282, 0.022, 0.048),
+      mats.beaconRed
+    );
+    stripe.position.set(0, 0.014, -0.052);
+
+    const chip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.065, 0.024, 0.05),
+      mats.beaconCyan
+    );
+    chip.position.set(-0.065, 0.014, 0.03);
+
+    group.add(card, stripe, chip);
+  } else {
+    const tag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.02, 0.095),
+      mats.beaconAmber
+    );
+    tag.position.set(-0.095, 0.015, 0);
+    tag.rotation.y = 0.3;
+
+    const bow = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.056, 0.056, 0.02, 12),
+      mats.beaconAmber
+    );
+    bow.position.set(0.02, 0.016, 0);
+    bow.castShadow = true;
+
+    const shaft = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.016, 0.025),
+      resMats.tinMetal
+    );
+    shaft.position.set(0.115, 0.016, 0);
+
+    const teeth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.016, 0.028),
+      resMats.tinMetal
+    );
+    teeth.position.set(0.17, 0.016, 0.022);
+
+    group.add(tag, bow, shaft, teeth);
+  }
+
+  return group;
+}
+

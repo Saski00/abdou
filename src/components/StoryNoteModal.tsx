@@ -1,4 +1,5 @@
 import { AlertTriangle, FileText, Package, Radio, RadioTower, X } from 'lucide-react';
+import { useViewportLayout } from '../game/responsiveLayout';
 import { RESOURCE_DEFINITIONS, RESOURCE_ORDER } from '../game/resources';
 import { InventoryState, StoryObjectInspectionData } from '../game/types';
 
@@ -17,6 +18,8 @@ export function StoryNoteModal({
   onPerformAction,
   onClose,
 }: StoryNoteModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
   const Icon =
     data.category === 'radio'
       ? Radio
@@ -43,9 +46,17 @@ export function StoryNoteModal({
         paddingRight: 'max(12px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-lg max-h-[90dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden">
+      <div
+        className={`w-full max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden ${
+          isCompactLandscape ? 'max-w-2xl' : 'max-w-lg'
+        }`}
+      >
         {/* Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-stone-800 flex items-start justify-between gap-3 shrink-0">
+        <div
+          className={`border-b border-stone-800 flex items-start justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2.5' : 'px-4 py-3.5 sm:px-6 sm:py-4'
+          }`}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Icon className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
@@ -112,7 +123,11 @@ export function StoryNoteModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 sm:px-6 border-t border-stone-800 flex items-center justify-between gap-3 shrink-0">
+        <div
+          className={`border-t border-stone-800 flex items-center justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
+          }`}
+        >
           <span className="text-xs text-stone-400 font-mono-tabular">
             {isTouchMode ? 'Tap Close when ready' : 'Esc to close'}
           </span>

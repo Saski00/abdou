@@ -1,10 +1,12 @@
 import { ArrowUp, Flashlight, Hand, Sword } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ViewportLayout } from '../game/responsiveLayout';
 import { InteractionPrompt } from '../game/types';
 
 interface MobileControlsProps {
   flashlightOn: boolean;
   interactionPrompt: InteractionPrompt | null;
+  viewport: ViewportLayout;
   onMove: (x: number, y: number, sprint: boolean) => void;
   onLookDelta: (dx: number, dy: number) => void;
   onJump: () => void;
@@ -13,11 +15,10 @@ interface MobileControlsProps {
   onToggleFlashlight: () => void;
 }
 
-const MAX_RADIUS = 44;
-
 export function MobileControls({
   flashlightOn,
   interactionPrompt,
+  viewport,
   onMove,
   onLookDelta,
   onJump,
@@ -25,29 +26,57 @@ export function MobileControls({
   onAttack,
   onToggleFlashlight,
 }: MobileControlsProps) {
+  const isCompactLandscape = viewport.isCompactLandscape;
+  const maxRadius = isCompactLandscape ? 38 : 44;
+
   const padRef = useRef<HTMLDivElement | null>(null);
   const knobRef = useRef<HTMLDivElement | null>(null);
 
   const joyPointerIdRef = useRef<number | null>(null);
   const joyOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const maxRadiusRef = useRef(maxRadius);
+  maxRadiusRef.current = maxRadius;
 
   const lookPointerIdRef = useRef<number | null>(null);
   const lookLastRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const [isSprintingStick, setIsSprintingStick] = useState(false);
 
-  // Ensure movement resets cleanly if controls unmount (e.g. pausing)
-  useEffect(() => {
-    return () => {
-      onMove(0, 0, false);
-    };
-  }, [onMove]);
-
-  const setKnobOffset = (dx: number, dy: number) => {
+  const setKnobOffset = useCallback((dx: number, dy: number) => {
     if (knobRef.current) {
       knobRef.current.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
     }
-  };
+  }, []);
+
+  const resetAllTouchInputs = useCallback(() => {
+    joyPointerIdRef.current = null;
+    lookPointerIdRef.current = null;
+    setKnobOffset(0, 0);
+    setIsSprintingStick(false);
+    onMove(0, 0, false);
+  }, [onMove, setKnobOffset]);
+
+  // Reset active pointers cleanly on unmount, orientation changes, resize reflow, or app backgrounding
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        resetAllTouchInputs();
+      }
+    };
+
+    window.addEventListener('orientationchange', resetAllTouchInputs);
+    window.addEventListener('resize', resetAllTouchInputs);
+    window.addEventListener('blur', resetAllTouchInputs);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('orientationchange', resetAllTouchInputs);
+      window.removeEventListener('resize', resetAllTouchInputs);
+      window.removeEventListener('blur', resetAllTouchInputs);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      onMove(0, 0, false);
+    };
+  }, [onMove, resetAllTouchInputs]);
 
   const resetJoystick = () => {
     joyPointerIdRef.current = null;
@@ -57,26 +86,27 @@ export function MobileControls({
   };
 
   const updateJoystickFromPoint = (clientX: number, clientY: number) => {
+    const radius = maxRadiusRef.current;
     const dx = clientX - joyOriginRef.current.x;
     const dy = clientY - joyOriginRef.current.y;
     const dist = Math.hypot(dx, dy);
 
-    const clampedDist = Math.min(dist, MAX_RADIUS);
+    const clampedDist = Math.min(dist, radius);
     const angle = dist > 0.001 ? Math.atan2(dy, dx) : 0;
     const kx = Math.cos(angle) * clampedDist;
     const ky = Math.sin(angle) * clampedDist;
 
     setKnobOffset(kx, ky);
 
-    const normMag = clampedDist / MAX_RADIUS;
+    const normMag = clampedDist / radius;
     if (normMag < 0.08) {
       setIsSprintingStick(false);
       onMove(0, 0, false);
       return;
     }
 
-    const normX = kx / MAX_RADIUS;
-    const normY = -ky / MAX_RADIUS; // Screen up (-dy) -> forward (+1)
+    const normX = kx / radius;
+    const normY = -ky / radius; // Screen up (-dy) -> forward (+1)
     const sprint = normMag > 0.88;
     setIsSprintingStick(sprint);
     onMove(normX, normY, sprint);
@@ -145,9 +175,11 @@ export function MobileControls({
     lookPointerIdRef.current = null;
   };
 
+  const lookLeftClass = viewport.orientation === 'landscape' ? 'left-[32%]' : 'left-[42%]';
+
   return (
     <div className="fixed inset-0 z-10 pointer-events-none select-none">
-      {/* Right-Side Camera Look Touch Surface (leaves left area dedicated to movement joystick) */}
+      {/* Camera Look Touch Surface (wider in landscape, leaves left thumb zone dedicated to movement stick) */}
       <div
         aria-label="Touch camera look area"
         onPointerDown={handleLookPointerDown}
@@ -155,15 +187,19 @@ export function MobileControls({
         onPointerUp={handleLookPointerEnd}
         onPointerCancel={handleLookPointerEnd}
         onLostPointerCapture={handleLookPointerEnd}
-        className="absolute top-0 right-0 bottom-0 left-[46%] sm:left-[42%] pointer-events-auto touch-none"
+        className={`absolute top-0 right-0 bottom-0 ${lookLeftClass} pointer-events-auto touch-none`}
       />
 
       {/* Bottom-Left Virtual Movement Joystick */}
       <div
         className="absolute bottom-0 left-0 pointer-events-auto touch-none"
         style={{
-          paddingLeft: 'max(18px, env(safe-area-inset-left))',
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          paddingLeft: isCompactLandscape
+            ? 'max(14px, env(safe-area-inset-left))'
+            : 'max(18px, env(safe-area-inset-left))',
+          paddingBottom: isCompactLandscape
+            ? 'max(12px, env(safe-area-inset-bottom))'
+            : 'max(20px, env(safe-area-inset-bottom))',
         }}
       >
         <div
@@ -175,19 +211,27 @@ export function MobileControls({
           onPointerUp={handleJoyPointerEnd}
           onPointerCancel={handleJoyPointerEnd}
           onLostPointerCapture={handleJoyPointerEnd}
-          className={`relative w-32 h-32 rounded-full border-2 flex items-center justify-center transition-colors ${
+          className={`relative rounded-full border-2 flex items-center justify-center transition-colors ${
+            isCompactLandscape ? 'w-28 h-28' : 'w-32 h-32'
+          } ${
             isSprintingStick
               ? 'bg-[#0e121a]/65 border-amber-400/80'
               : 'bg-[#0e121a]/55 border-stone-500/55'
           }`}
         >
           {/* Crosshair guide ticks */}
-          <div className="w-16 h-16 rounded-full border border-stone-600/35 pointer-events-none" />
+          <div
+            className={`rounded-full border border-stone-600/35 pointer-events-none ${
+              isCompactLandscape ? 'w-14 h-14' : 'w-16 h-16'
+            }`}
+          />
 
           {/* Movable thumb knob */}
           <div
             ref={knobRef}
-            className={`absolute w-14 h-14 rounded-full border shadow-lg pointer-events-none flex items-center justify-center ${
+            className={`absolute rounded-full border shadow-lg pointer-events-none flex items-center justify-center ${
+              isCompactLandscape ? 'w-12 h-12' : 'w-14 h-14'
+            } ${
               isSprintingStick
                 ? 'bg-amber-500/85 border-amber-200'
                 : 'bg-stone-200/80 border-white/60'
@@ -201,41 +245,41 @@ export function MobileControls({
 
       {/* Bottom-Right Action Cluster (Interact + Flashlight above Attack + Jump) */}
       <div
-        className="absolute bottom-0 right-0 flex flex-col items-end gap-2.5 pointer-events-none touch-none z-20"
+        className={`absolute bottom-0 right-0 flex flex-col items-end pointer-events-none touch-none z-20 ${
+          isCompactLandscape ? 'gap-2' : 'gap-2.5'
+        }`}
         style={{
-          paddingRight: 'max(14px, env(safe-area-inset-right))',
-          paddingBottom: 'max(18px, env(safe-area-inset-bottom))',
+          paddingRight: isCompactLandscape
+            ? 'max(14px, env(safe-area-inset-right))'
+            : 'max(14px, env(safe-area-inset-right))',
+          paddingBottom: isCompactLandscape
+            ? 'max(12px, env(safe-area-inset-bottom))'
+            : 'max(18px, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            disabled={!interactionPrompt}
-            aria-label={
-              interactionPrompt
-                ? `${interactionPrompt.actionLabel} ${interactionPrompt.name}`
-                : 'Interact unavailable'
-            }
-            onPointerDown={(e) => {
-              if (!interactionPrompt) return;
-              e.preventDefault();
-              e.stopPropagation();
-              onInteract();
-            }}
-            onClick={(e) => {
-              if (e.detail === 0 && interactionPrompt) onInteract();
-            }}
-            className={`h-11 px-3.5 rounded-full border-2 flex items-center gap-1.5 shadow-xl transition-all touch-none ${
-              interactionPrompt
-                ? 'pointer-events-auto bg-amber-500 active:bg-amber-400 border-amber-200 text-stone-950 font-semibold active:scale-95 opacity-100'
-                : 'pointer-events-none bg-[#0e121a]/70 border-stone-700/60 text-stone-400 opacity-30'
-            }`}
-          >
-            <Hand className="w-4 h-4 stroke-[2.2]" />
-            <span className="text-xs font-bold tracking-wide whitespace-nowrap">
-              {interactionPrompt ? interactionPrompt.actionLabel : 'Interact'}
-            </span>
-          </button>
+        <div className={`flex items-center ${isCompactLandscape ? 'gap-2' : 'gap-2.5'}`}>
+          {interactionPrompt && (
+            <button
+              type="button"
+              aria-label={`${interactionPrompt.actionLabel} ${interactionPrompt.name}`}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onInteract();
+              }}
+              onClick={(e) => {
+                if (e.detail === 0) onInteract();
+              }}
+              className={`h-11 ${
+                isCompactLandscape ? 'px-3' : 'px-3.5'
+              } rounded-full border-2 flex items-center gap-1.5 shadow-xl transition-transform touch-none pointer-events-auto bg-amber-500 active:bg-amber-400 border-amber-200 text-stone-950 font-semibold active:scale-95`}
+            >
+              <Hand className="w-4 h-4 stroke-[2.2]" />
+              <span className="text-xs font-bold tracking-wide whitespace-nowrap">
+                {interactionPrompt.actionLabel}
+              </span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -248,7 +292,9 @@ export function MobileControls({
             onClick={(e) => {
               if (e.detail === 0) onToggleFlashlight();
             }}
-            className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg active:scale-95 transition-transform pointer-events-auto touch-none ${
+            className={`${
+              isCompactLandscape ? 'w-11 h-11' : 'w-12 h-12'
+            } rounded-full border-2 flex items-center justify-center shadow-lg active:scale-95 transition-transform pointer-events-auto touch-none ${
               flashlightOn
                 ? 'bg-amber-500/90 border-amber-300 text-stone-950'
                 : 'bg-[#0e121a]/82 border-stone-600/80 text-stone-200'
@@ -258,7 +304,7 @@ export function MobileControls({
           </button>
         </div>
 
-        <div className="flex items-end gap-3 pointer-events-auto">
+        <div className={`flex items-end pointer-events-auto ${isCompactLandscape ? 'gap-2.5' : 'gap-3'}`}>
           <button
             type="button"
             aria-label="Melee attack"
@@ -270,7 +316,9 @@ export function MobileControls({
             onClick={(e) => {
               if (e.detail === 0) onAttack();
             }}
-            className="w-16 h-16 rounded-full bg-[#2a1216]/90 active:bg-rose-600 border-2 border-rose-400/80 active:border-rose-200 text-rose-100 active:text-white flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none"
+            className={`${
+              isCompactLandscape ? 'w-14 h-14' : 'w-16 h-16'
+            } rounded-full bg-[#2a1216]/90 active:bg-rose-600 border-2 border-rose-400/80 active:border-rose-200 text-rose-100 active:text-white flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none`}
           >
             <Sword className="w-5 h-5 stroke-[2.2]" />
             <span className="text-[10px] font-semibold tracking-wide leading-none mt-0.5">
@@ -289,7 +337,9 @@ export function MobileControls({
             onClick={(e) => {
               if (e.detail === 0) onJump();
             }}
-            className="w-16 h-16 rounded-full bg-[#0e121a]/85 active:bg-amber-500 border-2 border-stone-400/75 active:border-amber-200 text-stone-100 active:text-stone-950 flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none"
+            className={`${
+              isCompactLandscape ? 'w-14 h-14' : 'w-16 h-16'
+            } rounded-full bg-[#0e121a]/85 active:bg-amber-500 border-2 border-stone-400/75 active:border-amber-200 text-stone-100 active:text-stone-950 flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none`}
           >
             <ArrowUp className="w-5 h-5 stroke-[2.4]" />
             <span className="text-[10px] font-semibold tracking-wide leading-none mt-0.5">

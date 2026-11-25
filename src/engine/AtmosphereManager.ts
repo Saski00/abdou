@@ -409,7 +409,11 @@ export class AtmosphereManager {
     this.world.streetLampPoolMat.opacity = lampFactor * 0.92;
 
     for (const sl of this.world.streetLampLights) {
-      if (lampFactor <= 0.01) {
+      const dx = sl.light.position.x - playerX;
+      const dz = sl.light.position.z - playerZ;
+      const inRange = lampFactor > 0.01 && dx * dx + dz * dz <= 38 * 38;
+      sl.light.visible = inRange;
+      if (!inRange) {
         sl.light.intensity = 0;
       } else {
         const flicker =
@@ -436,6 +440,15 @@ export class AtmosphereManager {
     }
 
     for (const il of this.world.interiorLights) {
+      const dx = il.light.position.x - playerX;
+      const dz = il.light.position.z - playerZ;
+      const inRange = il.isSafeBase || dx * dx + dz * dz <= 26 * 26;
+      il.light.visible = inRange;
+      if (!inRange) {
+        il.light.intensity = 0;
+        continue;
+      }
+
       if (il.isSafeBase) {
         // Warm, reliable backup generator lighting inside The Last Shop
         const baseScale = 0.84 + nightGlow * 0.42;

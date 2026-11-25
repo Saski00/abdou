@@ -308,6 +308,10 @@ export function buildEnterableBuildingShell(
     sign.position.set(0, ceilingH + 0.16, frontZ + 0.14);
     group.add(sign);
 
+    const bayLamp = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.14, 0.14), mats.beaconAmber);
+    bayLamp.position.set(0, 2.68, frontZ + 0.1);
+    group.add(bayLamp);
+
     const vent = new THREE.Mesh(
       new THREE.CylinderGeometry(0.24, 0.28, 0.7, 8),
       mats.lampMetal
@@ -338,6 +342,168 @@ export function buildEnterableBuildingShell(
     );
     chimney.position.set(-3.2, ceilingH + 0.9, 2.4);
     group.add(chimney);
+  } else if (exteriorStyle === 'diner') {
+    const northZ = -d * 0.5;
+    const canopy = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.5, 0.35, 1.4),
+      mats.hydrantRed
+    );
+    canopy.position.set(0, 2.95, northZ - 0.58);
+    canopy.castShadow = true;
+    group.add(canopy);
+
+    const dinerNeon = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.48, 0.08, 0.1),
+      mats.beaconAmber
+    );
+    dinerNeon.position.set(0, 2.95, northZ - 1.26);
+    group.add(dinerNeon);
+
+    const dinerPorchBulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 8, 6),
+      mats.lampBulbLit
+    );
+    dinerPorchBulb.position.set(0, 2.68, northZ - 0.45);
+    group.add(dinerPorchBulb);
+
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(4.8, 0.95, 0.2),
+      mats.signStarlightDiner
+    );
+    sign.position.set(0, ceilingH + 0.22, northZ - 0.14);
+    group.add(sign);
+  } else if (exteriorStyle === 'garage') {
+    const northZ = -d * 0.5;
+    const fascia = new THREE.Mesh(
+      new THREE.BoxGeometry(5.2, 0.98, 0.22),
+      mats.signRedlineAuto
+    );
+    fascia.position.set(0, ceilingH + 0.18, northZ - 0.14);
+    group.add(fascia);
+
+    // Closed roll-up steel service shutter on west bay (distinct visual landmark)
+    const shutter = new THREE.Mesh(
+      new THREE.BoxGeometry(4.0, 2.45, 0.14),
+      mats.rustedMetal
+    );
+    shutter.position.set(-3.1, 1.24, northZ - 0.04);
+    group.add(shutter);
+
+    const serviceLight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.85, 0.14, 0.12),
+      mats.beaconAmber
+    );
+    serviceLight.position.set(1.6, 2.66, northZ - 0.12);
+    group.add(serviceLight);
+
+    const vent = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.3, 0.75, 8),
+      mats.lampMetal
+    );
+    vent.position.set(3.4, ceilingH + 0.85, 1.8);
+    group.add(vent);
+  } else if (exteriorStyle === 'police') {
+    const northZ = -d * 0.5;
+    const pediment = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.2, 0.55, 0.35),
+      mats.concrete
+    );
+    pediment.position.set(0, ceilingH + 0.26, northZ - 0.12);
+    group.add(pediment);
+
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(5.8, 1.0, 0.22),
+      mats.signPolicePrecinct
+    );
+    sign.position.set(0, ceilingH + 0.15, northZ - 0.18);
+    group.add(sign);
+
+    const globe = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 10, 8),
+      mats.beaconBlue
+    );
+    globe.position.set(0, 2.72, northZ - 0.26);
+    group.add(globe);
+
+    const roofStrobe = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.24, 0.28),
+      mats.beaconBlue
+    );
+    roofStrobe.position.set(0, ceilingH + 0.66, northZ + 0.35);
+    group.add(roofStrobe);
+  } else if (exteriorStyle === 'clinic') {
+    const northZ = -d * 0.5;
+    const canopy = new THREE.Mesh(
+      new THREE.BoxGeometry(5.4, 0.26, 1.65),
+      mats.concrete
+    );
+    canopy.position.set(0, 2.95, northZ - 0.72);
+    canopy.castShadow = true;
+    group.add(canopy);
+
+    const triageStrip = new THREE.Mesh(
+      new THREE.BoxGeometry(5.36, 0.09, 0.1),
+      mats.beaconCyan
+    );
+    triageStrip.position.set(0, 2.95, northZ - 1.54);
+    group.add(triageStrip);
+
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(5.4, 1.02, 0.22),
+      mats.signFieldClinic
+    );
+    sign.position.set(0, ceilingH + 0.16, northZ - 0.16);
+    group.add(sign);
+
+    const crossH = new THREE.Mesh(
+      new THREE.BoxGeometry(0.85, 0.24, 0.12),
+      mats.beaconRed
+    );
+    crossH.position.set(-4.2, 2.58, northZ - 0.16);
+    const crossV = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.85, 0.12),
+      mats.beaconRed
+    );
+    crossV.position.set(-4.2, 2.58, northZ - 0.16);
+    group.add(crossH, crossV);
+  } else if (exteriorStyle === 'lab') {
+    const southZ = d * 0.5;
+    const airlock = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.3, 1.3),
+      mats.darkTrim
+    );
+    airlock.position.set(0, 2.88, southZ + 0.55);
+    airlock.castShadow = true;
+    group.add(airlock);
+
+    const airlockBeacon = new THREE.Mesh(
+      new THREE.BoxGeometry(3.15, 0.09, 0.1),
+      mats.beaconAmber
+    );
+    airlockBeacon.position.set(0, 2.88, southZ + 1.18);
+    group.add(airlockBeacon);
+
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(5.8, 1.04, 0.22),
+      mats.signResearchLab
+    );
+    sign.position.set(0, ceilingH + 0.18, southZ + 0.16);
+    group.add(sign);
+
+    const dish = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.18, 0.55, 10),
+      mats.lampMetal
+    );
+    dish.position.set(3.2, ceilingH + 0.95, -1.6);
+    dish.rotation.x = 0.45;
+    group.add(dish);
+
+    const dishBeacon = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 8, 6),
+      mats.beaconRed
+    );
+    dishBeacon.position.set(3.2, ceilingH + 1.25, -1.5);
+    group.add(dishBeacon);
   }
 
   return group;
@@ -378,6 +544,26 @@ export function buildInteriorDoorModel(
   handle.position.set(door.width - 0.18, 1.02, 0);
 
   pivot.add(leaf, trim, handle);
+
+  if (door.lockedKeyId) {
+    const lockPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.24, 0.15),
+      mats.darkTrim
+    );
+    lockPlate.position.set(door.width - 0.18, 1.24, 0);
+    const lockLed = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.12, 0.165),
+      door.kind === 'metal' ? mats.beaconRed : mats.beaconAmber
+    );
+    lockLed.position.set(door.width - 0.18, 1.27, 0);
+    const hazardBar = new THREE.Mesh(
+      new THREE.BoxGeometry(door.width * 0.78, 0.08, 0.096),
+      mats.hazardStripe
+    );
+    hazardBar.position.set(door.width * 0.5, 0.82, 0);
+    pivot.add(lockPlate, lockLed, hazardBar);
+  }
+
   return pivot;
 }
 

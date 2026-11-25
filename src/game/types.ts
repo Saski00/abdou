@@ -2,11 +2,23 @@ export type GameScreenState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
 
 export type TouchControlsMode = 'auto' | 'on' | 'off';
 
+export type ScreenOrientationMode = 'auto' | 'portrait' | 'landscape';
+
 export type DayPhase = 'Dawn' | 'Morning' | 'Afternoon' | 'Sunset' | 'Night';
 
 export type WeatherKind = 'clear' | 'rain' | 'fog';
 
 export type LocationDangerLevel = 'safe' | 'low' | 'moderate' | 'high';
+
+export type WorldRegionId =
+  | 'main_street'
+  | 'residential_district'
+  | 'commercial_district'
+  | 'industrial_zone'
+  | 'medical_district'
+  | 'police_station'
+  | 'military_checkpoint'
+  | 'research_facility';
 
 export type ResourceId =
   | 'canned_food'
@@ -30,7 +42,12 @@ export interface InteractionPrompt {
     | 'customer'
     | 'survivor'
     | 'employee'
-    | 'story_object';
+    | 'story_object'
+    | 'key'
+    | 'vehicle'
+    | 'workbench'
+    | 'examine'
+    | 'bed';
   amount?: number;
 }
 
@@ -311,6 +328,7 @@ export interface GameSettings {
   lightingQuality: 'atmospheric' | 'performance';
   flashlightOn: boolean;
   touchControls: TouchControlsMode;
+  screenOrientation: ScreenOrientationMode;
   dayLengthSeconds: number;
 }
 
@@ -344,7 +362,11 @@ export interface HudSnapshot {
   currentLocationName: string | null;
   currentLocationSubtitle: string | null;
   currentLocationDanger: LocationDangerLevel | null;
+  currentRegionId: WorldRegionId | null;
+  currentRegionName: string | null;
   discoveredLocationIds: string[];
+  discoveredRegionIds: WorldRegionId[];
+  collectedKeyIds: string[];
   guidanceHint: GuidanceHintSummary | null;
   contextTitle: string | null;
   contextMessage: string | null;
@@ -358,6 +380,9 @@ export interface HudSnapshot {
   missions: MissionSnapshot;
   latestToast: FeedbackToast | null;
   damagePulseId: number;
+  attackPulseId: number;
+  inActiveCombat: boolean;
+  weaponLabel: string;
   zombiesDefeated: number;
   deathReason: string | null;
 }

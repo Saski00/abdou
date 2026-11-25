@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatMoney } from '../game/economy';
+import { useViewportLayout } from '../game/responsiveLayout';
 import { RESOURCE_DEFINITIONS, RESOURCE_ORDER } from '../game/resources';
 import { HudSnapshot, MissionSummary } from '../game/types';
 import { LOCATION_BY_ID, getBearingLabel } from '../game/worldLocations';
@@ -52,6 +53,8 @@ export function MissionModal({
   onTrackMission,
   onClose,
 }: MissionModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
   const [tab, setTab] = useState<MissionTab>('main');
   const { missions } = hud;
 
@@ -86,20 +89,30 @@ export function MissionModal({
         paddingRight: 'max(12px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-2xl max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden">
+      <div
+        className={`w-full max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden ${
+          isCompactLandscape ? 'max-w-3xl' : 'max-w-2xl'
+        }`}
+      >
         {/* Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-stone-800 flex items-start justify-between gap-3 shrink-0">
+        <div
+          className={`border-b border-stone-800 flex items-start justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3.5 sm:px-6 sm:py-4'
+          }`}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Compass className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
               <h2
                 id="mission-modal-title"
-                className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 leading-none truncate"
+                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate ${
+                  isCompactLandscape ? 'text-xl' : 'text-2xl sm:text-3xl'
+                }`}
               >
                 THE ASHFALL SIGNAL
               </h2>
             </div>
-            <p className="text-xs text-stone-400 mt-1.5 font-mono-tabular">
+            <p className="text-xs text-stone-400 mt-1 font-mono-tabular">
               Story {missions.mainCompletedCount}/{missions.mainTotalCount} · Side{' '}
               {missions.sideCompletedCount}/{missions.sideTotalCount} · Clues{' '}
               {missions.clues.length}
@@ -117,7 +130,11 @@ export function MissionModal({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="px-4 sm:px-6 pt-3 pb-2 border-b border-stone-800/80 flex items-center gap-2 shrink-0 overflow-x-auto">
+        <div
+          className={`border-b border-stone-800/80 flex items-center gap-2 shrink-0 overflow-x-auto ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 sm:px-6 pt-3 pb-2'
+          }`}
+        >
           <button
             type="button"
             onClick={() => setTab('main')}
@@ -351,7 +368,11 @@ export function MissionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 sm:px-6 border-t border-stone-800 flex items-center justify-between gap-3 shrink-0">
+        <div
+          className={`border-t border-stone-800 flex items-center justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
+          }`}
+        >
           <span className="text-xs text-stone-400 font-mono-tabular">
             {isTouchMode ? 'Tap Track to pin on HUD' : 'M or Esc to close'}
           </span>

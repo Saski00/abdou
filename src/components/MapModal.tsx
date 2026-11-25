@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import { Compass, MapPin, Navigation, Store, Target, X } from 'lucide-react';
+import { Compass, KeyRound, MapPin, Navigation, Store, Target, X } from 'lucide-react';
+import { ENTERABLE_BUILDINGS } from '../assets/maps/buildingLayouts';
+import { NEIGHBORHOOD_MAP } from '../assets/maps/neighborhoodMap';
+import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
 import {
   LOCATION_BY_ID,
+  REGION_BY_ID,
   WORLD_LOCATIONS,
+  WORLD_REGIONS,
   WorldLocationDef,
   getBearingLabel,
 } from '../game/worldLocations';
@@ -14,24 +19,53 @@ interface MapModalProps {
   onClose: () => void;
 }
 
-const WORLD_MIN_X = -46;
-const WORLD_MAX_X = 46;
-const WORLD_MIN_Z = -38;
-const WORLD_MAX_Z = 38;
+const WORLD_MIN_X = -50;
+const WORLD_MAX_X = 50;
+const WORLD_MIN_Z = -51;
+const WORLD_MAX_Z = 51;
+
+function toMapPctX(x: number): number {
+  return ((x - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)) * 100;
+}
+
+function toMapPctY(z: number): number {
+  return ((z - WORLD_MIN_Z) / (WORLD_MAX_Z - WORLD_MIN_Z)) * 100;
+}
 
 function toMapX(x: number): number {
-  return Math.max(4, Math.min(96, ((x - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)) * 100));
+  return Math.max(4, Math.min(96, toMapPctX(x)));
 }
 
 function toMapY(z: number): number {
-  return Math.max(4, Math.min(96, ((z - WORLD_MIN_Z) / (WORLD_MAX_Z - WORLD_MIN_Z)) * 100));
+  return Math.max(4, Math.min(96, toMapPctY(z)));
 }
 
+const REGION_MAP_LABELS = [
+  { id: 'main_street', label: 'Main Street', x: -16, z: 1.5 },
+  { id: 'residential_district', label: 'Residential', x: -30, z: -13.5 },
+  { id: 'commercial_district', label: 'Commercial', x: 15, z: -19.5 },
+  { id: 'industrial_zone', label: 'Industrial', x: 32, z: 22.5 },
+  { id: 'military_checkpoint', label: 'Checkpoint', x: 0, z: -39.5 },
+  { id: 'research_facility', label: 'Research Lab', x: 31, z: -36.5 },
+  { id: 'police_station', label: 'Police', x: -22, z: 39.5 },
+  { id: 'medical_district', label: 'Medical', x: 24, z: 39.5 },
+] as const;
+
 export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
+  const viewport = useViewportLayout();
+  const isCompactLandscape = viewport.isCompactLandscape;
+  const isLandscape = viewport.orientation === 'landscape';
   const discoveredSet = new Set(hud.discoveredLocationIds);
+  const discoveredRegionSet = new Set(hud.discoveredRegionIds);
   const discoveredLocations = WORLD_LOCATIONS.filter((loc) => discoveredSet.has(loc.id));
   const totalCount = WORLD_LOCATIONS.length;
   const undiscoveredCount = Math.max(0, totalCount - discoveredLocations.length);
+  const playableBuildings = [
+    ...ENTERABLE_BUILDINGS.map((b) => ({ id: b.id, x: b.x, z: b.z, w: b.w, d: b.d })),
+    ...NEIGHBORHOOD_MAP.buildings
+      .filter((b) => b.x >= -46 && b.x <= 46 && b.z >= -48 && b.z <= 48)
+      .map((b) => ({ id: b.id, x: b.x, z: b.z, w: b.w, d: b.d })),
+  ];
 
   const initialSelected =
     (hud.currentLocationId && discoveredSet.has(hud.currentLocationId)
@@ -68,23 +102,39 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
         paddingRight: 'max(12px, env(safe-area-inset-right))',
       }}
     >
-      <div className="w-full max-w-3xl max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-4xl max-h-[92dvh] flex flex-col bg-[#10151f] border border-stone-700/80 rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-stone-800 flex items-start justify-between gap-3 shrink-0">
+        <div
+          className={`border-b border-stone-800 flex items-start justify-between gap-3 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2.5' : 'px-4 py-3.5 sm:px-6 sm:py-4'
+          }`}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Compass className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
               <h2
                 id="map-modal-title"
-                className="font-display text-2xl sm:text-3xl font-bold tracking-wider text-stone-100 leading-none truncate"
+                className={`font-display font-bold tracking-wider text-stone-100 leading-none truncate ${
+                  isCompactLandscape ? 'text-xl' : 'text-2xl sm:text-3xl'
+                }`}
               >
                 DISTRICT 04 MAP
               </h2>
             </div>
-            <p className="text-xs text-stone-400 mt-1.5 truncate">
-              You are at: <span className="text-stone-200 font-medium">{hud.currentLocationName}</span> ·{' '}
-              <span className="font-mono-tabular text-amber-300">
-                {discoveredLocations.length}/{totalCount} Areas Discovered
+            <p className="text-xs text-stone-400 mt-1 truncate">
+              {hud.currentRegionName && (
+                <>
+                  <span className="text-amber-300 font-semibold">{hud.currentRegionName}</span>
+                  <span className="text-stone-600"> · </span>
+                </>
+              )}
+              <span className="text-stone-200 font-medium">{hud.currentLocationName}</span> ·{' '}
+              <span className="font-mono-tabular text-sky-300">
+                {discoveredLocations.length}/{totalCount} Charted
+              </span>
+              <span className="hidden sm:inline text-stone-600"> · </span>
+              <span className="hidden sm:inline font-mono-tabular text-stone-300">
+                Day {hud.day} {hud.formattedTime} ({hud.dayPhaseLabel} · {hud.weatherLabel})
               </span>
             </p>
           </div>
@@ -99,9 +149,23 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto touch-pan-y p-4 sm:p-5 grid grid-cols-1 md:grid-cols-[1.35fr_1fr] gap-4">
-          {/* Top-down Street & Discovered POI Chart */}
-          <div className="relative aspect-[92/76] w-full rounded-lg border border-stone-700/80 bg-[#0b1018] overflow-hidden select-none">
+        <div
+          className={`flex-1 min-h-0 gap-3 ${
+            isLandscape
+              ? 'grid grid-cols-[auto_1fr] items-stretch overflow-hidden p-3 sm:p-4'
+              : 'overflow-y-auto touch-pan-y p-4 grid grid-cols-1 gap-4'
+          }`}
+        >
+          {/* Top-down Street, Alley, Parking & Discovered POI Chart */}
+          <div
+            className={`relative aspect-[100/102] rounded-lg border border-stone-700/80 bg-[#0b1018] overflow-hidden select-none ${
+              isCompactLandscape
+                ? 'h-full w-auto max-w-[48vw]'
+                : isLandscape
+                  ? 'w-[min(420px,calc(92dvh-160px))] max-w-full'
+                  : 'w-full max-w-[440px] mx-auto'
+            }`}
+          >
             {/* Subtle Map Grid */}
             <div
               aria-hidden="true"
@@ -109,43 +173,151 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               style={{
                 backgroundImage:
                   'linear-gradient(to right, #334155 1px, transparent 1px), linear-gradient(to bottom, #334155 1px, transparent 1px)',
-                backgroundSize: '12.5% 14.28%',
+                backgroundSize: '12.5% 12.5%',
               }}
             />
 
-            {/* Main Blvd (East-West, z=0, d=14) */}
+            {/* Roads, Alleys & Parking Lots from NEIGHBORHOOD_MAP */}
+            {NEIGHBORHOOD_MAP.roads.map((r, idx) => {
+              const left = Math.max(0, toMapPctX(r.x - r.w * 0.5));
+              const right = Math.min(100, toMapPctX(r.x + r.w * 0.5));
+              const top = Math.max(0, toMapPctY(r.z - r.d * 0.5));
+              const bottom = Math.min(100, toMapPctY(r.z + r.d * 0.5));
+              const width = Math.max(1, right - left);
+              const height = Math.max(1, bottom - top);
+
+              const kindClass =
+                r.roadKind === 'parking'
+                  ? 'bg-[#1a293d] border border-amber-400/35 flex items-center justify-center'
+                  : r.roadKind === 'alley'
+                    ? 'bg-[#1a2434] border border-stone-600/65'
+                    : 'bg-[#263244] border border-stone-500/55';
+
+              return (
+                <div
+                  key={`road_${idx}`}
+                  aria-hidden="true"
+                  className={`absolute ${kindClass}`}
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: `${width}%`,
+                    height: `${height}%`,
+                  }}
+                >
+                  {r.roadKind === 'parking' && (
+                    <span className="text-[8px] font-mono-tabular font-bold text-amber-300/75">
+                      P
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Building Architectural Footprints */}
+            {playableBuildings.map((b) => {
+              const left = Math.max(0, toMapPctX(b.x - b.w * 0.5));
+              const right = Math.min(100, toMapPctX(b.x + b.w * 0.5));
+              const top = Math.max(0, toMapPctY(b.z - b.d * 0.5));
+              const bottom = Math.min(100, toMapPctY(b.z + b.d * 0.5));
+              const width = Math.max(1.5, right - left);
+              const height = Math.max(1.5, bottom - top);
+              const isSafe = b.id === 'last_shop';
+              const isKnown = discoveredSet.has(b.id);
+
+              return (
+                <div
+                  key={`bld_${b.id}`}
+                  aria-hidden="true"
+                  className={`absolute rounded-[2px] border ${
+                    isSafe
+                      ? 'bg-amber-950/50 border-amber-400/70'
+                      : isKnown
+                        ? 'bg-sky-950/45 border-sky-400/65'
+                        : 'bg-[#141c28]/90 border-stone-600/55'
+                  }`}
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: `${width}%`,
+                    height: `${height}%`,
+                  }}
+                />
+              );
+            })}
+
+            {/* Centerline Dashes for Major Arteries */}
             <div
               aria-hidden="true"
-              className="absolute left-0 right-0 bg-[#1f2937] border-y border-stone-600/70 flex items-center justify-between px-3"
-              style={{
-                top: `${toMapY(-7)}%`,
-                height: `${toMapY(7) - toMapY(-7)}%`,
-              }}
+              className="absolute inset-x-0 border-t border-dashed border-amber-400/25 pointer-events-none"
+              style={{ top: `${toMapPctY(0)}%` }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-y-0 border-l border-dashed border-amber-400/25 pointer-events-none"
+              style={{ left: `${toMapPctX(0)}%` }}
+            />
+
+            {/* Road Corridor Names */}
+            <div
+              aria-hidden="true"
+              className="absolute left-2 -translate-y-1/2 text-[8px] sm:text-[9px] font-mono-tabular uppercase tracking-widest text-stone-300/85 pointer-events-none"
+              style={{ top: `${toMapPctY(0)}%` }}
             >
-              <span className="text-[9px] sm:text-[10px] font-mono-tabular uppercase tracking-widest text-stone-400">
-                Main Blvd
-              </span>
-              <span className="text-[9px] sm:text-[10px] font-mono-tabular uppercase tracking-widest text-stone-400">
-                Main Blvd
-              </span>
+              Main Blvd
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
+              style={{ top: `${toMapPctY(-33)}%` }}
+            >
+              North St
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
+              style={{ top: `${toMapPctY(34.5)}%` }}
+            >
+              South St
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute bottom-1.5 -translate-x-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/85 pointer-events-none"
+              style={{ left: `${toMapPctX(0)}%` }}
+            >
+              Central Ave
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
+              style={{ left: `${toMapPctX(-22.8)}%`, top: `${toMapPctY(27.5)}%` }}
+            >
+              Maple Alley
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
+              style={{ left: `${toMapPctX(22.8)}%`, top: `${toMapPctY(-17.5)}%` }}
+            >
+              Freight Alley
             </div>
 
-            {/* Central Ave (North-South, x=0, w=12) */}
-            <div
-              aria-hidden="true"
-              className="absolute top-0 bottom-0 bg-[#1f2937] border-x border-stone-600/70 flex flex-col justify-between items-center py-2"
-              style={{
-                left: `${toMapX(-6)}%`,
-                width: `${toMapX(6) - toMapX(-6)}%`,
-              }}
-            >
-              <span className="text-[9px] font-mono-tabular uppercase tracking-wider text-stone-400">
-                N
-              </span>
-              <span className="text-[9px] font-mono-tabular uppercase tracking-wider text-stone-400">
-                S
-              </span>
-            </div>
+            {/* Subtle Region Labels */}
+            {REGION_MAP_LABELS.map((reg) => {
+              const regionKnown = discoveredRegionSet.has(reg.id);
+              return (
+                <div
+                  key={reg.id}
+                  aria-hidden="true"
+                  style={{ left: `${toMapX(reg.x)}%`, top: `${toMapY(reg.z)}%` }}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 text-[8px] sm:text-[9px] font-mono-tabular uppercase tracking-widest pointer-events-none whitespace-nowrap ${
+                    regionKnown ? 'text-amber-300/80 font-semibold' : 'text-slate-400/60'
+                  }`}
+                >
+                  {reg.label}
+                </div>
+              );
+            })}
 
             {/* Discovered Locations ONLY */}
             {discoveredLocations.map((loc) => {
@@ -161,7 +333,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                   type="button"
                   onClick={() => setSelectedId(loc.id)}
                   style={{ left: `${left}%`, top: `${top}%` }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-md whitespace-nowrap ${
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-md whitespace-nowrap ${
                     isSafe
                       ? isSelected
                         ? 'bg-amber-500 border-amber-200 text-stone-950 z-20 scale-105'
@@ -174,9 +346,9 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                   }`}
                 >
                   {isSafe ? (
-                    <Store className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <Store className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
                   ) : (
-                    <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <MapPin className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
                   )}
                   <span>{loc.shortName}</span>
                 </button>
@@ -222,22 +394,43 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
             <div className="absolute top-2 right-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 text-[10px] font-mono-tabular text-stone-300 pointer-events-none">
               N ↑ · E →
             </div>
+
+            {/* Compact Map Legend */}
+            <div className="absolute top-2 left-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 flex items-center gap-2 text-[9px] font-mono-tabular text-stone-300 pointer-events-none">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 bg-amber-400 inline-block rounded-[1px]" />
+                Shop
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 bg-sky-400 inline-block rounded-[1px]" />
+                Charted
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 bg-[#1a2232] border border-stone-500 inline-block rounded-[1px]" />
+                Block
+              </span>
+            </div>
           </div>
 
-          {/* Right Panel: Selected Location Details & Discovered List */}
-          <div className="flex flex-col gap-3 min-h-0">
+          {/* Right Panel: Selected Location Details, Keys & Discovered List */}
+          <div
+            className={`flex flex-col gap-2.5 min-h-0 ${
+              isLandscape ? 'overflow-y-auto touch-pan-y pr-1' : ''
+            }`}
+          >
             {selectedLoc && (
               <div className="rounded-lg border border-stone-700/80 bg-[#141b27] p-3.5 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-mono-tabular uppercase tracking-wider text-amber-400">
+                  <span className="text-[11px] font-mono-tabular uppercase tracking-wider text-amber-400 truncate">
+                    {REGION_BY_ID[selectedLoc.regionId].name} ·{' '}
                     {selectedLoc.category === 'safe_base'
-                      ? 'Safe Haven'
+                      ? 'Base'
                       : selectedLoc.category === 'building'
-                        ? 'Explored Interior'
-                        : 'Discovered Landmark'}
+                        ? 'Interior'
+                        : 'Landmark'}
                   </span>
                   <span
-                    className={`text-[10px] font-mono-tabular font-semibold ${
+                    className={`text-[10px] font-mono-tabular font-semibold shrink-0 ${
                       selectedLoc.dangerLevel === 'safe'
                         ? 'text-emerald-300'
                         : selectedLoc.dangerLevel === 'high'
@@ -264,6 +457,11 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                 <p className="text-xs text-stone-300 leading-relaxed pt-1">
                   {selectedLoc.description}
                 </p>
+                {selectedLoc.discoveryReward && (
+                  <div className="pt-1 text-[11px] font-mono-tabular text-emerald-300">
+                    Discovery Bonus Claimed: {selectedLoc.discoveryReward.label}
+                  </div>
+                )}
               </div>
             )}
 
@@ -289,7 +487,9 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
 
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-2.5 space-y-1.5 flex-1 overflow-y-auto">
               <div className="flex items-center justify-between text-[11px] text-stone-400 px-1">
-                <span>Discovered Areas</span>
+                <span>
+                  Areas ({hud.discoveredRegionIds.length}/{WORLD_REGIONS.length} Regions)
+                </span>
                 <span className="font-mono-tabular">
                   {undiscoveredCount > 0 ? `${undiscoveredCount} Unexplored` : 'All Mapped'}
                 </span>
@@ -308,7 +508,12 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                           : 'bg-[#10151f] border-stone-800 text-stone-300 hover:border-stone-600'
                       }`}
                     >
-                      <span className="text-xs font-semibold truncate">{loc.name}</span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold truncate">{loc.name}</div>
+                        <div className="text-[10px] text-stone-500 truncate">
+                          {REGION_BY_ID[loc.regionId].name} · {loc.lootFocus}
+                        </div>
+                      </div>
                       <span className="text-[10px] text-stone-400 font-mono-tabular shrink-0">
                         {loc.dangerLevel === 'safe' ? 'Safe' : loc.dangerLevel}
                       </span>
@@ -321,12 +526,24 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 sm:px-6 border-t border-stone-800 flex items-center justify-between gap-4 shrink-0">
-          <span className="text-xs text-stone-400 font-mono-tabular">
-            {isTouchMode
-              ? 'Explore streets and buildings to reveal them on your map'
-              : 'Explore to chart new areas · N or Esc to close'}
-          </span>
+        <div
+          className={`border-t border-stone-800 flex items-center justify-between gap-4 shrink-0 ${
+            isCompactLandscape ? 'px-4 py-2' : 'px-4 py-3 sm:px-6'
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-xs text-stone-400 font-mono-tabular truncate">
+              {isTouchMode
+                ? 'Explore streets and buildings to reveal them on your map'
+                : 'Explore to chart new areas · N or Esc to close'}
+            </span>
+            {hud.collectedKeyIds.length > 0 && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono-tabular text-amber-300 shrink-0">
+                <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
+                {hud.collectedKeyIds.length}/3 Keys
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -339,3 +556,4 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
     </div>
   );
 }
+

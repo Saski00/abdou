@@ -46,6 +46,7 @@ export class ZombieManager {
   private root = new THREE.Group();
   private sharedGeos: ZombieSharedGeometries;
   private entities: ZombieEntityView[] = [];
+  private agentsCache: ZombieAgent[] = [];
   private meleeProp: ReturnType<typeof buildFirstPersonMeleePipe>;
 
   public zombiesDefeated = 0;
@@ -92,6 +93,7 @@ export class ZombieManager {
     this.root.add(group);
     const view = { agent, group, rig };
     this.entities.push(view);
+    this.agentsCache.push(agent);
     return view;
   }
 
@@ -120,6 +122,7 @@ export class ZombieManager {
       ent.rig?.dispose();
     }
     this.entities = [];
+    this.agentsCache = [];
   }
 
   public reset(): void {
@@ -214,12 +217,11 @@ export class ZombieManager {
   }
 
   public emitNoise(event: NoiseEvent, nightFactor = 0): void {
-    const agents = this.entities.map((e) => e.agent);
-    dispatchNoiseToZombies(agents, event, this.colliders, nightFactor);
+    dispatchNoiseToZombies(this.agentsCache, event, this.colliders, nightFactor);
   }
 
   public getAgents(): ZombieAgent[] {
-    return this.entities.map((e) => e.agent);
+    return this.agentsCache;
   }
 
   public replenishStreetZombiesOnNewDay(
@@ -271,7 +273,7 @@ export class ZombieManager {
     this.meleeSwingTimer = 0.28;
     this.sound.playMeleeSwing();
 
-    const agents = this.entities.map((e) => e.agent);
+    const agents = this.agentsCache;
     this.emitNoise(
       {
         x: playerX,
@@ -328,9 +330,8 @@ export class ZombieManager {
 
     this.updateFirstPersonWeapon(dt, isMoving, isSprinting);
 
-    const agents = this.entities.map((e) => e.agent);
     const tickRes = stepZombiesAI(
-      agents,
+      this.agentsCache,
       dt,
       playerX,
       playerZ,
@@ -349,7 +350,7 @@ export class ZombieManager {
       this.sound.playPlayerHurt();
     }
 
-    // Sync 3D transforms & procedural animations
+    // Sync 3D transforms & distance-culled procedural rig animations
     for (const ent of this.entities) {
       const a = ent.agent;
       ent.group.position.set(a.x, a.y, a.z);
@@ -361,15 +362,19 @@ export class ZombieManager {
       }
 
       if (ent.rig) {
-        animateZombieRig(
-          ent.rig,
-          a.state,
-          a.walkCycle,
-          a.attackWindup,
-          a.config.attackWindupSec,
-          a.hitFlashTimer,
-          a.deathTimer
-        );
+        const dx = a.x - playerX;
+        const dz = a.z - playerZ;
+        if (dx * dx + dz * dz <= 44 * 44) {
+          animateZombieRig(
+            ent.rig,
+            a.state,
+            a.walkCycle,
+            a.attackWindup,
+            a.config.attackWindupSec,
+            a.hitFlashTimer,
+            a.deathTimer
+          );
+        }
       }
     }
 

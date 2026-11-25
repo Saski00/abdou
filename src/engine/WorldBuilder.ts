@@ -37,6 +37,7 @@ import {
 } from '../assets/models/proceduralModels';
 import {
   buildHingedGateModel,
+  buildKeyPickupModel,
   buildResourceModel,
   buildSupplyContainerModel,
   buildWorktableModel,
@@ -55,6 +56,13 @@ import { buildStoryObjectModel } from '../assets/models/storyModels';
 import { ProceduralTextureSet } from '../assets/textures/proceduralTextures';
 import { STORY_OBJECTS } from '../game/missionSystem';
 import { InventoryState, ResourceId } from '../game/types';
+import {
+  PROP_EXAMINE_SPECS,
+  PROP_SEARCH_SPECS,
+  PROP_WORKBENCH_NAMES,
+  VEHICLE_INTERACT_SPECS,
+  getInteriorFurnitureInteractionSpec,
+} from '../game/worldObjectCatalog';
 import { AssetManager } from './AssetManager';
 
 export interface BoxCollider {
@@ -137,6 +145,21 @@ export interface WorldDoorInteractable {
   pivot: THREE.Object3D;
   collider: SegmentCollider;
   isOpen: boolean;
+  lockedKeyId?: string;
+  lockedHint?: string;
+  unlocked: boolean;
+}
+
+export interface WorldKeyInteractable {
+  kind: 'key';
+  id: string;
+  name: string;
+  keyKind: 'key' | 'keycard';
+  x: number;
+  y: number;
+  z: number;
+  group: THREE.Group;
+  collected: boolean;
 }
 
 export interface WorldContainerInteractable {
@@ -181,12 +204,98 @@ export interface WorldStoryObjectInteractable {
   group: THREE.Group;
 }
 
+export interface WorldVehicleInteractable {
+  kind: 'vehicle';
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  interactRadiusOffset: number;
+  initialNote: string;
+  inspectedNote: string;
+  searched: boolean;
+  lootTaken: boolean;
+  loot?: {
+    resourceId: ResourceId;
+    amount: number;
+  };
+  defaultLoot?: {
+    resourceId: ResourceId;
+    amount: number;
+  };
+}
+
+export interface WorldSearchablePropInteractable {
+  kind: 'searchable_prop';
+  id: string;
+  name: string;
+  searchAction: string;
+  emptyAction: string;
+  x: number;
+  y: number;
+  z: number;
+  interactRadiusOffset: number;
+  initialNote: string;
+  inspectedNote: string;
+  searched: boolean;
+  lootTaken: boolean;
+  loot?: {
+    resourceId: ResourceId;
+    amount: number;
+  };
+  defaultLoot?: {
+    resourceId: ResourceId;
+    amount: number;
+  };
+}
+
+export interface WorldWorkbenchInteractable {
+  kind: 'workbench';
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  interactRadiusOffset: number;
+}
+
+export interface WorldExamineInteractable {
+  kind: 'examine';
+  id: string;
+  name: string;
+  actionLabel: string;
+  noteTitle: string;
+  noteText: string;
+  x: number;
+  y: number;
+  z: number;
+  interactRadiusOffset: number;
+  examined: boolean;
+}
+
+export interface WorldBedInteractable {
+  kind: 'bed';
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  interactRadiusOffset: number;
+}
+
 export type WorldInteractable =
   | WorldResourceInteractable
   | WorldDoorInteractable
   | WorldContainerInteractable
   | WorldShopStationInteractable
-  | WorldStoryObjectInteractable;
+  | WorldStoryObjectInteractable
+  | WorldKeyInteractable
+  | WorldVehicleInteractable
+  | WorldSearchablePropInteractable
+  | WorldWorkbenchInteractable
+  | WorldExamineInteractable
+  | WorldBedInteractable;
 
 export interface DynamicLightHandle {
   light: THREE.PointLight;
@@ -362,6 +471,34 @@ export function buildNeighborhoodWorld(
   }
   localDisposables.push(cwStripeGeoZ);
 
+  // Subtle painted parking stall dividers on parking lots (shared geometry, zero runtime cost)
+  const stallStripeGeo = new THREE.PlaneGeometry(0.1, 2.5);
+  stallStripeGeo.rotateX(-Math.PI * 0.5);
+  localDisposables.push(stallStripeGeo);
+  for (const r of map.roads) {
+    if (r.roadKind !== 'parking') continue;
+    if (r.orientation === 'x') {
+      const startX = r.x - r.w * 0.5 + 2.2;
+      const endX = r.x + r.w * 0.5 - 2.0;
+      const stripeZ = r.z - r.d * 0.5 + 1.45;
+      for (let sx = startX; sx <= endX; sx += 3.0) {
+        const line = new THREE.Mesh(stallStripeGeo, whitePaintMat);
+        line.position.set(sx, 0.02, stripeZ);
+        root.add(line);
+      }
+    } else {
+      const startZ = r.z - r.d * 0.5 + 2.2;
+      const endZ = r.z + r.d * 0.5 - 2.0;
+      const stripeX = r.x - r.w * 0.5 + 1.45;
+      for (let sz = startZ; sz <= endZ; sz += 3.0) {
+        const line = new THREE.Mesh(stallStripeGeo, whitePaintMat);
+        line.position.set(stripeX, 0.02, sz);
+        line.rotation.y = Math.PI * 0.5;
+        root.add(line);
+      }
+    }
+  }
+
   // 3. Raised Concrete Sidewalks
   const swMat = new THREE.MeshStandardMaterial({
     map: textures.sidewalk,
@@ -437,6 +574,25 @@ export function buildNeighborhoodWorld(
       d: len,
       rotationY: v.rotationY,
     });
+
+    const vSpec = VEHICLE_INTERACT_SPECS[v.id];
+    if (vSpec) {
+      interactables.push({
+        kind: 'vehicle',
+        id: v.id,
+        name: vSpec.name,
+        x: v.x,
+        y: 0,
+        z: v.z,
+        interactRadiusOffset: v.kind === 'van' ? 2.25 : 2.05,
+        initialNote: vSpec.initialNote,
+        inspectedNote: vSpec.inspectedNote,
+        searched: false,
+        lootTaken: false,
+        loot: vSpec.loot ? { ...vSpec.loot } : undefined,
+        defaultLoot: vSpec.loot ? { ...vSpec.loot } : undefined,
+      });
+    }
   }
 
   // 6. Street Lamps + lightweight light pools
@@ -568,6 +724,52 @@ export function buildNeighborhoodWorld(
         });
       }
     }
+
+    if (p.kind === 'worktable') {
+      interactables.push({
+        kind: 'workbench',
+        id: p.id,
+        name: PROP_WORKBENCH_NAMES[p.id] ?? 'Supply Workbench',
+        x: p.x,
+        y: baseY,
+        z: p.z,
+        interactRadiusOffset: 0.75,
+      });
+    } else if (PROP_SEARCH_SPECS[p.id]) {
+      const s = PROP_SEARCH_SPECS[p.id];
+      interactables.push({
+        kind: 'searchable_prop',
+        id: p.id,
+        name: s.name,
+        searchAction: s.searchAction,
+        emptyAction: s.emptyAction,
+        x: p.x,
+        y: baseY,
+        z: p.z,
+        interactRadiusOffset: s.radiusOffset,
+        initialNote: s.initialNote,
+        inspectedNote: s.inspectedNote,
+        searched: false,
+        lootTaken: false,
+        loot: s.loot ? { ...s.loot } : undefined,
+        defaultLoot: s.loot ? { ...s.loot } : undefined,
+      });
+    } else if (PROP_EXAMINE_SPECS[p.id]) {
+      const ex = PROP_EXAMINE_SPECS[p.id];
+      interactables.push({
+        kind: 'examine',
+        id: p.id,
+        name: ex.name,
+        actionLabel: ex.actionLabel,
+        noteTitle: ex.noteTitle,
+        noteText: ex.noteText,
+        x: p.x,
+        y: baseY,
+        z: p.z,
+        interactRadiusOffset: ex.radiusOffset,
+        examined: false,
+      });
+    }
   }
 
   // 9. Collectible 3D Resources (GLB/GLTF-extensible via AssetManager)
@@ -641,6 +843,9 @@ export function buildNeighborhoodWorld(
       pivot: swingPivot,
       collider: segCollider,
       isOpen: false,
+      lockedKeyId: g.lockedKeyId,
+      lockedHint: g.lockedHint,
+      unlocked: !g.lockedKeyId,
     });
   }
 
@@ -756,7 +961,8 @@ export function buildNeighborhoodWorld(
     }
 
     // Interior Furniture
-    for (const furn of b.furniture) {
+    for (let fi = 0; fi < b.furniture.length; fi++) {
+      const furn = b.furniture[fi];
       const fMesh = buildFurnitureModel(furn.kind, furn.w, furn.d, mats, intMats);
       fMesh.position.set(b.x + furn.x, floorY, b.z + furn.z);
       fMesh.rotation.y = furn.rotationY;
@@ -770,6 +976,48 @@ export function buildNeighborhoodWorld(
           d: furn.d,
           rotationY: furn.rotationY,
         });
+      }
+
+      const furnSpec = getInteriorFurnitureInteractionSpec(b.id, furn.kind, fi);
+      if (furnSpec) {
+        const fx = b.x + furn.x;
+        const fz = b.z + furn.z;
+        const fid = `furn_${b.id}_${furn.kind}_${fi}`;
+        if (furnSpec.interactKind === 'workbench') {
+          interactables.push({
+            kind: 'workbench',
+            id: fid,
+            name: furnSpec.name,
+            x: fx,
+            y: floorY,
+            z: fz,
+            interactRadiusOffset: furnSpec.radiusOffset,
+          });
+        } else if (furnSpec.interactKind === 'bed') {
+          interactables.push({
+            kind: 'bed',
+            id: fid,
+            name: furnSpec.name,
+            x: fx,
+            y: floorY,
+            z: fz,
+            interactRadiusOffset: furnSpec.radiusOffset,
+          });
+        } else {
+          interactables.push({
+            kind: 'examine',
+            id: fid,
+            name: furnSpec.name,
+            actionLabel: furnSpec.actionLabel ?? 'Examine',
+            noteTitle: furnSpec.noteTitle ?? furnSpec.name,
+            noteText: furnSpec.noteText ?? '',
+            x: fx,
+            y: floorY,
+            z: fz,
+            interactRadiusOffset: furnSpec.radiusOffset,
+            examined: false,
+          });
+        }
       }
     }
 
@@ -816,6 +1064,9 @@ export function buildNeighborhoodWorld(
         pivot: swingPivot,
         collider: segCollider,
         isOpen: false,
+        lockedKeyId: d.lockedKeyId,
+        lockedHint: d.lockedHint,
+        unlocked: !d.lockedKeyId,
       });
     }
 
@@ -886,6 +1137,34 @@ export function buildNeighborhoodWorld(
         group: rGroup,
         collected: false,
       });
+    }
+
+    // Interior Keys & Access Keycards
+    if (b.keys) {
+      for (const k of b.keys) {
+        const ky = floorY + k.yOffset;
+        const kGroup = assets.instantiateAsset(
+          `key.${k.keyKind}`,
+          () => buildKeyPickupModel(k.keyKind, resMats, mats),
+          true,
+          false
+        );
+        kGroup.position.set(b.x + k.x, ky, b.z + k.z);
+        kGroup.rotation.y = k.rotationY;
+        root.add(kGroup);
+
+        interactables.push({
+          kind: 'key',
+          id: k.id,
+          name: k.name,
+          keyKind: k.keyKind,
+          x: b.x + k.x,
+          y: ky,
+          z: b.z + k.z,
+          group: kGroup,
+          collected: false,
+        });
+      }
     }
 
     // Shop Counter Register & Backroom Storage Locker
