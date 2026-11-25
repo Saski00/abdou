@@ -101,6 +101,7 @@ function createNameTagTexture(
     ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 12);
     ctx.stroke();
 
+    ctx.direction = /[\u0600-\u06FF]/.test(`${title} ${subtitle}`) ? 'rtl' : 'ltr';
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 24px Cairo, system-ui, sans-serif';
     ctx.textAlign = 'center';

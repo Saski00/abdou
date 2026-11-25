@@ -141,6 +141,7 @@ export interface FurnitureTranslation {
 export interface GuidanceHintTranslation {
   title: string;
   message: string;
+  touchMessage?: string;
 }
 
 export interface TranslationCatalog {
@@ -210,6 +211,10 @@ export interface TranslationCatalog {
     controlsFooterTouch: string;
     controlsFooterDesktop: string;
     languageLabel: string;
+  };
+  gameCanvas: {
+    contextLostTitle: string;
+    contextLostBody: string;
   };
   settingsModal: {
     title: string;
@@ -464,6 +469,7 @@ export interface TranslationCatalog {
     noVisitorsOpen: string;
     noVisitorsClosed: string;
     budgetLabel: string; // "Budget {amount}"
+    prefers: string; // "Prefers {item}"
     recentSalesHeading: string;
     completedCountLabel: string; // "{count} completed"
     noSalesRecorded: string;
@@ -573,6 +579,7 @@ export interface TranslationCatalog {
     trackedLeadAria: string;
     yourPosAria: string;
     leadBearingDist: string; // "Lead · {bearing} {dist}m"
+    distMeters: string; // "{dist}m"
     compassLabel: string;
     compactShop: string;
     compactCharted: string;
@@ -834,8 +841,12 @@ export interface TranslationCatalog {
       abandonedShelter: string;
       streetsSuffix: string;
       weaponSteelPipe: string;
+      districtDefault: string;
+      districtSurvivor: string;
+      defaultCustomerName: string;
     };
   };
+  customers: Record<string, string>;
   resources: Record<ResourceId, ResourceTranslation>;
   recipes: Record<string, RecipeTranslation>;
   shopLevels: Record<number, ShopLevelTranslation>;

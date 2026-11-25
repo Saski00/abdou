@@ -281,7 +281,7 @@ export default function App() {
     (name: string) => {
       if (screenState !== 'PLAYING') return;
       soundEngine.playUiClick(560);
-      setWorkbenchName(name || getTranslations().workbenchModal.defaultName);
+      setWorkbenchName(name || getTranslations().workbenchModal.defaultTitle);
       setActiveModal('WORKBENCH');
     },
     [screenState, soundEngine]

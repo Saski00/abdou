@@ -21,7 +21,7 @@ import {
 } from '../game/customerAI';
 import { SHOP_ITEM_PRICES, ShopEconomySystem, formatMoney } from '../game/economy';
 import { ActiveCustomerSummary } from '../game/types';
-import { formatTpl, getTranslations, tResourceName } from '../i18n';
+import { formatTpl, getTranslations, tCustomerName, tResourceName } from '../i18n';
 import { AssetManager } from './AssetManager';
 import { CustomerInteractTarget, InteractionManager } from './InteractionManager';
 import { BuiltWorld, WorldDoorInteractable } from './WorldBuilder';
@@ -167,7 +167,8 @@ export class CustomerManager {
 
       const res = this.economy.sellStockItem(req.resourceId, req.quantity, timeLabel, {
         source: 'customer',
-        buyerName: req.customerName,
+        buyerId: req.customerProfileId,
+        buyerName: tCustomerName(req.customerProfileId, req.customerName),
       });
 
       const itemLabel = tResourceName(req.resourceId, req.quantity);
@@ -235,7 +236,7 @@ export class CustomerManager {
       list.push({
         kind: 'customer',
         id: a.id,
-        name: a.profile.name,
+        name: tCustomerName(a.profile.id, a.profile.name),
         statusLabel: resolveCustomerStatusLabel(a),
         x: a.x,
         y: a.y,
@@ -250,6 +251,7 @@ export class CustomerManager {
     if (!ent) return;
     const a = ent.agent;
     const t = getTranslations();
+    const customerName = tCustomerName(a.profile.id, a.profile.name);
     const topPrefId = (Object.keys(a.profile.preferences) as (keyof typeof a.profile.preferences)[]).sort(
       (x, y) => a.profile.preferences[y] - a.profile.preferences[x]
     )[0];
@@ -259,18 +261,18 @@ export class CustomerManager {
       const itemName = tResourceName(a.selectedPurchase.resourceId, a.selectedPurchase.quantity);
       const msg = a.purchaseCompleted
         ? formatTpl(t.gameMessages.toasts.customerThanksPurchased, {
-            name: a.profile.name,
+            name: customerName,
             qty: a.selectedPurchase.quantity,
             item: itemName,
           })
-        : `${a.profile.name}: ${resolveCustomerStatusLabel(a)}`;
+        : `${customerName}: ${resolveCustomerStatusLabel(a)}`;
       this.interactions.pushToast(msg, 'world', 2.6);
       return;
     }
 
     const status = resolveCustomerStatusLabel(a);
     this.interactions.pushToast(
-      `${a.profile.name} (${status}) · ${formatTpl(t.shopModal.prefers, { item: prefName })} · ${formatMoney(a.budget)}`,
+      `${customerName} (${status}) · ${formatTpl(t.shopModal.prefers, { item: prefName })} · ${formatMoney(a.budget)}`,
       'world',
       2.6
     );

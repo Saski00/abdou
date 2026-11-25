@@ -12,6 +12,7 @@ export interface WorldRegionDef {
   dangerTier: LocationDangerLevel;
   accentColor: string;
   description: string;
+  mapShortLabel?: string;
 }
 
 export const WORLD_REGIONS: WorldRegionDef[] = [
@@ -422,6 +423,7 @@ export function getLocalizedRegion(id: WorldRegionId): WorldRegionDef {
       dangerTier: 'low',
       accentColor: '#94a3b8',
       description: loc.description,
+      mapShortLabel: loc.mapShortLabel,
     };
   }
   return {
@@ -429,6 +431,7 @@ export function getLocalizedRegion(id: WorldRegionId): WorldRegionDef {
     name: loc.name,
     subtitle: loc.subtitle,
     description: loc.description,
+    mapShortLabel: loc.mapShortLabel,
   };
 }
 

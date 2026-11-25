@@ -239,10 +239,11 @@ export class GuidanceSystem {
 
     this.activeHintId = best.id;
     const locHint = tGuidanceHint(best.id);
+    const localizedMessage = ctx.isTouchMode ? locHint?.touchMessage ?? locHint?.message : locHint?.message;
     return {
       id: best.id,
       title: locHint?.title ?? best.title,
-      message: locHint?.message ?? best.getMessage(ctx.isTouchMode),
+      message: localizedMessage ?? best.getMessage(ctx.isTouchMode),
     };
   }
 }

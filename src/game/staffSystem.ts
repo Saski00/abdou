@@ -631,7 +631,7 @@ export class StaffSystem {
       };
     }
 
-    const survName = tSurvivor(surv.id).name;
+    const survName = tSurvivor(surv.id)?.name ?? surv.name;
     const profLoc = tProfession(profession);
 
     if (surv.costMoney > 0) {
@@ -727,7 +727,7 @@ export class StaffSystem {
     if (!emp) {
       return { ok: false, message: staffMsg.employeeNotFound };
     }
-    const empName = tSurvivor(emp.survivorId).name || emp.name;
+    const empName = tSurvivor(emp.survivorId)?.name ?? emp.name;
     const nextProfLoc = tProfession(nextProfession);
     if (emp.profession === nextProfession) {
       return {
@@ -794,7 +794,7 @@ export class StaffSystem {
       return { ok: false, message: staffMsg.employeeNotFound };
     }
     const [removed] = this.employees.splice(idx, 1);
-    const empName = tSurvivor(removed.survivorId).name || removed.name;
+    const empName = tSurvivor(removed.survivorId)?.name ?? removed.name;
     const msg = formatTemplate(staffMsg.dismissedMsg, { name: empName });
     economy.recordStaffNotice(msg, timeLabel);
     return { ok: true, message: msg };
@@ -812,7 +812,7 @@ export class StaffSystem {
 
     let paidCount = 0;
     for (const emp of unpaid) {
-      const empName = tSurvivor(emp.survivorId).name || emp.name;
+      const empName = tSurvivor(emp.survivorId)?.name ?? emp.name;
       const res = economy.payEmployeeSalary(empName, emp.salary, timeLabel);
       if (res.ok) {
         paidCount += 1;
@@ -915,7 +915,7 @@ export class StaffSystem {
       const staffMsg = tr.gameMessages.staff;
       const toastsMsg = tr.gameMessages.toasts;
       for (const emp of this.employees) {
-        const empName = tSurvivor(emp.survivorId).name || emp.name;
+        const empName = tSurvivor(emp.survivorId)?.name ?? emp.name;
         const payRes = economy.payEmployeeSalary(empName, emp.salary, timeLabel);
         if (payRes.ok) {
           paidCount += 1;
@@ -1082,7 +1082,7 @@ export class StaffSystem {
   ): void {
     const tr = getTranslations();
     const staffMsg = tr.gameMessages.staff;
-    const empName = tSurvivor(emp.survivorId).name || emp.name;
+    const empName = tSurvivor(emp.survivorId)?.name ?? emp.name;
     // Recover softly if knocked low in a fight
     if (emp.recovering) {
       emp.health = Math.min(emp.maxHealth, emp.health + 4.5 * dt);
@@ -1338,7 +1338,7 @@ export class StaffSystem {
     result: StaffUpdateResult
   ): void {
     const staffMsg = getTranslations().gameMessages.staff;
-    const empName = tSurvivor(emp.survivorId).name || emp.name;
+    const empName = tSurvivor(emp.survivorId)?.name ?? emp.name;
     emp.status = 'gathering';
     emp.statusLabel = staffMsg.statusLabels.gathering;
 
@@ -1568,27 +1568,28 @@ export class StaffSystem {
 
   private resolveLastSalaryNotice(): string | null {
     const tr = getTranslations();
-    if (!this.lastSalaryNoticeMeta) return this.lastSalaryNotice;
-    if (this.lastSalaryNoticeMeta.kind === 'paidUnpaidCount') {
-      return formatTemplate(tr.gameMessages.staff.paidUnpaidCount, {
-        count: this.lastSalaryNoticeMeta.count,
-      });
+    const meta = this.lastSalaryNoticeMeta;
+    if (!meta) return this.lastSalaryNotice;
+    switch (meta.kind) {
+      case 'paidUnpaidCount':
+        return formatTemplate(tr.gameMessages.staff.paidUnpaidCount, {
+          count: meta.count,
+        });
+      case 'stillUnpaidCount':
+        return formatTemplate(tr.gameMessages.staff.stillUnpaidCount, {
+          count: meta.count,
+        });
+      case 'unpaidWagesNotice':
+        return formatTemplate(tr.gameMessages.toasts.unpaidWagesNotice, {
+          unpaid: meta.unpaid,
+          paid: meta.paid,
+        });
+      case 'payrollPaidNotice':
+        return formatTemplate(tr.gameMessages.toasts.payrollPaidNotice, {
+          amount: formatMoney(meta.amount),
+          count: meta.count,
+        });
     }
-    if (this.lastSalaryNoticeMeta.kind === 'stillUnpaidCount') {
-      return formatTemplate(tr.gameMessages.staff.stillUnpaidCount, {
-        count: this.lastSalaryNoticeMeta.count,
-      });
-    }
-    if (this.lastSalaryNoticeMeta.kind === 'unpaidWagesNotice') {
-      return formatTemplate(tr.gameMessages.toasts.unpaidWagesNotice, {
-        unpaid: this.lastSalaryNoticeMeta.unpaid,
-        paid: this.lastSalaryNoticeMeta.paid,
-      });
-    }
-    return formatTemplate(tr.gameMessages.toasts.payrollPaidNotice, {
-      amount: formatMoney(this.lastSalaryNoticeMeta.amount),
-      count: this.lastSalaryNoticeMeta.count,
-    });
   }
 
   public getSnapshot(
@@ -1602,7 +1603,7 @@ export class StaffSystem {
       const profLoc = tProfession(e.profession);
       return {
         id: e.id,
-        name: survLoc.name || e.name,
+        name: survLoc?.name || e.name,
         profession: e.profession,
         professionLabel: profLoc.label,
         status: e.status,
@@ -1625,11 +1626,11 @@ export class StaffSystem {
       const survLoc = tSurvivor(s.id);
       return {
         id: s.id,
-        name: survLoc.name,
-        locationLabel: survLoc.locationLabel,
-        dialogue: survLoc.dialogue,
+        name: survLoc?.name ?? s.name,
+        locationLabel: survLoc?.locationLabel ?? s.locationLabel,
+        dialogue: survLoc?.dialogue ?? s.dialogue,
         storyRemark: getSurvivorStoryRemark(s.id, completedMissionIds, endingCompleted),
-        needDescription: survLoc.needDescription,
+        needDescription: survLoc?.needDescription ?? s.needDescription,
         preferredProfession: s.preferredProfession,
         costMoney: s.costMoney,
         costResources: { ...s.costResources },
@@ -1660,10 +1661,10 @@ export function createInitialStaffSnapshot(employeeCapacity = 1): StaffSnapshot 
       const survLoc = tSurvivor(s.id);
       return {
         id: s.id,
-        name: survLoc.name,
-        locationLabel: survLoc.locationLabel,
-        dialogue: survLoc.dialogue,
-        needDescription: survLoc.needDescription,
+        name: survLoc?.name ?? s.name,
+        locationLabel: survLoc?.locationLabel ?? s.locationLabel,
+        dialogue: survLoc?.dialogue ?? s.dialogue,
+        needDescription: survLoc?.needDescription ?? s.needDescription,
         preferredProfession: s.preferredProfession,
         costMoney: s.costMoney,
         costResources: { ...s.costResources },

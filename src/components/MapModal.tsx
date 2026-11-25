@@ -281,6 +281,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
 
             {/* Road Corridor Names */}
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute left-2 -translate-y-1/2 text-[8px] sm:text-[9px] font-mono-tabular uppercase tracking-widest text-stone-300/85 pointer-events-none"
               style={{ top: `${toMapPctY(0)}%` }}
@@ -288,6 +289,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               {mapCopy.roadLabels.mainBlvd}
             </div>
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
               style={{ top: `${toMapPctY(-33)}%` }}
@@ -295,6 +297,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               {mapCopy.roadLabels.northSt}
             </div>
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute left-2 -translate-y-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/75 pointer-events-none"
               style={{ top: `${toMapPctY(34.5)}%` }}
@@ -302,6 +305,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               {mapCopy.roadLabels.southSt}
             </div>
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute bottom-1.5 -translate-x-1/2 text-[8px] font-mono-tabular uppercase tracking-wider text-stone-300/85 pointer-events-none"
               style={{ left: `${toMapPctX(0)}%` }}
@@ -309,6 +313,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               {mapCopy.roadLabels.centralAve}
             </div>
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
               style={{ left: `${toMapPctX(-22.8)}%`, top: `${toMapPctY(27.5)}%` }}
@@ -316,6 +321,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               {mapCopy.roadLabels.mapleAlley}
             </div>
             <div
+              dir={dir}
               aria-hidden="true"
               className="absolute -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono-tabular text-sky-300/60 pointer-events-none whitespace-nowrap"
               style={{ left: `${toMapPctX(22.8)}%`, top: `${toMapPctY(-17.5)}%` }}
@@ -330,6 +336,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               return (
                 <div
                   key={reg.id}
+                  dir={dir}
                   aria-hidden="true"
                   style={{ left: `${toMapX(reg.x)}%`, top: `${toMapY(reg.z)}%` }}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 text-[8px] sm:text-[9px] font-mono-tabular uppercase tracking-widest pointer-events-none whitespace-nowrap ${
@@ -352,6 +359,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               return (
                 <button
                   key={loc.id}
+                  dir={dir}
                   type="button"
                   onClick={() => setSelectedId(loc.id)}
                   style={{ left: `${left}%`, top: `${top}%` }}
@@ -390,7 +398,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                   )}
                 </div>
                 {!discoveredSet.has(trackedLoc.id) && (
-                  <span className="mt-0.5 text-[9px] font-mono-tabular font-semibold text-amber-300 bg-[#0b1018]/90 px-1 rounded whitespace-nowrap">
+                  <span dir={dir} className="mt-0.5 text-[9px] font-mono-tabular font-semibold text-amber-300 bg-[#0b1018]/90 px-1 rounded whitespace-nowrap">
                     {formatTpl(mapCopy.leadBearingDist, {
                       bearing: trackedBearing,
                       dist: trackedDist,
@@ -416,12 +424,18 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
             </div>
 
             {/* Compass Rose Label */}
-            <div className="absolute top-2 right-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 text-[10px] font-mono-tabular text-stone-300 pointer-events-none">
+            <div
+              dir={dir}
+              className="absolute top-2 right-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 text-[10px] font-mono-tabular text-stone-300 pointer-events-none"
+            >
               {mapCopy.compassLabel}
             </div>
 
             {/* Compact Map Legend */}
-            <div className="absolute top-2 left-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 flex items-center gap-2 text-[9px] font-mono-tabular text-stone-300 pointer-events-none">
+            <div
+              dir={dir}
+              className="absolute top-2 left-2 bg-[#0b0f17]/90 border border-stone-700/80 rounded px-2 py-1 flex items-center gap-2 text-[9px] font-mono-tabular text-stone-300 pointer-events-none"
+            >
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 bg-amber-400 inline-block rounded-[1px]" />
                 {legendShopLabel}
@@ -496,7 +510,7 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                   </span>
                   {trackedLoc && (
                     <span className="text-sky-300">
-                      {trackedBearing} · <bdi dir="ltr">{trackedDist}m</bdi>
+                      {trackedBearing} · {formatTpl(mapCopy.distMeters, { dist: trackedDist })}
                     </span>
                   )}
                 </div>

@@ -34,6 +34,7 @@ import { PROFESSION_CONFIGS, PROFESSION_ORDER } from '../game/staffSystem';
 import { EmployeeProfession, HudSnapshot, ResourceId, ShopModalTab } from '../game/types';
 import {
   formatTpl,
+  tCustomerName,
   tDecoration,
   tProfession,
   tResource,
@@ -726,7 +727,7 @@ export function ShopModal({
                       >
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-stone-100 truncate">
-                            {sale.customerName}
+                            {tCustomerName(sale.customerId, sale.customerName)}
                           </div>
                           <div className="text-xs text-stone-400 font-mono-tabular">
                             <bdi dir="ltr">{sale.quantity}×</bdi>{' '}

@@ -1,6 +1,7 @@
 import {
   formatTemplate,
   getTranslations,
+  tCustomerName,
   tDecoration,
   tResourceName,
   tShopLevel,
@@ -634,7 +635,7 @@ export class ShopEconomySystem {
       };
     }
 
-    const nextName = tStorageTier(nextCfg.tier).name;
+    const nextName = tStorageTier(nextCfg.tier)?.name ?? nextCfg.name;
     const spendRes = this.spendMoney(nextCfg.cost);
     if (!spendRes.ok) {
       return {
@@ -1112,7 +1113,7 @@ export class ShopEconomySystem {
     resourceId: ResourceId,
     quantity: number,
     timeLabel = '',
-    options: { source?: 'manual' | 'customer'; buyerName?: string } = {}
+    options: { source?: 'manual' | 'customer'; buyerName?: string; buyerId?: string } = {}
   ): ShopSaleResult {
     const qty = sanitizeQuantity(quantity);
     const econMsg = getTranslations().gameMessages.economy;
@@ -1120,7 +1121,7 @@ export class ShopEconomySystem {
     const itemSingle = tResourceName(resourceId, 1);
     const available = Math.max(0, this.shopStock[resourceId] ?? 0);
     const source = options.source ?? 'manual';
-    const buyerName = options.buyerName?.trim() || 'Survivor';
+    const buyerName = tCustomerName(options.buyerId, options.buyerName?.trim());
 
     if (qty <= 0) {
       return {
@@ -1151,6 +1152,7 @@ export class ShopEconomySystem {
     const record = this.recordTx({
       kind: 'sale',
       source,
+      customerId: source === 'customer' ? options.buyerId : undefined,
       customerName: source === 'customer' ? buyerName : undefined,
       resourceId,
       itemName: itemSingle,
@@ -1180,6 +1182,7 @@ export class ShopEconomySystem {
       this.recentCustomerSales = [
         {
           id: record.id,
+          customerId: options.buyerId,
           customerName: buyerName,
           resourceId,
           itemName: itemSingle,

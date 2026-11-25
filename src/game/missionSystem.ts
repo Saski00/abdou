@@ -975,7 +975,8 @@ export function getSurvivorStoryRemark(
   completedMissionIds: ReadonlySet<string>,
   endingCompleted: boolean
 ): string {
-  const remarks = tSurvivor(survivorId).storyRemarks;
+  const remarks = tSurvivor(survivorId)?.storyRemarks;
+  if (!remarks) return '';
   if (endingCompleted) {
     return remarks.endingCompleted;
   }
@@ -1112,6 +1113,10 @@ export class MissionSystem {
     if (!cfg) return null;
 
     const objLoc = tStoryObject(cfg.id);
+    const objName = objLoc?.name ?? cfg.name;
+    const objSubtitle = objLoc?.subtitle ?? cfg.subtitle;
+    const objBody = objLoc?.body ?? cfg.initialBody;
+    const objActivatedBody = objLoc?.activatedBody ?? cfg.activatedBody ?? objBody;
     const relayMsg = getTranslations().gameMessages.storyRelay;
     const alreadyActivated = this.activatedStoryObjects.has(objectId);
     if (cfg.id === 'story_final_relay') {
@@ -1121,8 +1126,8 @@ export class MissionSystem {
       if (m10Status === 'completed') {
         return {
           id: cfg.id,
-          title: objLoc.name,
-          subtitle: objLoc.subtitle,
+          title: objName,
+          subtitle: objSubtitle,
           body: relayMsg.completedBody,
           category: cfg.category,
           alreadyActivated: true,
@@ -1132,9 +1137,9 @@ export class MissionSystem {
       if (m10Status === 'locked') {
         return {
           id: cfg.id,
-          title: objLoc.name,
-          subtitle: objLoc.subtitle,
-          body: objLoc.body,
+          title: objName,
+          subtitle: objSubtitle,
+          body: objBody,
           category: cfg.category,
           actionDisabledReason: relayMsg.lockedDisabledReason,
           alreadyActivated: false,
@@ -1157,11 +1162,11 @@ export class MissionSystem {
         }
         return {
           id: cfg.id,
-          title: objLoc.name,
-          subtitle: objLoc.subtitle,
-          body: objLoc.body,
+          title: objName,
+          subtitle: objSubtitle,
+          body: objBody,
           category: cfg.category,
-          actionLabel: objLoc.activateActionLabel ?? cfg.activateActionLabel,
+          actionLabel: objLoc?.activateActionLabel ?? cfg.activateActionLabel,
           actionDisabledReason:
             missing.length > 0
               ? formatTemplate(relayMsg.needInPackTemplate, { items: missing.join(' & ') })
@@ -1173,13 +1178,12 @@ export class MissionSystem {
 
       // Already calibrated -> check surge clear before transmit
       if (surgeKills < 3) {
-        const baseText = objLoc.activatedBody ?? objLoc.body;
         return {
           id: cfg.id,
-          title: objLoc.name,
-          subtitle: objLoc.subtitle,
+          title: objName,
+          subtitle: objSubtitle,
           body: formatTemplate(relayMsg.surgeWarningBody, {
-            base: baseText,
+            base: objActivatedBody,
             rem: 3 - surgeKills,
           }),
           category: cfg.category,
@@ -1192,9 +1196,9 @@ export class MissionSystem {
 
       return {
         id: cfg.id,
-        title: objLoc.name,
-        subtitle: objLoc.subtitle,
-        body: objLoc.activatedBody ?? objLoc.body,
+        title: objName,
+        subtitle: objSubtitle,
+        body: objActivatedBody,
         category: cfg.category,
         actionLabel: relayMsg.transmitActionLabel,
         alreadyActivated: true,
@@ -1203,9 +1207,9 @@ export class MissionSystem {
 
     return {
       id: cfg.id,
-      title: objLoc.name,
-      subtitle: objLoc.subtitle,
-      body: objLoc.body,
+      title: objName,
+      subtitle: objSubtitle,
+      body: objBody,
       category: cfg.category,
       alreadyActivated: this.inspectedStoryObjects.has(objectId),
     };
@@ -1345,7 +1349,7 @@ export class MissionSystem {
             const missionLoc = tMission(def.id);
             outcome.rewardGrants.push({
               missionId: def.id,
-              missionTitle: missionLoc.title,
+              missionTitle: missionLoc?.title ?? def.title,
               money: def.rewards.money ?? 0,
               resources: def.rewards.resources ?? {},
             });
@@ -1357,9 +1361,9 @@ export class MissionSystem {
               const clueLoc = tClue(clueDef.id);
               const clue: StoryClueSummary = {
                 ...clueDef,
-                title: clueLoc.title,
-                source: clueLoc.source,
-                body: clueLoc.body,
+                title: clueLoc?.title ?? clueDef.title,
+                source: clueLoc?.source ?? clueDef.source,
+                body: clueLoc?.body ?? clueDef.body,
                 discoveredDay: Math.max(1, mergedCtx.day),
               };
               this.discoveredClues.set(clue.id, clue);
@@ -1498,13 +1502,16 @@ export class MissionSystem {
         id: def.id,
         order: def.order,
         category: def.category,
-        chapterLabel: missionLoc.chapterLabel,
-        title: missionLoc.title,
-        description: missionLoc.description,
+        chapterLabel: missionLoc?.chapterLabel ?? def.chapterLabel,
+        title: missionLoc?.title ?? def.title,
+        description: missionLoc?.description ?? def.description,
         status,
         tracked: this.trackedMissionId === def.id,
         objectives: this.evaluateObjectives(def, ctx),
-        rewards: def.rewards,
+        rewards: {
+          ...def.rewards,
+          clueId: def.clueUnlockId,
+        },
         rewardsClaimed: this.claimedRewardIds.has(def.id),
         targetZoneId: def.targetZoneId,
       };
@@ -1520,9 +1527,9 @@ export class MissionSystem {
       const clueLoc = tClue(c.id);
       return {
         ...c,
-        title: clueLoc.title,
-        source: clueLoc.source,
-        body: clueLoc.body,
+        title: clueLoc?.title ?? c.title,
+        source: clueLoc?.source ?? c.source,
+        body: clueLoc?.body ?? c.body,
       };
     });
 

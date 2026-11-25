@@ -1,3 +1,4 @@
+import { getTranslations } from '../i18n';
 import type { SerializedMissionState } from './missionSystem';
 import type {
   EmployeeProfession,
@@ -177,7 +178,8 @@ export function getSavedGameSummary(): SavedGameSummary | null {
     day: Math.max(1, Math.floor(data.day || 1)),
     formattedTime: data.formattedTime || '08:00',
     activeMissionId: data.activeMissionId ?? data.missions?.trackedMissionId ?? null,
-    activeMissionTitle: data.activeMissionTitle || 'District 04 Survivor',
+    activeMissionTitle:
+      data.activeMissionTitle || getTranslations().gameMessages.locationsFallback.districtSurvivor,
     money: Math.round(data.economy?.money ?? 50),
     shopLevel: Math.max(1, Math.floor(data.economy?.shopLevel ?? 1)),
     savedAtIso: data.savedAtIso || '',

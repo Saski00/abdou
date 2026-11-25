@@ -609,7 +609,9 @@ export class Game3DEngine {
     const missionSnap = this.missions.getSnapshot(ctx, true);
     const activeTitle =
       missionSnap.trackedMission?.title ??
-      (this.missions.endingCompleted ? t.gameMessages.toasts.loadedFallbackMsg : 'District 04');
+      (this.missions.endingCompleted
+        ? t.gameMessages.toasts.loadedFallbackMsg
+        : t.gameMessages.locationsFallback.districtDefault);
 
     const payload: SavedGameData = {
       version: CURRENT_SAVE_VERSION,
@@ -1659,7 +1661,7 @@ export class Game3DEngine {
       if (loc.discoveryReward && !this.claimedDiscoveryRewardIds.has(loc.id)) {
         this.claimedDiscoveryRewardIds.add(loc.id);
         let anyAdded = false;
-        const rewardLabel = locLocalized.discoveryRewardLabel ?? loc.discoveryReward.label;
+        const rewardLabel = locLocalized.discoveryReward?.label ?? loc.discoveryReward.label;
         if (loc.discoveryReward.money && loc.discoveryReward.money > 0) {
           this.economy.grantMissionReward(
             loc.discoveryReward.money,

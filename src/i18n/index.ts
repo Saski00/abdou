@@ -232,6 +232,15 @@ export function tMission(
   return CATALOGS[lang].missions[id] ?? null;
 }
 
+export function tMissionObjectiveLabel(
+  missionId: string,
+  objectiveId: string,
+  fallback: string,
+  lang: GameLanguage = currentLanguage
+): string {
+  return CATALOGS[lang].missions[missionId]?.objectiveLabels[objectiveId] ?? fallback;
+}
+
 export function tClue(
   id: string,
   lang: GameLanguage = currentLanguage
@@ -361,4 +370,18 @@ export function tWeaponLabel(
     return CATALOGS[lang].gameMessages.locationsFallback.weaponSteelPipe;
   }
   return raw;
+}
+
+export function tCustomerName(
+  customerId?: string,
+  fallback?: string,
+  lang: GameLanguage = currentLanguage
+): string {
+  if (customerId && CATALOGS[lang].customers[customerId]) {
+    return CATALOGS[lang].customers[customerId];
+  }
+  if (!fallback || fallback === 'Survivor') {
+    return CATALOGS[lang].gameMessages.locationsFallback.defaultCustomerName;
+  }
+  return fallback;
 }

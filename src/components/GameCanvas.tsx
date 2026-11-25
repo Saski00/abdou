@@ -106,7 +106,7 @@ export function GameCanvas({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Game3DEngine | null>(null);
   const [contextLost, setContextLost] = useState(false);
-  const { lang, t } = useI18n();
+  const { dir, t } = useI18n();
 
   const callbacksRef = useRef({
     onHudChange,
@@ -273,15 +273,16 @@ export function GameCanvas({
         aria-label={t.meta.appTitle}
       />
       {contextLost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0e14]/95 px-6 text-center">
+        <div
+          dir={dir}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0e14]/95 px-6 text-center"
+        >
           <div className="max-w-sm">
             <h2 className="font-display text-2xl font-bold text-stone-100 mb-2">
-              {lang === 'ar' ? 'تم إيقاف سياق الرسوميات مؤقتاً' : 'Graphics Context Paused'}
+              {t.gameCanvas.contextLostTitle}
             </h2>
             <p className="text-sm text-stone-400">
-              {lang === 'ar'
-                ? 'بانتظار استعادة سياق رسوميات WebGL...'
-                : 'Waiting for WebGL graphics context to restore...'}
+              {t.gameCanvas.contextLostBody}
             </p>
           </div>
         </div>

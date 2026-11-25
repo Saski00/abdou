@@ -86,6 +86,7 @@ export interface MissionObjectiveSummary {
 export interface MissionRewardSummary {
   money?: number;
   resources?: Partial<InventoryState>;
+  clueId?: string;
   clueTitle?: string;
   unlockText?: string;
 }
@@ -257,6 +258,7 @@ export interface ActiveCustomerSummary {
 
 export interface CustomerSaleRecord {
   id: number;
+  customerId?: string;
   customerName: string;
   resourceId: ResourceId;
   itemName: string;
@@ -270,6 +272,7 @@ export interface ShopTransactionRecord {
   id: number;
   kind: 'sale' | 'transfer' | 'upgrade' | 'salary' | 'staff' | 'mission' | 'error';
   source?: 'manual' | 'customer';
+  customerId?: string;
   customerName?: string;
   resourceId?: ResourceId;
   itemName?: string;
@@ -351,7 +354,7 @@ export interface HudSnapshot {
   isSprinting: boolean;
   day: number;
   formattedTime: string;
-  dayPhaseLabel: DayPhase;
+  dayPhaseLabel: string;
   weather: WeatherKind;
   weatherLabel: string;
   flashlightOn: boolean;

@@ -1,6 +1,6 @@
 import { SIDEWALK_HEIGHT } from '../assets/maps/neighborhoodMap';
 import { WorldColliders } from '../engine/WorldBuilder';
-import { formatTemplate, getTranslations, tResourceName } from '../i18n';
+import { formatTemplate, getTranslations, tCustomerName, tResourceName } from '../i18n';
 import { TranslationCatalog } from '../i18n/types';
 import {
   clamp,
@@ -219,6 +219,7 @@ export interface CustomerStepContext {
 
 export interface CustomerPurchaseRequest {
   customerId: string;
+  customerProfileId: string;
   customerName: string;
   resourceId: ResourceId;
   quantity: number;
@@ -983,7 +984,8 @@ export function stepCustomersAI(
           c.purchaseCompleted = true;
           result.purchaseRequests.push({
             customerId: c.id,
-            customerName: c.profile.name,
+            customerProfileId: c.profile.id,
+            customerName: tCustomerName(c.profile.id, c.profile.name),
             resourceId: c.selectedPurchase.resourceId,
             quantity: c.selectedPurchase.quantity,
           });
@@ -1134,7 +1136,7 @@ export function buildActiveCustomerSummaries(
     if (c.state === 'despawned') continue;
     summaries.push({
       id: c.id,
-      name: c.profile.name,
+      name: tCustomerName(c.profile.id, c.profile.name),
       state: c.state,
       statusLabel: resolveCustomerStatusLabel(c),
       desiredItemName: c.selectedPurchase

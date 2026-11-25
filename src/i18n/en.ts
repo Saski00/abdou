@@ -87,6 +87,10 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     controlsFooterDesktop: 'WASD Move · Mouse Look · E Interact · Click/Q Attack · I Pack · M Missions · N Map',
     languageLabel: 'Language',
   },
+  gameCanvas: {
+    contextLostTitle: 'Graphics Context Paused',
+    contextLostBody: 'Waiting for WebGL graphics context to restore...',
+  },
   settingsModal: {
     title: 'Settings',
     viewMeta: 'View: {orientation} ({w}×{h})',
@@ -375,6 +379,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     noVisitorsOpen: 'Waiting for nearby survivors to stroll in...',
     noVisitorsClosed: 'Shop is currently closed.',
     budgetLabel: 'Budget {amount}',
+    prefers: 'Prefers {item}',
     recentSalesHeading: 'Recent Customer Sales',
     completedCountLabel: '{count} completed',
     noSalesRecorded: 'No customer sales recorded yet. Stock shelves and open the shop!',
@@ -488,6 +493,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     trackedLeadAria: 'Tracked mission lead',
     yourPosAria: 'Your current position',
     leadBearingDist: 'Lead · {bearing} {dist}m',
+    distMeters: '{dist}m',
     compassLabel: 'N ↑ · E →',
     compactShop: 'Shop:',
     compactCharted: 'Charted:',
@@ -759,7 +765,17 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       abandonedShelter: 'Abandoned Shelter',
       streetsSuffix: '{region} Streets',
       weaponSteelPipe: 'Steel Pipe',
+      districtDefault: 'District 04',
+      districtSurvivor: 'District 04 Survivor',
+      defaultCustomerName: 'Survivor',
     },
+  },
+  customers: {
+    mara: 'Mara',
+    cole: 'Cole',
+    elena: 'Elena',
+    jax: 'Jax',
+    nora: 'Nora',
   },
   resources: {
     canned_food: {
@@ -2149,56 +2165,78 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       title: 'Infected Nearby',
       message:
         'Left-click (or Q) swings your Steel Pipe. Keep moving, back up inside The Last Shop if overwhelmed, or hire a Guard later.',
+      touchMessage:
+        'Tap Attack to swing your Steel Pipe, or sprint away using the outer joystick ring and step inside The Last Shop.',
     },
     survival_critical: {
       title: 'Low Vitals',
       message:
         'Press 1 (Food), 2 (Water), or 3 (Medkit) to recover immediately, or press R inside safe shelter to rest.',
+      touchMessage:
+        'Your hunger, thirst, or energy is getting low. Tap the quick-use Food, Water, or Heal buttons top-left, or tap Rest.',
     },
     move_and_look: {
       title: 'First Steps in District 04',
       message:
         'Use WASD to walk and click the viewport to look around. Walk up to the lit Last Shop door and press E to open it.',
+      touchMessage:
+        'Drag the left joystick to walk (outer edge to sprint) and drag the right side of the screen to look around. Open The Last Shop door with Interact.',
     },
     enter_shop_hint: {
       title: 'Open Your Safe Base',
       message:
         'Step inside The Last Shop ahead and interact (E) with the brass Counter Register to stock your first shelves.',
+      touchMessage:
+        'Walk up to The Last Shop front door ahead, tap Interact to open it, and step inside your safe base.',
     },
     shop_counter_hint: {
       title: 'Open for Customers',
       message:
         'Interact (E) with the Shop Counter register to transfer items onto display shelves—traveling survivors will walk in to buy them.',
+      touchMessage:
+        'Approach the brass Counter Register inside, tap Manage, and move supplies onto Shelves so visiting survivors can buy them.',
     },
     scavenge_ruins: {
       title: 'Scavenge District 04',
       message:
         'Head across Main Street to search crates, parked vehicles, Vale Corner Store, or Starlight Diner (E) for extra supplies.',
+      touchMessage:
+        'Cross Main Blvd to Vale Corner Store or Depot 04. Tap Interact near crates, parked vehicles, and loose supplies.',
     },
     pack_management: {
       title: 'Check Your Backpack',
       message:
         'Press I anytime to inspect collected supplies, check facility keys, or consume food, water, and medkits.',
+      touchMessage:
+        'Tap the Pack button top-right anytime to inspect gathered supplies, check facility keys, or use food, water, and medkits.',
     },
     pack_near_full: {
       title: 'Backpack Nearly Full',
       message:
         'Return to The Last Shop and store extra supplies on the Retail Shelf or Backroom Storage Locker (Shop Counter E), or upgrade Shop Level.',
+      touchMessage:
+        'Your pack is almost full. Return to The Last Shop counter or backroom locker to stock shelves and store surplus.',
     },
     flashlight_dark: {
       title: 'Darkness Settling',
       message:
         'Press F to toggle your flashlight. Watch street corners carefully—infected detect noise and bright beams up close.',
+      touchMessage:
+        'Tap Flashlight bottom-right inside dark ruins—or switch it off outdoors at night so infected spot you less easily.',
     },
     missions_and_map: {
       title: 'Journal & District Map',
       message:
         'Press M to track story & side missions, or press N to open the District 04 street map and locate landmarks.',
+      touchMessage:
+        'Tap Missions or Map top-right to follow story chapters and inspect every District 04 location you discover.',
     },
     grow_business: {
       title: 'Expand The Last Shop',
       message:
         'You have steady cash—check the Shop Counter (E) Upgrades tab to expand capacity, or talk to neighborhood survivors to hire staff.',
+      touchMessage:
+        'You have steady cash—approach the Shop Counter, tap Manage, and open the Upgrades tab, or talk to survivors around town to hire staff.',
     },
   },
 };
