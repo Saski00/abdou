@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeCharacterParts } from '../assets/models/characterGeometryKit';
 import {
   StaffCharacterRig,
   StaffSharedGeometries,
@@ -42,9 +43,7 @@ export class WorldEventManager {
 
   // Pooled Shadow Silhouette Apparition (zero shadow cost, smoothly faded)
   private silhouetteGroup = new THREE.Group();
-  private silhouetteHeadGeo: THREE.SphereGeometry;
-  private silhouetteTorsoGeo: THREE.BoxGeometry;
-  private silhouetteLimbGeo: THREE.BoxGeometry;
+  private silhouetteGeo: THREE.BufferGeometry;
   private silhouetteMat: THREE.MeshBasicMaterial;
   private silhouetteOpacity = 0;
   private silhouetteGazeTimer = 0;
@@ -138,10 +137,50 @@ export class WorldEventManager {
     this.npcTrader.group.visible = false;
     this.root.add(this.npcTrader.group);
 
-    // 3. Pooled Shadow Silhouette Apparition (no shadows, faint dark fog-tinted figure)
-    this.silhouetteHeadGeo = new THREE.SphereGeometry(0.145, 10, 8);
-    this.silhouetteTorsoGeo = new THREE.BoxGeometry(0.44, 0.72, 0.24);
-    this.silhouetteLimbGeo = new THREE.BoxGeometry(0.15, 0.76, 0.16);
+    // 3. Pooled Shadow Silhouette Apparition (single merged organic humanoid figure, no shadows)
+    const silHead = this.sharedGeos.headHuman.clone();
+    silHead.scale(0.95, 1.06, 0.95);
+    silHead.translate(0, 1.41, 0);
+    const silTorso = this.sharedGeos.torsoSlim.clone();
+    silTorso.translate(0, 0.88, 0);
+    const silPelvis = this.sharedGeos.pelvis.clone();
+    silPelvis.translate(0, 0.84, 0);
+    const silArmL = this.sharedGeos.upperArm.clone();
+    silArmL.rotateZ(-0.08);
+    silArmL.translate(-0.195, 1.33, 0);
+    const silForeL = this.sharedGeos.forearm.clone();
+    silForeL.rotateX(0.14);
+    silForeL.translate(-0.217, 1.06, 0);
+    const silArmR = this.sharedGeos.upperArm.clone();
+    silArmR.rotateZ(0.08);
+    silArmR.translate(0.195, 1.33, 0);
+    const silForeR = this.sharedGeos.forearm.clone();
+    silForeR.rotateX(0.14);
+    silForeR.translate(0.217, 1.06, 0);
+    const silThighL = this.sharedGeos.thigh.clone();
+    silThighL.translate(-0.095, 0.84, 0);
+    const silShinL = this.sharedGeos.shinBoot.clone();
+    silShinL.translate(-0.095, 0.44, 0);
+    const silThighR = this.sharedGeos.thigh.clone();
+    silThighR.translate(0.095, 0.84, 0);
+    const silShinR = this.sharedGeos.shinBoot.clone();
+    silShinR.translate(0.095, 0.44, 0);
+    this.silhouetteGeo = mergeCharacterParts(
+      [
+        silHead,
+        silTorso,
+        silPelvis,
+        silArmL,
+        silForeL,
+        silArmR,
+        silForeR,
+        silThighL,
+        silShinL,
+        silThighR,
+        silShinR,
+      ],
+      false
+    );
     this.silhouetteMat = new THREE.MeshBasicMaterial({
       color: 0x06090f,
       transparent: true,
@@ -149,16 +188,8 @@ export class WorldEventManager {
       depthWrite: false,
     });
 
-    const silHead = new THREE.Mesh(this.silhouetteHeadGeo, this.silhouetteMat);
-    silHead.position.y = 1.66;
-    const silTorso = new THREE.Mesh(this.silhouetteTorsoGeo, this.silhouetteMat);
-    silTorso.position.y = 1.16;
-    const silLegL = new THREE.Mesh(this.silhouetteLimbGeo, this.silhouetteMat);
-    silLegL.position.set(-0.11, 0.39, 0);
-    const silLegR = new THREE.Mesh(this.silhouetteLimbGeo, this.silhouetteMat);
-    silLegR.position.set(0.11, 0.39, 0);
-
-    this.silhouetteGroup.add(silHead, silTorso, silLegL, silLegR);
+    const silMesh = new THREE.Mesh(this.silhouetteGeo, this.silhouetteMat);
+    this.silhouetteGroup.add(silMesh);
     this.silhouetteGroup.visible = false;
     this.root.add(this.silhouetteGroup);
   }
@@ -314,6 +345,7 @@ export class WorldEventManager {
       status: isTrader ? 'working' : 'survivor',
       walkCycle: elapsedTime * 1.1,
       isMoving: false,
+      dt,
     });
   }
 
@@ -364,9 +396,7 @@ export class WorldEventManager {
     this.rodMat.dispose();
     this.tipMat.dispose();
     this.ringMat.dispose();
-    this.silhouetteHeadGeo.dispose();
-    this.silhouetteTorsoGeo.dispose();
-    this.silhouetteLimbGeo.dispose();
+    this.silhouetteGeo.dispose();
     this.silhouetteMat.dispose();
     this.sharedGeos.dispose();
   }

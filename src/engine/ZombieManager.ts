@@ -10,6 +10,8 @@ import {
   buildProceduralZombieModel,
   createZombieSharedGeometries,
 } from '../assets/models/zombieModel';
+import { damp } from '../assets/models/characterGeometryKit';
+import { PlayerAnimContext } from './FirstPersonController';
 import {
   CombatSystem,
   WEAPON_DEFINITIONS,
@@ -75,8 +77,29 @@ const DYNAMIC_PROWLER_SPOTS: { x: number; z: number; yaw: number }[] = [
 const MAX_DYNAMIC_PROWLERS = 2;
 const MAX_LIVING_ZOMBIES = 16;
 
+export type PlayerWeaponAnimState =
+  | 'idle'
+  | 'walk'
+  | 'sprint'
+  | 'airborne'
+  | 'attack_windup'
+  | 'attack_strike'
+  | 'attack_recovery'
+  | 'reload'
+  | 'switch'
+  | 'flinch'
+  | 'dead';
+
+export interface DeferredMeleeHit {
+  weaponId: WeaponId;
+  result: MeleeHitResult;
+  killedSurgeId?: string;
+  recoilKick: number;
+}
+
 export interface PlayerAttackAttemptResult {
   triggered: boolean;
+  pendingMelee?: boolean;
   dryFire?: boolean;
   autoReloadStarted?: boolean;
   weaponId: WeaponId;
@@ -84,6 +107,102 @@ export interface PlayerAttackAttemptResult {
   recoilKick: number;
   result: MeleeHitResult | null;
   killedSurgeId?: string;
+}
+
+interface PendingMeleeStrike {
+  weaponId: WeaponId;
+  exhausted: boolean;
+  nightFactor: number;
+  impactDelaySec: number;
+  elapsed: number;
+}
+
+interface WeaponViewPose {
+  moveBlend: number;
+  sprintBlend: number;
+  turnLagYaw: number;
+  turnLagPitch: number;
+  strafeRoll: number;
+  airDip: number;
+  landDip: number;
+  restBlend: number;
+  flinchImpulse: number;
+  deadDrop: number;
+  breathPhase: number;
+  pipePosX: number;
+  pipePosY: number;
+  pipePosZ: number;
+  pipeRotX: number;
+  pipeRotY: number;
+  pipeRotZ: number;
+  pipeOffX: number;
+  pipeOffY: number;
+  bladePosX: number;
+  bladePosY: number;
+  bladePosZ: number;
+  bladeRotX: number;
+  bladeRotY: number;
+  bladeRotZ: number;
+  bladeOffX: number;
+  bladeOffY: number;
+  pistolPosX: number;
+  pistolPosY: number;
+  pistolPosZ: number;
+  pistolRotX: number;
+  pistolRotY: number;
+  pistolRotZ: number;
+  pistolLeftX: number;
+  pistolLeftY: number;
+  pistolLeftZ: number;
+  pistolLeftRx: number;
+  pistolLeftRy: number;
+  pistolLeftRz: number;
+  slideZ: number;
+}
+
+function createDefaultWeaponViewPose(): WeaponViewPose {
+  return {
+    moveBlend: 0,
+    sprintBlend: 0,
+    turnLagYaw: 0,
+    turnLagPitch: 0,
+    strafeRoll: 0,
+    airDip: 0,
+    landDip: 0,
+    restBlend: 0,
+    flinchImpulse: 0,
+    deadDrop: 0,
+    breathPhase: 0,
+    pipePosX: 0.31,
+    pipePosY: -0.3,
+    pipePosZ: -0.49,
+    pipeRotX: 0.24,
+    pipeRotY: -0.35,
+    pipeRotZ: 0.22,
+    pipeOffX: -0.46,
+    pipeOffY: -0.14,
+    bladePosX: 0.29,
+    bladePosY: -0.26,
+    bladePosZ: -0.44,
+    bladeRotX: 0.28,
+    bladeRotY: -0.42,
+    bladeRotZ: 0.34,
+    bladeOffX: -0.46,
+    bladeOffY: -0.14,
+    pistolPosX: 0.25,
+    pistolPosY: -0.23,
+    pistolPosZ: -0.43,
+    pistolRotX: 0.03,
+    pistolRotY: -0.08,
+    pistolRotZ: 0.02,
+    pistolLeftX: -0.042,
+    pistolLeftY: -0.105,
+    pistolLeftZ: 0.048,
+    pistolLeftRx: -1.08,
+    pistolLeftRy: 0.28,
+    pistolLeftRz: -0.44,
+    slideZ: 0,
+  };
 }
 
 export class ZombieManager {
@@ -110,6 +229,10 @@ export class ZombieManager {
   private lastGroanTime = -99;
   private elapsedSec = 0;
   private dynamicProwlerSeq = 1;
+  private lodFrameCount = 0;
+  private pendingMeleeStrike: PendingMeleeStrike | null = null;
+  private weaponAnimState: PlayerWeaponAnimState = 'idle';
+  private readonly viewPose: WeaponViewPose = createDefaultWeaponViewPose();
 
   constructor(
     scene: THREE.Scene,
@@ -211,8 +334,23 @@ export class ZombieManager {
     this.lastGroanTime = -99;
     this.elapsedSec = 0;
     this.dynamicProwlerSeq = 1;
+    this.lodFrameCount = 0;
+    this.pendingMeleeStrike = null;
+    this.weaponAnimState = 'idle';
+    Object.assign(this.viewPose, createDefaultWeaponViewPose());
     this.syncActiveViewmodelVisibility();
     this.spawnInitialZombies();
+  }
+
+  public getWeaponAnimState(): PlayerWeaponAnimState {
+    return this.weaponAnimState;
+  }
+
+  public triggerPlayerDamageFlinch(strength = 1.0): void {
+    this.viewPose.flinchImpulse = Math.min(
+      1.3,
+      Math.max(this.viewPose.flinchImpulse, Math.max(0.2, strength))
+    );
   }
 
   public getLivingCount(): number {
@@ -422,9 +560,10 @@ export class ZombieManager {
     if (!changed) return false;
     this.attackCooldown = Math.min(this.attackCooldown, 0.14);
     this.attackAnimTimer = 0;
+    this.pendingMeleeStrike = null;
     this.muzzleFlashTimer = 0;
     this.pistolProp.muzzleFlash.visible = false;
-    this.switchAnimTimer = 0.18;
+    this.switchAnimTimer = 0.22;
     this.sound.playWeaponSwitch();
     this.syncActiveViewmodelVisibility();
     return true;
@@ -435,9 +574,10 @@ export class ZombieManager {
     if (!next) return null;
     this.attackCooldown = Math.min(this.attackCooldown, 0.14);
     this.attackAnimTimer = 0;
+    this.pendingMeleeStrike = null;
     this.muzzleFlashTimer = 0;
     this.pistolProp.muzzleFlash.visible = false;
-    this.switchAnimTimer = 0.18;
+    this.switchAnimTimer = 0.22;
     this.sound.playWeaponSwitch();
     this.syncActiveViewmodelVisibility();
     return next;
@@ -503,11 +643,17 @@ export class ZombieManager {
       a.hitFlashTimer = 0;
       a.attackCooldown = 0;
       a.attackWindup = 0;
+      a.attackRecoveryTimer = 0;
+      a.actualSpeed = 0;
+      a.yawRate = 0;
+      a.vx = 0;
+      a.vz = 0;
       a.idleTimer = 1.2;
       a.suspiciousTimer = 0;
       a.alertTimer = 0;
       a.searchTimer = 0;
       a.stunTimer = 0;
+      a.stunMaxTimer = 0;
       a.stuckTimer = 0;
       a.stuckRetries = 0;
       a.loseSightTimer = 0;
@@ -525,7 +671,12 @@ export class ZombieManager {
     playerYaw: number,
     playerPitch: number,
     nightFactor = 0,
-    context?: { isMoving?: boolean; isSprinting?: boolean; exhausted?: boolean }
+    context?: {
+      isMoving?: boolean;
+      isSprinting?: boolean;
+      exhausted?: boolean;
+      immediateMelee?: boolean;
+    }
   ): PlayerAttackAttemptResult {
     const weapon = this.combat.getEquippedWeapon();
     if (this.attackCooldown > 0) {
@@ -647,6 +798,52 @@ export class ZombieManager {
       this.sound.playMeleeSwing();
     }
 
+    if (!context?.immediateMelee) {
+      this.pendingMeleeStrike = {
+        weaponId: weapon.id,
+        exhausted: Boolean(context?.exhausted),
+        nightFactor,
+        impactDelaySec: weapon.id === 'scrap_blade' ? 0.062 : 0.088,
+        elapsed: 0,
+      };
+      return {
+        triggered: true,
+        pendingMelee: true,
+        weaponId: weapon.id,
+        staminaSpent: weapon.staminaCost,
+        recoilKick: 0,
+        result: null,
+      };
+    }
+
+    const hitPayload = this.executeMeleeHitEvaluation(
+      playerX,
+      playerZ,
+      playerYaw,
+      weapon.id,
+      Boolean(context?.exhausted),
+      nightFactor
+    );
+
+    return {
+      triggered: true,
+      weaponId: weapon.id,
+      staminaSpent: weapon.staminaCost,
+      recoilKick: hitPayload.recoilKick,
+      result: hitPayload.result,
+      killedSurgeId: hitPayload.killedSurgeId,
+    };
+  }
+
+  private executeMeleeHitEvaluation(
+    playerX: number,
+    playerZ: number,
+    playerYaw: number,
+    weaponId: WeaponId,
+    exhausted: boolean,
+    nightFactor: number
+  ): DeferredMeleeHit {
+    const weapon = WEAPON_DEFINITIONS[weaponId];
     const result = performWeaponMelee(
       this.agentsCache,
       playerX,
@@ -654,10 +851,9 @@ export class ZombieManager {
       playerYaw,
       this.colliders,
       weapon,
-      Boolean(context?.exhausted)
+      exhausted
     );
 
-    // Subtle noise when swinging in empty air, louder metallic impact on solid hit
     this.emitNoise(
       {
         x: playerX,
@@ -688,12 +884,10 @@ export class ZombieManager {
     }
 
     return {
-      triggered: true,
       weaponId: weapon.id,
-      staminaSpent: weapon.staminaCost,
-      recoilKick: result.hit ? 0.015 : 0,
       result,
       killedSurgeId,
+      recoilKick: result.hit ? 0.015 : 0,
     };
   }
 
@@ -706,8 +900,10 @@ export class ZombieManager {
     isSprinting: boolean,
     nightFactor: number,
     flashlightOn = false,
-    extraContext?: Omit<ZombieStepContext, 'isMoving' | 'isSprinting'>
-  ): { playerDamage: number; reloadCompleted: boolean } {
+    extraContext?: Omit<ZombieStepContext, 'isMoving' | 'isSprinting'>,
+    playerAnim?: PlayerAnimContext,
+    playerYaw = 0
+  ): { playerDamage: number; reloadCompleted: boolean; deferredMeleeHit: DeferredMeleeHit | null } {
     this.elapsedSec += dt;
 
     if (this.attackCooldown > 0) {
@@ -726,12 +922,31 @@ export class ZombieManager {
       }
     }
 
+    let deferredMeleeHit: DeferredMeleeHit | null = null;
+    if (playerDead) {
+      this.pendingMeleeStrike = null;
+    } else if (this.pendingMeleeStrike) {
+      this.pendingMeleeStrike.elapsed += dt;
+      if (this.pendingMeleeStrike.elapsed >= this.pendingMeleeStrike.impactDelaySec) {
+        const strike = this.pendingMeleeStrike;
+        this.pendingMeleeStrike = null;
+        deferredMeleeHit = this.executeMeleeHitEvaluation(
+          playerX,
+          playerZ,
+          playerYaw,
+          strike.weaponId,
+          strike.exhausted,
+          strike.nightFactor
+        );
+      }
+    }
+
     const combatStep = this.combat.step(dt);
     if (combatStep.reloadCompleted) {
       this.sound.playPistolReload(true);
     }
 
-    this.updateFirstPersonWeapon(dt, isMoving, isSprinting);
+    this.updateFirstPersonWeapon(dt, isMoving, isSprinting, playerAnim, playerDead);
 
     const tickRes = stepZombiesAI(
       this.agentsCache,
@@ -758,7 +973,9 @@ export class ZombieManager {
       this.sound.playPlayerHurt();
     }
 
-    for (const ent of this.entities) {
+    this.lodFrameCount = (this.lodFrameCount + 1) & 0x3fffffff;
+    for (let i = 0; i < this.entities.length; i++) {
+      const ent = this.entities[i];
       const a = ent.agent;
       ent.group.position.set(a.x, a.y, a.z);
       ent.group.rotation.y = a.yaw;
@@ -771,7 +988,13 @@ export class ZombieManager {
       if (ent.rig) {
         const dx = a.x - playerX;
         const dz = a.z - playerZ;
-        if (dx * dx + dz * dz <= 44 * 44) {
+        const distSq = dx * dx + dz * dz;
+        if (distSq <= 44 * 44) {
+          const isMidFar = distSq > 22 * 22 && !(a.state === 'dead' && a.deathTimer < 0.7);
+          if (isMidFar && ((this.lodFrameCount + i) & 1) !== 0) {
+            continue;
+          }
+          const animDt = isMidFar ? dt * 2 : dt;
           animateZombieRig(
             ent.rig,
             a.state,
@@ -779,7 +1002,18 @@ export class ZombieManager {
             a.attackWindup,
             a.config.attackWindupSec,
             a.hitFlashTimer,
-            a.deathTimer
+            a.deathTimer,
+            animDt,
+            distSq,
+            {
+              actualSpeed: a.actualSpeed,
+              yawRate: a.yawRate,
+              gaitStyle: a.gaitStyle,
+              attackRecoveryTimer: a.attackRecoveryTimer,
+              stunTimer: a.stunTimer,
+              stunMaxTimer: a.stunMaxTimer,
+              hitDirectionSign: a.hitDirectionSign,
+            }
           );
         }
       }
@@ -788,20 +1022,95 @@ export class ZombieManager {
     return {
       playerDamage: tickRes.playerDamage,
       reloadCompleted: combatStep.reloadCompleted,
+      deferredMeleeHit,
     };
   }
 
-  private updateFirstPersonWeapon(dt: number, isMoving: boolean, isSprinting: boolean): void {
-    const bobRate = isSprinting ? 12 : isMoving ? 8 : 2.2;
-    this.weaponBobTime += dt * bobRate;
-    const bobX = isMoving ? Math.cos(this.weaponBobTime * 0.5) * 0.011 : 0;
-    const bobY = isMoving
-      ? Math.abs(Math.sin(this.weaponBobTime)) * 0.013
-      : Math.sin(this.weaponBobTime) * 0.0028;
+  private updateFirstPersonWeapon(
+    dt: number,
+    isMoving: boolean,
+    isSprinting: boolean,
+    playerAnim?: PlayerAnimContext,
+    playerDead = false
+  ): void {
+    const vp = this.viewPose;
+    const normSpeed = playerAnim ? playerAnim.normalizedSpeed : isSprinting ? 1 : isMoving ? 0.62 : 0;
+    const grounded = playerAnim ? playerAnim.isGrounded : true;
+    const sprinting = playerAnim ? playerAnim.isSprinting : isSprinting;
+    const resting = playerAnim ? playerAnim.isResting : false;
+    const exhausted = playerAnim ? playerAnim.isExhausted : false;
+    const yawRate = playerAnim ? playerAnim.yawRate : 0;
+    const strafeFactor = playerAnim ? playerAnim.strafeFactor : 0;
+    const landImpulse = playerAnim ? playerAnim.landImpulse : 0;
+    const walkPhase = playerAnim ? playerAnim.walkCycle : (this.weaponBobTime += dt * (sprinting ? 12 : isMoving ? 8 : 2.1));
+    if (playerAnim) {
+      this.weaponBobTime = walkPhase;
+    }
 
-    const switchDrop = this.switchAnimTimer > 0 ? (this.switchAnimTimer / 0.18) * 0.14 : 0;
+    vp.breathPhase += dt * (exhausted ? 3.2 : 1.75);
+    vp.moveBlend = damp(vp.moveBlend, Math.min(1, normSpeed), 12, dt);
+    vp.sprintBlend = damp(vp.sprintBlend, sprinting && this.attackAnimTimer <= 0 ? 1 : 0, 10, dt);
+    vp.turnLagYaw = damp(vp.turnLagYaw, Math.max(-0.045, Math.min(0.045, -yawRate * 0.011)), 14, dt);
+    vp.turnLagPitch = damp(vp.turnLagPitch, Math.max(-0.025, Math.min(0.025, Math.abs(yawRate) * 0.005)), 14, dt);
+    vp.strafeRoll = damp(vp.strafeRoll, -strafeFactor * 0.055, 11, dt);
+    vp.airDip = damp(vp.airDip, grounded ? 0 : 1, 10, dt);
+    vp.landDip = damp(vp.landDip, landImpulse * 0.065, 16, dt);
+    vp.restBlend = damp(vp.restBlend, resting ? 1 : 0, 8, dt);
+    vp.flinchImpulse = damp(vp.flinchImpulse, 0, 11, dt);
+    vp.deadDrop = damp(vp.deadDrop, playerDead ? 1 : 0, 9, dt);
+
+    const switchDrop = this.switchAnimTimer > 0 ? Math.sin((this.switchAnimTimer / 0.22) * Math.PI * 0.5) * 0.16 : 0;
     const combatSnap = this.combat.getSnapshot();
     const active = combatSnap.equippedWeaponId;
+    const attackDur = Math.max(0.06, this.attackAnimDuration);
+    const attackProgress = this.attackAnimTimer > 0 ? Math.max(0, Math.min(1, 1 - this.attackAnimTimer / attackDur)) : 0;
+
+    if (playerDead) {
+      this.weaponAnimState = 'dead';
+    } else if (vp.flinchImpulse > 0.22) {
+      this.weaponAnimState = 'flinch';
+    } else if (this.switchAnimTimer > 0.02) {
+      this.weaponAnimState = 'switch';
+    } else if (combatSnap.isReloading) {
+      this.weaponAnimState = 'reload';
+    } else if (this.attackAnimTimer > 0) {
+      if (active === 'service_pistol') {
+        this.weaponAnimState = attackProgress < 0.45 ? 'attack_strike' : 'attack_recovery';
+      } else {
+        this.weaponAnimState =
+          attackProgress < 0.28
+            ? 'attack_windup'
+            : attackProgress < 0.56
+              ? 'attack_strike'
+              : 'attack_recovery';
+      }
+    } else if (!grounded) {
+      this.weaponAnimState = 'airborne';
+    } else if (vp.sprintBlend > 0.35) {
+      this.weaponAnimState = 'sprint';
+    } else if (vp.moveBlend > 0.12) {
+      this.weaponAnimState = 'walk';
+    } else {
+      this.weaponAnimState = 'idle';
+    }
+
+    const idleBreathX = Math.cos(vp.breathPhase * 0.5) * 0.0024 * (1 - vp.moveBlend * 0.6);
+    const idleBreathY = Math.sin(vp.breathPhase) * (exhausted ? 0.0075 : 0.0038) * (1 - vp.moveBlend * 0.5);
+    const moveBobX = Math.cos(walkPhase * 0.5) * 0.015 * vp.moveBlend;
+    const moveBobY = -Math.abs(Math.sin(walkPhase)) * 0.016 * vp.moveBlend;
+    const bobX = idleBreathX + moveBobX + vp.turnLagYaw;
+    const bobY =
+      idleBreathY +
+      moveBobY +
+      vp.airDip * 0.016 -
+      vp.landDip -
+      vp.restBlend * 0.095 -
+      vp.deadDrop * 0.26 -
+      switchDrop;
+    const flinchX = -vp.flinchImpulse * 0.045;
+    const flinchY = -vp.flinchImpulse * 0.055;
+    const flinchRotZ = vp.flinchImpulse * 0.24;
+    const flinchRotX = -vp.flinchImpulse * 0.18;
 
     if (active === 'service_pistol') {
       const reloadTilt = combatSnap.isReloading
@@ -809,61 +1118,114 @@ export class ZombieManager {
         : 0;
       const recoil =
         this.attackAnimTimer > 0
-          ? Math.sin((this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration)) * Math.PI)
+          ? Math.sin((1 - attackProgress) * Math.PI) * (attackProgress < 0.35 ? 1 : 0.72)
           : 0;
 
-      this.pistolProp.group.position.set(
-        0.27 + bobX * 0.65 - reloadTilt * 0.05,
-        -0.24 + bobY * 0.65 - switchDrop - reloadTilt * 0.12 + recoil * 0.018,
-        -0.44 + recoil * 0.055
-      );
-      this.pistolProp.group.rotation.set(
-        0.03 + recoil * 0.24 - reloadTilt * 0.45,
-        -0.08 + reloadTilt * 0.35,
-        0.02 - reloadTilt * 0.42
-      );
+      const tSlideZ = recoil * 0.044;
+      const tLeftX = -0.042 - reloadTilt * 0.062;
+      const tLeftY = -0.105 - reloadTilt * 0.125;
+      const tLeftZ = 0.048 + reloadTilt * 0.04;
+      const tLeftRx = -1.08 + reloadTilt * 0.48;
+      const tLeftRy = 0.28 - reloadTilt * 0.22;
+      const tLeftRz = -0.44 - reloadTilt * 0.24;
+
+      const tPosX = 0.25 + bobX * 0.65 + flinchX - reloadTilt * 0.04 - vp.sprintBlend * 0.042;
+      const tPosY = -0.23 + bobY * 0.7 + flinchY - reloadTilt * 0.088 + recoil * 0.02 - vp.sprintBlend * 0.048;
+      const tPosZ = -0.43 + recoil * 0.058 + vp.sprintBlend * 0.032 - vp.turnLagPitch;
+      const tRotX = 0.03 + recoil * 0.26 + flinchRotX - reloadTilt * 0.36 - vp.sprintBlend * 0.28 - vp.restBlend * 0.24 - vp.deadDrop * 0.55;
+      const tRotY = -0.08 + vp.turnLagYaw * 2.4 + reloadTilt * 0.32 + vp.sprintBlend * 0.34;
+      const tRotZ = 0.02 + vp.strafeRoll + flinchRotZ - reloadTilt * 0.36 + vp.sprintBlend * 0.18;
+
+      const rate = this.attackAnimTimer > 0 ? 28 : 16;
+      vp.slideZ = damp(vp.slideZ, tSlideZ, 30, dt);
+      vp.pistolLeftX = damp(vp.pistolLeftX, tLeftX, 16, dt);
+      vp.pistolLeftY = damp(vp.pistolLeftY, tLeftY, 16, dt);
+      vp.pistolLeftZ = damp(vp.pistolLeftZ, tLeftZ, 16, dt);
+      vp.pistolLeftRx = damp(vp.pistolLeftRx, tLeftRx, 16, dt);
+      vp.pistolLeftRy = damp(vp.pistolLeftRy, tLeftRy, 16, dt);
+      vp.pistolLeftRz = damp(vp.pistolLeftRz, tLeftRz, 16, dt);
+
+      vp.pistolPosX = damp(vp.pistolPosX, tPosX, rate, dt);
+      vp.pistolPosY = damp(vp.pistolPosY, tPosY, rate, dt);
+      vp.pistolPosZ = damp(vp.pistolPosZ, tPosZ, rate, dt);
+      vp.pistolRotX = damp(vp.pistolRotX, tRotX, rate, dt);
+      vp.pistolRotY = damp(vp.pistolRotY, tRotY, rate, dt);
+      vp.pistolRotZ = damp(vp.pistolRotZ, tRotZ, rate, dt);
+
+      this.pistolProp.slideMesh.position.z = vp.slideZ;
+      this.pistolProp.leftArmPivot.position.set(vp.pistolLeftX, vp.pistolLeftY, vp.pistolLeftZ);
+      this.pistolProp.leftArmPivot.rotation.set(vp.pistolLeftRx, vp.pistolLeftRy, vp.pistolLeftRz);
+      this.pistolProp.group.position.set(vp.pistolPosX, vp.pistolPosY, vp.pistolPosZ);
+      this.pistolProp.group.rotation.set(vp.pistolRotX, vp.pistolRotY, vp.pistolRotZ);
       return;
     }
 
-    if (active === 'scrap_blade') {
-      if (this.attackAnimTimer > 0) {
-        const progress = 1 - this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration);
-        const slash = Math.sin(progress * Math.PI);
-        this.bladeProp.group.position.set(
-          0.29 - slash * 0.26,
-          -0.27 + slash * 0.06,
-          -0.45 - slash * 0.14
-        );
-        this.bladeProp.group.rotation.set(
-          0.28 - slash * 0.95,
-          -0.42 + slash * 1.15,
-          0.34 + slash * 0.95
-        );
+    // 3-phase melee curve: 0..0.28 windup pullback, 0.28..0.56 sharp strike, 0.56..1.0 follow-through recovery
+    let windup = 0;
+    let strike = 0;
+    if (this.attackAnimTimer > 0) {
+      if (attackProgress < 0.28) {
+        const t = attackProgress / 0.28;
+        windup = t * t;
+      } else if (attackProgress < 0.56) {
+        const t = (attackProgress - 0.28) / 0.28;
+        windup = 1 - t;
+        strike = 1 - Math.pow(1 - t, 2.4);
       } else {
-        this.bladeProp.group.position.set(0.29 + bobX, -0.27 + bobY - switchDrop, -0.45);
-        this.bladeProp.group.rotation.set(0.28, -0.42, 0.34);
+        const t = (attackProgress - 0.56) / 0.44;
+        strike = 1 - t * t * (3 - 2 * t);
       }
+    }
+
+    if (active === 'scrap_blade') {
+      const tPosX = 0.29 + bobX + flinchX + windup * 0.08 - strike * 0.29 - vp.sprintBlend * 0.04;
+      const tPosY = -0.26 + bobY + flinchY + windup * 0.07 + strike * 0.05 - vp.sprintBlend * 0.04;
+      const tPosZ = -0.44 + windup * 0.06 - strike * 0.16 - vp.turnLagPitch;
+      const tRotX = 0.28 + flinchRotX + windup * 0.26 - strike * 1.05 - vp.sprintBlend * 0.26 - vp.restBlend * 0.22 - vp.deadDrop * 0.52;
+      const tRotY = -0.42 + vp.turnLagYaw * 2.2 - windup * 0.24 + strike * 1.24 + vp.sprintBlend * 0.22;
+      const tRotZ = 0.34 + vp.strafeRoll + flinchRotZ - windup * 0.22 + strike * 1.02 + vp.sprintBlend * 0.18;
+      const tOffX = -0.46 - bobX * 0.8 + strike * 0.09 - windup * 0.04;
+      const tOffY = -0.14 - bobY * 0.7 - strike * 0.05;
+
+      const rate = this.attackAnimTimer > 0 ? 30 : 15;
+      vp.bladePosX = damp(vp.bladePosX, tPosX, rate, dt);
+      vp.bladePosY = damp(vp.bladePosY, tPosY, rate, dt);
+      vp.bladePosZ = damp(vp.bladePosZ, tPosZ, rate, dt);
+      vp.bladeRotX = damp(vp.bladeRotX, tRotX, rate, dt);
+      vp.bladeRotY = damp(vp.bladeRotY, tRotY, rate, dt);
+      vp.bladeRotZ = damp(vp.bladeRotZ, tRotZ, rate, dt);
+      vp.bladeOffX = damp(vp.bladeOffX, tOffX, rate, dt);
+      vp.bladeOffY = damp(vp.bladeOffY, tOffY, rate, dt);
+
+      this.bladeProp.group.position.set(vp.bladePosX, vp.bladePosY, vp.bladePosZ);
+      this.bladeProp.group.rotation.set(vp.bladeRotX, vp.bladeRotY, vp.bladeRotZ);
+      this.bladeProp.leftArmPivot.position.set(vp.bladeOffX, vp.bladeOffY, 0.12);
       return;
     }
 
     // Steel Pipe default melee
-    if (this.attackAnimTimer > 0) {
-      const progress = 1 - this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration);
-      const arc = Math.sin(progress * Math.PI);
-      this.pipeProp.group.position.set(
-        0.32 - arc * 0.22,
-        -0.31 + arc * 0.11,
-        -0.5 - arc * 0.14
-      );
-      this.pipeProp.group.rotation.set(
-        0.24 - arc * 1.15,
-        -0.35 + arc * 0.85,
-        0.22 + arc * 0.65
-      );
-    } else {
-      this.pipeProp.group.position.set(0.32 + bobX, -0.31 + bobY - switchDrop, -0.5);
-      this.pipeProp.group.rotation.set(0.24, -0.35, 0.22);
-    }
+    const tPosX = 0.31 + bobX + flinchX + windup * 0.09 - strike * 0.24 - vp.sprintBlend * 0.04;
+    const tPosY = -0.3 + bobY + flinchY + windup * 0.12 + strike * 0.08 - vp.sprintBlend * 0.04;
+    const tPosZ = -0.49 + windup * 0.07 - strike * 0.16 - vp.turnLagPitch;
+    const tRotX = 0.24 + flinchRotX + windup * 0.34 - strike * 1.24 - vp.sprintBlend * 0.24 - vp.restBlend * 0.22 - vp.deadDrop * 0.52;
+    const tRotY = -0.35 + vp.turnLagYaw * 2.2 - windup * 0.26 + strike * 0.94 + vp.sprintBlend * 0.25;
+    const tRotZ = 0.22 + vp.strafeRoll + flinchRotZ - windup * 0.26 + strike * 0.72 + vp.sprintBlend * 0.16;
+    const tOffX = -0.46 - bobX * 0.8 + strike * 0.08 - windup * 0.04;
+    const tOffY = -0.14 - bobY * 0.7 - strike * 0.06;
+
+    const rate = this.attackAnimTimer > 0 ? 28 : 14;
+    vp.pipePosX = damp(vp.pipePosX, tPosX, rate, dt);
+    vp.pipePosY = damp(vp.pipePosY, tPosY, rate, dt);
+    vp.pipePosZ = damp(vp.pipePosZ, tPosZ, rate, dt);
+    vp.pipeRotX = damp(vp.pipeRotX, tRotX, rate, dt);
+    vp.pipeRotY = damp(vp.pipeRotY, tRotY, rate, dt);
+    vp.pipeRotZ = damp(vp.pipeRotZ, tRotZ, rate, dt);
+    vp.pipeOffX = damp(vp.pipeOffX, tOffX, rate, dt);
+    vp.pipeOffY = damp(vp.pipeOffY, tOffY, rate, dt);
+
+    this.pipeProp.group.position.set(vp.pipePosX, vp.pipePosY, vp.pipePosZ);
+    this.pipeProp.group.rotation.set(vp.pipeRotX, vp.pipeRotY, vp.pipeRotZ);
+    this.pipeProp.leftArmPivot.position.set(vp.pipeOffX, vp.pipeOffY, 0.12);
   }
 
   public dispose(): void {

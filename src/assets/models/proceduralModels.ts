@@ -1,5 +1,22 @@
 import * as THREE from 'three';
 import { ProceduralTextureSet } from '../textures/proceduralTextures';
+import {
+  applyTriplanarUVs,
+  createBeveledBoxGeometry,
+  createBoulderGeometry,
+  createCurvedAwningGeometry,
+  createDrapedTarpGeometry,
+  createFracturedSlabGeometry,
+  createGableEndWallGeometry,
+  createGabledRoofGeometry,
+  createMansardRoofGeometry,
+  createOrganicPatchGeometry,
+  createSandbagGeometry,
+  createSawtoothRoofGeometry,
+  createTubePathGeometry,
+  createVehicleProfileGeometry,
+  mergeParts,
+} from './proceduralGeometryKit';
 
 export interface MaterialPalette {
   brick: THREE.MeshStandardMaterial;
@@ -8,6 +25,8 @@ export interface MaterialPalette {
   roofTar: THREE.MeshStandardMaterial;
   rustedMetal: THREE.MeshStandardMaterial;
   wood: THREE.MeshStandardMaterial;
+  barkWood: THREE.MeshStandardMaterial;
+  mossRock: THREE.MeshStandardMaterial;
   tireRubber: THREE.MeshStandardMaterial;
   glassDark: THREE.MeshStandardMaterial;
   warmWindow: THREE.MeshStandardMaterial;
@@ -91,6 +110,21 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     roughnessMap: textures.woodRoughness,
     roughness: 0.88,
     metalness: 0.02,
+  });
+  const barkWood = new THREE.MeshStandardMaterial({
+    color: 0x2e261f,
+    map: textures.woodPlank,
+    normalMap: textures.woodNormal,
+    normalScale: new THREE.Vector2(0.95, 0.95),
+    roughness: 0.95,
+    metalness: 0.0,
+  });
+  const mossRock = new THREE.MeshStandardMaterial({
+    color: 0x454a44,
+    normalMap: textures.concreteNormal,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    roughness: 0.94,
+    metalness: 0.03,
   });
   const tireRubber = new THREE.MeshStandardMaterial({
     color: 0x14161a,
@@ -343,6 +377,8 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     roofTar,
     rustedMetal,
     wood,
+    barkWood,
+    mossRock,
     tireRubber,
     glassDark,
     warmWindow,
@@ -388,6 +424,8 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     roofTar,
     rustedMetal,
     wood,
+    barkWood,
+    mossRock,
     tireRubber,
     glassDark,
     warmWindow,
@@ -445,79 +483,53 @@ export function buildLastShopModel(
   const { w, h, d } = opts;
   const group = new THREE.Group();
 
-  // 1. Primary building hull (brick)
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats.brick);
+  const hull = new THREE.Mesh(createBeveledBoxGeometry(w, h, d, 0.04, 0.04), mats.brick);
   hull.position.y = h * 0.5;
   hull.castShadow = true;
   hull.receiveShadow = true;
   group.add(hull);
 
-  // 2. Concrete foundation plinth
   const plinth = new THREE.Mesh(
-    new THREE.BoxGeometry(w + 0.28, 0.35, d + 0.28),
+    createBeveledBoxGeometry(w + 0.3, 0.35, d + 0.3, 0.03, 0.04),
     mats.concrete
   );
   plinth.position.y = 0.175;
   plinth.receiveShadow = true;
   group.add(plinth);
 
-  // 3. Parapet roof cap & recessed tar slab
-  const parapet = new THREE.Mesh(
-    new THREE.BoxGeometry(w + 0.35, 0.45, d + 0.35),
-    mats.darkTrim
-  );
-  parapet.position.y = h + 0.22;
-  parapet.castShadow = true;
-  group.add(parapet);
-
-  const roofPad = new THREE.Mesh(
-    new THREE.BoxGeometry(w - 0.6, 0.12, d - 0.6),
+  // Gabled pitched roof instead of flat parapet box
+  const roof = new THREE.Mesh(
+    createGabledRoofGeometry(w, d, 1.5, 0.45, 0.18, true),
     mats.roofTar
   );
-  roofPad.position.y = h + 0.44;
-  group.add(roofPad);
+  roof.position.y = h + 0.04;
+  roof.castShadow = true;
+  group.add(roof);
 
-  // 4. Rooftop HVAC unit
-  const hvac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 1.4), mats.rustedMetal);
-  hvac.position.set(-w * 0.25, h + 0.9, -d * 0.15);
-  group.add(hvac);
+  const gable = createGableEndWallGeometry(d - 0.12, 1.4, 0.24);
+  gable.rotateY(Math.PI * 0.5);
+  const gW = new THREE.Mesh(gable, mats.brick);
+  gW.position.set(-w * 0.5 + 0.12, h + 0.02, 0);
+  const gE = new THREE.Mesh(gable.clone(), mats.brick);
+  gE.position.set(w * 0.5 - 0.12, h + 0.02, 0);
+  group.add(gW, gE);
 
-  // 5. Storefront facing +Z (south side)
   const frontZ = d * 0.5;
-  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.55, 0.18), mats.darkTrim);
-  doorFrame.position.set(0, 1.28, frontZ + 0.04);
-  group.add(doorFrame);
-
-  const doorLeaf = new THREE.Mesh(new THREE.BoxGeometry(1.36, 2.35, 0.14), mats.wood);
-  doorLeaf.position.set(0, 1.2, frontZ + 0.08);
-  group.add(doorLeaf);
-
-  // 6. Warm glowing storefront windows flanking the door
-  const winGeo = new THREE.BoxGeometry(2.6, 1.85, 0.12);
-  const winLeft = new THREE.Mesh(winGeo, mats.warmWindow);
-  winLeft.position.set(-w * 0.27, 1.65, frontZ + 0.05);
-  group.add(winLeft);
-
-  const winRight = new THREE.Mesh(winGeo, mats.warmWindow);
-  winRight.position.set(w * 0.27, 1.65, frontZ + 0.05);
-  group.add(winRight);
-
-  // 7. Striped storefront awning
   const awningMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w - 1.2, 0.16, 1.9),
+    createCurvedAwningGeometry(w - 1.2, 1.85, 0.65),
     mats.awning
   );
-  awningMesh.position.set(0, 3.05, frontZ + 0.85);
-  awningMesh.rotation.x = 0.22;
+  awningMesh.position.set(0, 2.75, frontZ);
   awningMesh.castShadow = true;
   group.add(awningMesh);
 
-  // 8. LAST SHOP illuminated signboard
-  const signMesh = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.25, 0.2), mats.shopSign);
-  signMesh.position.set(0, 4.1, frontZ + 0.14);
+  const signMesh = new THREE.Mesh(
+    createBeveledBoxGeometry(5.6, 1.25, 0.22, 0.03, 0.02),
+    mats.shopSign
+  );
+  signMesh.position.set(0, 4.1, frontZ + 0.16);
   group.add(signMesh);
 
-  // 9. Porch lantern housing above door
   const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), mats.lampBulbLit);
   lantern.position.set(0, 2.75, frontZ + 0.35);
   group.add(lantern);
@@ -525,6 +537,11 @@ export function buildLastShopModel(
   return group;
 }
 
+/**
+ * Non-block urban background & landmark buildings (e.g. Mercer Flats, perimeter towers).
+ * Breaks box monotony with stepped wings, corner pilasters, recessed window bays,
+ * pitched/mansard/sawtooth roofs, fire escape balconies, and rooftop water tanks.
+ */
 export function buildUrbanBuildingModel(
   opts: BuildingBuildOptions,
   mats: MaterialPalette
@@ -535,168 +552,256 @@ export function buildUrbanBuildingModel(
   const wallMat =
     style === 'apartment' || style === 'diner' ? mats.brick : mats.concrete;
 
-  // 1. Main massing
-  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
-  body.position.y = h * 0.5;
+  // 1. Stepped architectural main massing (recessed upper setback tier on tall blocks)
+  const hasSetback = h >= 6.8;
+  const lowerH = hasSetback ? h * 0.66 : h;
+  const body = new THREE.Mesh(
+    createBeveledBoxGeometry(w, lowerH, d, 0.04, 0.05),
+    wallMat
+  );
+  body.position.y = lowerH * 0.5;
   body.castShadow = true;
   body.receiveShadow = true;
   group.add(body);
 
-  // 2. Foundation plinth
-  const plinth = new THREE.Mesh(
-    new THREE.BoxGeometry(w + 0.24, 0.32, d + 0.24),
-    mats.darkTrim
-  );
-  plinth.position.y = 0.16;
-  plinth.receiveShadow = true;
-  group.add(plinth);
+  if (hasSetback) {
+    const upperH = h - lowerH;
+    const upperBody = new THREE.Mesh(
+      createBeveledBoxGeometry(w * 0.88, upperH, d * 0.86, 0.04, 0.05),
+      wallMat
+    );
+    upperBody.position.set(0, lowerH + upperH * 0.5, 0);
+    upperBody.castShadow = true;
+    upperBody.receiveShadow = true;
+    group.add(upperBody);
 
-  // 3. Cornice / parapet cap
-  const cornice = new THREE.Mesh(
-    new THREE.BoxGeometry(w + 0.32, 0.38, d + 0.32),
-    mats.darkTrim
-  );
-  cornice.position.y = h + 0.18;
-  cornice.castShadow = true;
-  group.add(cornice);
+    const setbackLedge = new THREE.Mesh(
+      createBeveledBoxGeometry(w + 0.24, 0.22, d + 0.24, 0.03, 0.04),
+      mats.concrete
+    );
+    setbackLedge.position.y = lowerH;
+    group.add(setbackLedge);
+  }
 
-  // 4. Rooftop AC / vent box & exhaust duct + vertical drainage conduit
-  const vent = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1.5), mats.rustedMetal);
-  vent.position.set(w * 0.2, h + 0.72, -d * 0.15);
-  group.add(vent);
+  // 2. Corner pilasters & foundation water-table plinth
+  const trimParts: THREE.BufferGeometry[] = [];
+  const plinth = createBeveledBoxGeometry(w + 0.28, 0.36, d + 0.28, 0.03, 0.04);
+  plinth.translate(0, 0.18, 0);
+  trimParts.push(plinth);
 
+  for (const [px, pz] of [
+    [-w * 0.49, -d * 0.49],
+    [w * 0.49, -d * 0.49],
+    [-w * 0.49, d * 0.49],
+    [w * 0.49, d * 0.49],
+  ]) {
+    const pil = createBeveledBoxGeometry(0.42, lowerH, 0.42, 0.03, 0.03);
+    pil.translate(px, lowerH * 0.5, pz);
+    trimParts.push(pil);
+  }
+  const trimMesh = new THREE.Mesh(mergeParts(trimParts, false), mats.darkTrim);
+  trimMesh.castShadow = true;
+  trimMesh.receiveShadow = true;
+  group.add(trimMesh);
+
+  // 3. Architectural Roof Cap (Mansard / Sawtooth / Gable instead of flat rectangle)
+  const topW = hasSetback ? w * 0.88 : w;
+  const topD = hasSetback ? d * 0.86 : d;
+  if (style === 'warehouse' || style === 'garage') {
+    const saw = new THREE.Mesh(
+      createSawtoothRoofGeometry(topW, topD, 3, 1.15, 0.28),
+      mats.rustedMetal
+    );
+    saw.position.y = h;
+    saw.castShadow = true;
+    group.add(saw);
+  } else if (style === 'apartment') {
+    const mansard = new THREE.Mesh(
+      createMansardRoofGeometry(topW, topD, 1.15, Math.min(1.4, topW * 0.18), 0.28),
+      mats.roofTar
+    );
+    mansard.position.y = h;
+    mansard.castShadow = true;
+    group.add(mansard);
+  } else {
+    const gable = new THREE.Mesh(
+      createGabledRoofGeometry(topW, topD, 1.35, 0.34, 0.16, true),
+      mats.roofTar
+    );
+    gable.position.y = h;
+    gable.castShadow = true;
+    group.add(gable);
+  }
+
+  // 4. Rooftop AC / Curved Ducts / Elevated Water Tower & Fire-Escape Balcony on Tall Blocks
+  const exhaustPts = [
+    new THREE.Vector3(-topW * 0.24, h + 0.3, topD * 0.12),
+    new THREE.Vector3(-topW * 0.24, h + 1.35, topD * 0.12),
+    new THREE.Vector3(-topW * 0.24, h + 1.48, topD * 0.28),
+  ];
   const exhaustPipe = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.16, 1.1, 8),
+    createTubePathGeometry(exhaustPts, 0.14, 8, 6),
     mats.lampMetal
   );
-  exhaustPipe.position.set(-w * 0.24, h + 0.75, d * 0.12);
   group.add(exhaustPipe);
 
   if (h >= 7.5 && w >= 12) {
-    // Elevated weathered rooftop water tank silhouette for apartment/warehouse skyline depth
-    const tankLegs = new THREE.BoxGeometry(0.14, 1.2, 0.14);
+    const tankParts: THREE.BufferGeometry[] = [];
     for (const [lx, lz] of [
       [-0.65, -0.65],
       [0.65, -0.65],
       [-0.65, 0.65],
       [0.65, 0.65],
     ]) {
-      const leg = new THREE.Mesh(tankLegs, mats.darkTrim);
-      leg.position.set(-w * 0.24 + lx, h + 0.85, -d * 0.18 + lz);
-      group.add(leg);
+      const leg = new THREE.CylinderGeometry(0.06, 0.08, 1.35, 6);
+      leg.translate(topW * 0.22 + lx, h + 1.1, -topD * 0.16 + lz);
+      tankParts.push(leg);
     }
+    group.add(new THREE.Mesh(mergeParts(tankParts, false), mats.darkTrim));
+
     const tank = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.92, 0.92, 1.5, 10),
+      new THREE.CylinderGeometry(0.92, 0.96, 1.5, 12),
       mats.wood
     );
-    tank.position.set(-w * 0.24, h + 2.15, -d * 0.18);
+    tank.position.set(topW * 0.22, h + 2.45, -topD * 0.16);
     tank.castShadow = true;
-    const cap = new THREE.Mesh(
-      new THREE.ConeGeometry(1.02, 0.5, 10),
-      mats.rustedMetal
-    );
-    cap.position.set(-w * 0.24, h + 3.15, -d * 0.18);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.04, 0.55, 12), mats.rustedMetal);
+    cap.position.set(topW * 0.22, h + 3.48, -topD * 0.16);
     group.add(tank, cap);
+
+    // Exterior Steel Fire Escape Balcony + Ladder on front upper tier
+    const feParts: THREE.BufferGeometry[] = [];
+    const balconyFloor = createBeveledBoxGeometry(3.4, 0.08, 0.95, 0.015, 0.02);
+    balconyFloor.translate(-w * 0.18, 4.15, d * 0.5 + 0.45);
+    const railFront = createBeveledBoxGeometry(3.4, 0.06, 0.06, 0.01, 0.01);
+    railFront.translate(-w * 0.18, 4.95, d * 0.5 + 0.9);
+    for (let rx = -1.6; rx <= 1.61; rx += 0.8) {
+      const post = new THREE.CylinderGeometry(0.025, 0.025, 0.82, 5);
+      post.translate(-w * 0.18 + rx, 4.55, d * 0.5 + 0.9);
+      feParts.push(post);
+    }
+    // Angled ladder flight descending to 2.2m
+    for (const lx of [-1.25, -0.75]) {
+      const rail = new THREE.CylinderGeometry(0.025, 0.025, 2.3, 5);
+      rail.rotateX(0.32);
+      rail.translate(-w * 0.18 + lx, 3.1, d * 0.5 + 0.72);
+      feParts.push(rail);
+    }
+    const fireEscape = new THREE.Mesh(mergeParts(feParts, false), mats.lampMetal);
+    fireEscape.castShadow = true;
+    group.add(fireEscape);
   }
 
-  const downPipe = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.08, h, 8),
-    mats.lampMetal
-  );
-  downPipe.position.set(w * 0.5 + 0.06, h * 0.5, d * 0.44);
-  group.add(downPipe);
+  // Curved downspout
+  const downPts = [
+    new THREE.Vector3(w * 0.5 + 0.06, lowerH, d * 0.42),
+    new THREE.Vector3(w * 0.5 + 0.06, 0.3, d * 0.42),
+    new THREE.Vector3(w * 0.5 + 0.22, 0.08, d * 0.42),
+  ];
+  group.add(new THREE.Mesh(createTubePathGeometry(downPts, 0.065, 8, 6), mats.lampMetal));
 
-  // 5. Recessed dark / boarded windows with sills along front/back faces
+  // 5. Recessed / Framed Windows with Lintels, Sills & Angled Boarding Planks
   const floors = Math.max(1, Math.floor(h / 3.4));
   const cols = Math.max(2, Math.floor(w / 3.2));
-  const winGeo = new THREE.BoxGeometry(1.3, 1.45, 0.12);
-  const sillGeo = new THREE.BoxGeometry(1.48, 0.1, 0.22);
-  const plankGeo = new THREE.BoxGeometry(1.46, 0.22, 0.16);
+  const winGlassParts: THREE.BufferGeometry[] = [];
+  const winTrimParts: THREE.BufferGeometry[] = [];
+  const plankParts: THREE.BufferGeometry[] = [];
 
   for (let f = 0; f < floors; f++) {
     const wy = 2.0 + f * 3.2;
     if (wy + 1.0 > h) break;
-    for (let c = 0; c < cols; c++) {
-      const wx = -w * 0.5 + ((c + 0.5) / cols) * w;
-      const winFront = new THREE.Mesh(winGeo, mats.glassDark);
-      winFront.position.set(wx, wy, d * 0.5 + 0.02);
-      const sillFront = new THREE.Mesh(sillGeo, mats.darkTrim);
-      sillFront.position.set(wx, wy - 0.74, d * 0.5 + 0.08);
-      group.add(winFront, sillFront);
+    const faceZ = wy > lowerH ? (topD * 0.5) : (d * 0.5);
+    const colSpan = wy > lowerH ? topW : w;
 
-      // Side-rear dark window variation on upper floors for 360-degree silhouette depth
+    for (let c = 0; c < cols; c++) {
+      const wx = -colSpan * 0.5 + ((c + 0.5) / cols) * colSpan;
+
+      const glass = createBeveledBoxGeometry(1.26, 1.4, 0.08, 0.01, 0.01);
+      glass.translate(wx, wy, faceZ + 0.02);
+      winGlassParts.push(glass);
+
+      const sill = createBeveledBoxGeometry(1.5, 0.11, 0.24, 0.02, 0.02);
+      sill.translate(wx, wy - 0.74, faceZ + 0.08);
+      const lintel = createBeveledBoxGeometry(1.52, 0.14, 0.24, 0.02, 0.02);
+      lintel.translate(wx, wy + 0.76, faceZ + 0.07);
+      winTrimParts.push(sill, lintel);
+
       if (f > 0 && c % 2 === 0) {
-        const winBack = new THREE.Mesh(winGeo, mats.glassDark);
-        winBack.position.set(wx, wy, -d * 0.5 - 0.02);
-        const sillBack = new THREE.Mesh(sillGeo, mats.darkTrim);
-        sillBack.position.set(wx, wy - 0.74, -d * 0.5 - 0.08);
-        group.add(winBack, sillBack);
+        const glassB = createBeveledBoxGeometry(1.26, 1.4, 0.08, 0.01, 0.01);
+        glassB.translate(wx, wy, -faceZ - 0.02);
+        winGlassParts.push(glassB);
+        const sillB = createBeveledBoxGeometry(1.5, 0.11, 0.24, 0.02, 0.02);
+        sillB.translate(wx, wy - 0.74, -faceZ - 0.08);
+        winTrimParts.push(sillB);
       }
 
-      // Board up ground-floor windows on abandoned buildings
       if (f === 0 && (c + f) % 2 === 0) {
-        const plank = new THREE.Mesh(plankGeo, mats.wood);
-        plank.position.set(wx, wy + 0.12, d * 0.5 + 0.09);
-        plank.rotation.z = c % 2 === 0 ? 0.11 : -0.08;
-        group.add(plank);
-        const plank2 = new THREE.Mesh(plankGeo, mats.wood);
-        plank2.position.set(wx, wy - 0.24, d * 0.5 + 0.09);
-        plank2.rotation.z = c % 2 === 0 ? -0.06 : 0.09;
-        group.add(plank2);
+        const p1 = createBeveledBoxGeometry(1.48, 0.2, 0.12, 0.015, 0.01);
+        p1.rotateZ(c % 2 === 0 ? 0.11 : -0.08);
+        p1.translate(wx, wy + 0.12, faceZ + 0.09);
+        const p2 = createBeveledBoxGeometry(1.48, 0.2, 0.12, 0.015, 0.01);
+        p2.rotateZ(c % 2 === 0 ? -0.06 : 0.09);
+        p2.translate(wx, wy - 0.24, faceZ + 0.09);
+        plankParts.push(p1, p2);
       }
     }
   }
 
-  // 6. Entry doorway on designated side with small concrete stoop & lintel
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.35, 0.16), mats.darkTrim);
-  const doorLintel = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.2, 0.24), mats.concrete);
+  if (winGlassParts.length > 0) {
+    group.add(new THREE.Mesh(mergeParts(winGlassParts, false), mats.glassDark));
+  }
+  if (winTrimParts.length > 0) {
+    group.add(new THREE.Mesh(mergeParts(winTrimParts, false), mats.darkTrim));
+  }
+  if (plankParts.length > 0) {
+    group.add(new THREE.Mesh(mergeParts(plankParts, true, 0.6), mats.wood));
+  }
+
+  // 6. Entry doorway canopy & stoop on designated side
+  const door = new THREE.Mesh(
+    createBeveledBoxGeometry(1.42, 2.35, 0.18, 0.02, 0.02),
+    mats.darkTrim
+  );
+  const doorLintel = new THREE.Mesh(
+    createBeveledBoxGeometry(1.85, 0.24, 0.45, 0.03, 0.03),
+    mats.concrete
+  );
   if (doorSide === 'south') {
     door.position.set(0, 1.18, d * 0.5 + 0.05);
-    doorLintel.position.set(0, 2.42, d * 0.5 + 0.08);
+    doorLintel.position.set(0, 2.45, d * 0.5 + 0.16);
   } else if (doorSide === 'north') {
     door.position.set(0, 1.18, -d * 0.5 - 0.05);
-    doorLintel.position.set(0, 2.42, -d * 0.5 - 0.08);
+    doorLintel.position.set(0, 2.45, -d * 0.5 - 0.16);
   } else if (doorSide === 'east') {
     door.rotation.y = Math.PI * 0.5;
     door.position.set(w * 0.5 + 0.05, 1.18, 0);
     doorLintel.rotation.y = Math.PI * 0.5;
-    doorLintel.position.set(w * 0.5 + 0.08, 2.42, 0);
+    doorLintel.position.set(w * 0.5 + 0.16, 2.45, 0);
   } else {
     door.rotation.y = Math.PI * 0.5;
     door.position.set(-w * 0.5 - 0.05, 1.18, 0);
     doorLintel.rotation.y = Math.PI * 0.5;
-    doorLintel.position.set(-w * 0.5 - 0.08, 2.42, 0);
+    doorLintel.position.set(-w * 0.5 - 0.16, 2.45, 0);
   }
   group.add(door, doorLintel);
 
-  // 7. Garage bay door or diner awning + Landmark Fascia Signboards
-  if (style === 'garage') {
-    const bay = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.7, 0.18), mats.rustedMetal);
-    bay.position.set(w * 0.2, 1.35, -d * 0.5 - 0.04);
-    group.add(bay);
-
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.05, 0.16), mats.signRedlineAuto);
-    sign.position.set(0, h - 0.8, -d * 0.5 - 0.1);
-    sign.rotation.y = Math.PI;
-    group.add(sign);
-  } else if (style === 'diner') {
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(w + 0.25, 0.25, d + 0.25), mats.hydrantRed);
-    trim.position.y = h - 0.25;
-    group.add(trim);
-
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(5.4, 1.1, 0.16), mats.signStarlightDiner);
-    sign.position.set(0, h - 0.9, -d * 0.5 - 0.1);
-    sign.rotation.y = Math.PI;
-    group.add(sign);
-  } else if (style === 'apartment' && w < 14) {
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(4.8, 1.0, 0.16), mats.signMercerFlats);
-    sign.position.set(0, 3.35, d * 0.5 + 0.1);
+  // 7. Landmark Fascia Signboards
+  if (style === 'apartment' && w < 14) {
+    const sign = new THREE.Mesh(
+      createBeveledBoxGeometry(4.8, 1.0, 0.18, 0.025, 0.02),
+      mats.signMercerFlats
+    );
+    sign.position.set(0, 3.35, d * 0.5 + 0.14);
     group.add(sign);
   }
 
   return group;
 }
 
+/**
+ * Non-block sculpted vehicle builder using beveled ExtrudeGeometry side-profiles
+ * with sloped hoods, angled windshields, open pickup beds, bumpers, grilles, and grounded wheels.
+ */
 export function buildVehicleModel(
   kind: 'sedan' | 'taxi' | 'pickup' | 'van',
   colorHex: number,
@@ -706,139 +811,144 @@ export function buildVehicleModel(
 
   const bodyMat = new THREE.MeshStandardMaterial({
     color: colorHex,
-    roughness: 0.62,
-    metalness: 0.35,
+    roughness: 0.56,
+    metalness: 0.42,
   });
 
-  const length = kind === 'van' ? 4.6 : kind === 'pickup' ? 4.4 : 4.1;
-  const width = kind === 'van' ? 1.95 : 1.82;
+  const length = kind === 'van' ? 4.5 : kind === 'pickup' ? 4.35 : 4.05;
+  const width = kind === 'van' ? 1.88 : 1.76;
 
-  // 1. Lower chassis
-  const chassisH = kind === 'pickup' ? 0.72 : 0.65;
-  const chassis = new THREE.Mesh(
-    new THREE.BoxGeometry(width, chassisH, length),
-    bodyMat
+  // 1. Sculpted beveled vehicle body silhouette (replaces stacked boxes)
+  const bodyGeo = createVehicleProfileGeometry(kind);
+  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+  bodyMesh.castShadow = true;
+  bodyMesh.receiveShadow = true;
+  group.add(bodyMesh);
+
+  // Dark recessed underbody frame & wheel arch wells
+  const underbody = new THREE.Mesh(
+    createBeveledBoxGeometry(width - 0.24, 0.18, length - 0.35, 0.03, 0.04),
+    mats.darkTrim
   );
-  chassis.position.y = 0.28 + chassisH * 0.5;
-  chassis.castShadow = true;
-  chassis.receiveShadow = true;
-  group.add(chassis);
+  underbody.position.y = 0.28;
+  group.add(underbody);
 
-  // 2. Cabin / Van upper body
+  // 2. Angled Glass Windshields & Side Cabin Glass
   if (kind === 'van') {
-    const upper = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.08, 0.95, length - 0.55),
-      bodyMat
-    );
-    upper.position.set(0, 0.28 + chassisH + 0.45, -0.18);
-    upper.castShadow = true;
-    group.add(upper);
-
     const windshield = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.24, 0.68, 0.14),
+      createBeveledBoxGeometry(width - 0.26, 0.64, 0.08, 0.015, 0.02),
       mats.glassDark
     );
-    windshield.position.set(0, 1.36, length * 0.5 - 0.35);
-    windshield.rotation.x = -0.25;
+    windshield.position.set(0, 1.46, 1.36);
+    windshield.rotation.x = -0.44;
     group.add(windshield);
-  } else if (kind === 'pickup') {
-    const cab = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.1, 0.72, 1.55),
-      bodyMat
-    );
-    cab.position.set(0, 0.28 + chassisH + 0.35, 0.35);
-    cab.castShadow = true;
-    group.add(cab);
 
-    const bed = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.24, 0.12, 1.65),
+    const roofRack = new THREE.Mesh(
+      createBeveledBoxGeometry(1.36, 0.08, 2.2, 0.02, 0.02),
       mats.darkTrim
     );
-    bed.position.set(0, 0.28 + chassisH - 0.04, -1.28);
-    group.add(bed);
-
+    roofRack.position.set(0, 1.98, -0.45);
+    group.add(roofRack);
+  } else if (kind === 'pickup') {
     const windshield = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.28, 0.55, 0.1),
+      createBeveledBoxGeometry(width - 0.28, 0.58, 0.07, 0.015, 0.02),
       mats.glassDark
     );
-    windshield.position.set(0, 1.28, 1.15);
-    windshield.rotation.x = -0.38;
-    group.add(windshield);
-  } else {
-    const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.14, 0.62, 2.05),
-      bodyMat
-    );
-    cabin.position.set(0, 0.28 + chassisH + 0.3, -0.1);
-    cabin.castShadow = true;
-    group.add(cabin);
-
-    const windshield = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.28, 0.5, 0.1),
-      mats.glassDark
-    );
-    windshield.position.set(0, 1.2, 0.96);
+    windshield.position.set(0, 1.34, 0.94);
     windshield.rotation.x = -0.48;
-    group.add(windshield);
+
+    const rearCabGlass = new THREE.Mesh(
+      createBeveledBoxGeometry(width - 0.36, 0.42, 0.06, 0.01, 0.01),
+      mats.glassDark
+    );
+    rearCabGlass.position.set(0, 1.38, -0.37);
+
+    const bedFloor = new THREE.Mesh(
+      createBeveledBoxGeometry(width - 0.34, 0.08, 1.54, 0.02, 0.02),
+      mats.darkTrim
+    );
+    bedFloor.position.set(0, 0.99, -1.26);
+    group.add(windshield, rearCabGlass, bedFloor);
+  } else {
+    const windshield = new THREE.Mesh(
+      createBeveledBoxGeometry(width - 0.28, 0.56, 0.07, 0.015, 0.02),
+      mats.glassDark
+    );
+    windshield.position.set(0, 1.22, 0.76);
+    windshield.rotation.x = -0.74;
 
     const rearGlass = new THREE.Mesh(
-      new THREE.BoxGeometry(width - 0.3, 0.45, 0.1),
+      createBeveledBoxGeometry(width - 0.32, 0.54, 0.07, 0.015, 0.02),
       mats.glassDark
     );
-    rearGlass.position.set(0, 1.2, -1.16);
-    rearGlass.rotation.x = 0.5;
-    group.add(rearGlass);
+    rearGlass.position.set(0, 1.22, -0.96);
+    rearGlass.rotation.x = 0.72;
+
+    const sideCabinGlass = new THREE.Mesh(
+      createBeveledBoxGeometry(width - 0.1, 0.38, 1.4, 0.02, 0.03),
+      mats.glassDark
+    );
+    sideCabinGlass.position.set(0, 1.22, -0.1);
+    group.add(windshield, rearGlass, sideCabinGlass);
 
     if (kind === 'taxi') {
       const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.55, 0.2, 0.28),
+        createBeveledBoxGeometry(0.56, 0.18, 0.26, 0.03, 0.04),
         mats.barrierHazard
       );
-      sign.position.set(0, 1.65, 0.1);
+      sign.position.set(0, 1.56, -0.08);
       group.add(sign);
     }
   }
 
-  // 3. Front & rear bumpers + cracked/dead headlight & taillight housings
-  const bumperGeo = new THREE.BoxGeometry(width + 0.06, 0.18, 0.16);
-  const frontBumper = new THREE.Mesh(bumperGeo, mats.darkTrim);
-  frontBumper.position.set(0, 0.36, length * 0.5 + 0.05);
-  group.add(frontBumper);
+  // 3. Sculpted Bumpers, Side Mirrors, Grille, Headlights & Exhaust Tailpipe
+  const bumperParts: THREE.BufferGeometry[] = [];
+  const fBump = createBeveledBoxGeometry(width + 0.04, 0.18, 0.18, 0.04, 0.05);
+  fBump.translate(0, 0.38, length * 0.5 + 0.04);
+  const rBump = createBeveledBoxGeometry(width + 0.04, 0.18, 0.18, 0.04, 0.05);
+  rBump.translate(0, 0.38, -length * 0.5 - 0.04);
+  const grille = createBeveledBoxGeometry(width * 0.48, 0.22, 0.08, 0.02, 0.03);
+  grille.translate(0, 0.66, length * 0.5 - 0.01);
+  // Side mirrors
+  for (const mx of [-width * 0.5 - 0.08, width * 0.5 + 0.08]) {
+    const mir = createBeveledBoxGeometry(0.14, 0.1, 0.12, 0.02, 0.03);
+    mir.translate(mx, 1.06, 0.65);
+    bumperParts.push(mir);
+  }
+  const tailpipe = new THREE.CylinderGeometry(0.04, 0.045, 0.28, 7);
+  tailpipe.rotateX(Math.PI * 0.5);
+  tailpipe.translate(-width * 0.32, 0.26, -length * 0.5 - 0.06);
+  bumperParts.push(fBump, rBump, grille, tailpipe);
 
-  const rearBumper = new THREE.Mesh(bumperGeo, mats.darkTrim);
-  rearBumper.position.set(0, 0.36, -length * 0.5 - 0.05);
-  group.add(rearBumper);
+  group.add(new THREE.Mesh(mergeParts(bumperParts, false), mats.darkTrim));
 
-  const grille = new THREE.Mesh(
-    new THREE.BoxGeometry(width * 0.46, 0.22, 0.06),
-    mats.darkTrim
-  );
-  grille.position.set(0, 0.62, length * 0.5 + 0.01);
-  group.add(grille);
-
-  const headLensGeo = new THREE.BoxGeometry(0.24, 0.14, 0.06);
-  const tailLensGeo = new THREE.BoxGeometry(0.22, 0.13, 0.06);
-  for (const sx of [-width * 0.36, width * 0.36]) {
-    const hl = new THREE.Mesh(headLensGeo, mats.lampBulbDead);
-    hl.position.set(sx, 0.65, length * 0.5 + 0.01);
-    const tl = new THREE.Mesh(tailLensGeo, mats.hydrantRed);
-    tl.position.set(sx, 0.68, -length * 0.5 - 0.01);
+  for (const sx of [-width * 0.35, width * 0.35]) {
+    const hl = new THREE.Mesh(
+      createBeveledBoxGeometry(0.24, 0.13, 0.07, 0.02, 0.03),
+      mats.lampBulbDead
+    );
+    hl.position.set(sx, 0.68, length * 0.5 - 0.02);
+    const tl = new THREE.Mesh(
+      createBeveledBoxGeometry(0.22, 0.12, 0.07, 0.02, 0.03),
+      mats.hydrantRed
+    );
+    tl.position.set(sx, 0.72, -length * 0.5 + 0.02);
     group.add(hl, tl);
   }
 
-  // 4. Four grounded wheels with steel hubcaps
-  const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12);
-  wheelGeo.rotateZ(Math.PI * 0.5);
-  const rimGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.26, 8);
+  // 4. Four grounded rubber tires with beveled alloy hubs
+  const tireGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.24, 14);
+  tireGeo.rotateZ(Math.PI * 0.5);
+  const rimGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.26, 10);
   rimGeo.rotateZ(Math.PI * 0.5);
   const wheelOffsets = [
-    [-width * 0.47, 0.34, length * 0.31],
-    [width * 0.47, 0.34, length * 0.31],
-    [-width * 0.47, 0.34, -length * 0.31],
-    [width * 0.47, 0.34, -length * 0.31],
+    [-width * 0.45, 0.35, length * 0.31],
+    [width * 0.45, 0.35, length * 0.31],
+    [-width * 0.45, 0.35, -length * 0.31],
+    [width * 0.45, 0.35, -length * 0.31],
   ];
   for (const [wx, wy, wz] of wheelOffsets) {
-    const wheel = new THREE.Mesh(wheelGeo, mats.tireRubber);
+    const wheel = new THREE.Mesh(tireGeo, mats.tireRubber);
     wheel.position.set(wx, wy, wz);
     wheel.castShadow = true;
     const rim = new THREE.Mesh(rimGeo, mats.lampMetal);
@@ -849,109 +959,186 @@ export function buildVehicleModel(
   return group;
 }
 
+/**
+ * Curved gooseneck street lamp with fluted Lathe pedestal & sculpted cobra hood.
+ */
 export function buildStreetLampModel(lit: boolean, mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
-  // 1. Concrete base collar
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.18, 0.24, 0.45, 8),
-    mats.concrete
-  );
-  base.position.y = 0.225;
+  const basePts = [
+    new THREE.Vector2(0.26, 0),
+    new THREE.Vector2(0.24, 0.18),
+    new THREE.Vector2(0.18, 0.36),
+    new THREE.Vector2(0.15, 0.65),
+    new THREE.Vector2(0.11, 0.8),
+  ];
+  const base = new THREE.Mesh(new THREE.LatheGeometry(basePts, 10), mats.concrete);
   group.add(base);
 
-  // 2. Tapered steel pole
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.065, 0.1, 4.9, 8),
-    mats.lampMetal
-  );
-  pole.position.y = 2.65;
+  const polePts = [
+    new THREE.Vector3(0, 0.72, 0),
+    new THREE.Vector3(0, 4.45, 0),
+    new THREE.Vector3(0, 5.05, 0.32),
+    new THREE.Vector3(0, 5.14, 1.08),
+  ];
+  const pole = new THREE.Mesh(createTubePathGeometry(polePts, 0.068, 14, 8), mats.lampMetal);
   pole.castShadow = true;
   group.add(pole);
 
-  // 3. Angled arm
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.35), mats.lampMetal);
-  arm.position.set(0, 5.05, 0.6);
-  arm.rotation.x = -0.1;
-  group.add(arm);
-
-  // 4. Lamp hood housing
-  const hood = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.55), mats.darkTrim);
-  hood.position.set(0, 5.1, 1.2);
+  const hood = new THREE.Mesh(
+    createBeveledBoxGeometry(0.38, 0.14, 0.56, 0.035, 0.08),
+    mats.darkTrim
+  );
+  hood.position.set(0, 5.14, 1.18);
   group.add(hood);
 
-  // 5. Bulb lens
   const bulb = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 8, 6),
     lit ? mats.streetLampBulb : mats.lampBulbDead
   );
-  bulb.scale.y = 0.6;
-  bulb.position.set(0, 5.01, 1.2);
+  bulb.scale.set(1, 0.55, 1.3);
+  bulb.position.set(0, 5.04, 1.2);
   group.add(bulb);
 
   return group;
 }
 
+/**
+ * Tapered trapezoidal steel dumpster with structural ribs, half-propped angled lid & casters.
+ */
 export function buildDumpsterModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-
   const greenSteel = new THREE.MeshStandardMaterial({
     color: 0x263b32,
     roughness: 0.72,
     metalness: 0.35,
   });
 
-  // 1. Main steel bin
-  const bin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.15, 1.25), greenSteel);
-  bin.position.y = 0.66;
+  // Tapered trapezoidal side profile extruded across width
+  const binShape = new THREE.Shape();
+  binShape.moveTo(-0.52, 0.12);
+  binShape.lineTo(0.52, 0.12);
+  binShape.lineTo(0.64, 1.24);
+  binShape.lineTo(-0.64, 1.24);
+  binShape.closePath();
+  const binGeo = new THREE.ExtrudeGeometry(binShape, {
+    depth: 1.88,
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.03,
+    bevelSegments: 1,
+  });
+  binGeo.translate(0, 0, -0.94);
+  binGeo.rotateY(Math.PI * 0.5);
+  applyTriplanarUVs(binGeo, 0.5);
+
+  const bin = new THREE.Mesh(binGeo, greenSteel);
   bin.castShadow = true;
   bin.receiveShadow = true;
   group.add(bin);
 
-  // 2. Rim collar
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.1, 1.36), mats.rustedMetal);
-  rim.position.y = 1.24;
-  group.add(rim);
+  // Structural vertical side ribs & side lift pockets
+  const ribParts: THREE.BufferGeometry[] = [];
+  const rim = createBeveledBoxGeometry(2.04, 0.1, 1.36, 0.02, 0.03);
+  rim.translate(0, 1.24, 0);
+  ribParts.push(rim);
+  for (const rx of [-0.65, 0, 0.65]) {
+    const rib = createBeveledBoxGeometry(0.08, 0.96, 1.26, 0.015, 0.01);
+    rib.translate(rx, 0.7, 0);
+    ribParts.push(rib);
+  }
+  const ribsMesh = new THREE.Mesh(mergeParts(ribParts, true, 0.5), mats.rustedMetal);
+  group.add(ribsMesh);
 
-  // 3. Dual hinged lids
-  const lidGeo = new THREE.BoxGeometry(0.92, 0.08, 1.26);
-  const lidL = new THREE.Mesh(lidGeo, mats.tireRubber);
-  lidL.position.set(-0.48, 1.32, 0);
-  lidL.rotation.z = 0.06;
-  group.add(lidL);
+  // Dual beveled hinged rubber lids (one propped slightly ajar!)
+  const lidL = new THREE.Mesh(
+    createBeveledBoxGeometry(0.92, 0.075, 1.26, 0.02, 0.03),
+    mats.tireRubber
+  );
+  lidL.position.set(-0.48, 1.34, -0.03);
+  lidL.rotation.set(-0.18, 0, 0.05);
+  const lidR = new THREE.Mesh(
+    createBeveledBoxGeometry(0.92, 0.075, 1.26, 0.02, 0.03),
+    mats.tireRubber
+  );
+  lidR.position.set(0.48, 1.31, 0);
+  group.add(lidL, lidR);
 
-  const lidR = new THREE.Mesh(lidGeo, mats.tireRubber);
-  lidR.position.set(0.48, 1.32, 0);
-  group.add(lidR);
-
-  // 4. Skids
-  const skidGeo = new THREE.BoxGeometry(1.75, 0.1, 0.16);
-  const skid1 = new THREE.Mesh(skidGeo, mats.darkTrim);
-  skid1.position.set(0, 0.05, 0.44);
-  group.add(skid1);
-  const skid2 = new THREE.Mesh(skidGeo, mats.darkTrim);
-  skid2.position.set(0, 0.05, -0.44);
-  group.add(skid2);
+  // Caster feet
+  const casterParts: THREE.BufferGeometry[] = [];
+  for (const [cx, cz] of [
+    [-0.75, 0.42],
+    [0.75, 0.42],
+    [-0.75, -0.42],
+    [0.75, -0.42],
+  ]) {
+    const wheel = new THREE.CylinderGeometry(0.07, 0.07, 0.08, 8);
+    wheel.rotateZ(Math.PI * 0.5);
+    wheel.translate(cx, 0.07, cz);
+    casterParts.push(wheel);
+  }
+  group.add(new THREE.Mesh(mergeParts(casterParts, false), mats.darkTrim));
 
   return group;
 }
 
+/**
+ * Slatted timber crate with recessed interior gaps, diagonal braces & metal corner brackets.
+ */
 export function buildCrateModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
+  const woodParts: THREE.BufferGeometry[] = [];
 
-  const core = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.96, 0.96), mats.wood);
-  core.position.y = 0.5;
-  core.castShadow = true;
-  core.receiveShadow = true;
-  group.add(core);
+  // Inner dark shadow core slightly recessed inside slatted plank walls
+  const innerCore = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.84, 0.84), mats.darkTrim);
+  innerCore.position.y = 0.5;
+  group.add(innerCore);
 
-  const frameTop = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.1, 1.04), mats.darkTrim);
-  frameTop.position.y = 0.96;
-  group.add(frameTop);
+  // Slatted horizontal planks on all 4 sides + top lid planks
+  for (const py of [0.22, 0.5, 0.78]) {
+    const f = createBeveledBoxGeometry(0.96, 0.22, 0.05, 0.01, 0.01);
+    f.translate(0, py, 0.46);
+    const b = createBeveledBoxGeometry(0.96, 0.22, 0.05, 0.01, 0.01);
+    b.translate(0, py, -0.46);
+    const l = createBeveledBoxGeometry(0.05, 0.22, 0.96, 0.01, 0.01);
+    l.translate(-0.46, py, 0);
+    const r = createBeveledBoxGeometry(0.05, 0.22, 0.96, 0.01, 0.01);
+    r.translate(0.46, py, 0);
+    woodParts.push(f, b, l, r);
+  }
+  // Top lid slats
+  for (const pz of [-0.3, 0, 0.3]) {
+    const topP = createBeveledBoxGeometry(0.98, 0.05, 0.25, 0.01, 0.01);
+    topP.translate(0, 0.96, pz);
+    woodParts.push(topP);
+  }
+  // Diagonal cross-brace on front & back
+  const diagF = createBeveledBoxGeometry(1.05, 0.1, 0.055, 0.01, 0.005);
+  diagF.rotateZ(0.76);
+  diagF.translate(0, 0.5, 0.48);
+  const diagB = createBeveledBoxGeometry(1.05, 0.1, 0.055, 0.01, 0.005);
+  diagB.rotateZ(-0.76);
+  diagB.translate(0, 0.5, -0.48);
+  woodParts.push(diagF, diagB);
 
-  const frameBot = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.1, 1.04), mats.darkTrim);
-  frameBot.position.y = 0.05;
-  group.add(frameBot);
+  const woodMesh = new THREE.Mesh(mergeParts(woodParts, true, 0.7), mats.wood);
+  woodMesh.castShadow = true;
+  woodMesh.receiveShadow = true;
+  group.add(woodMesh);
+
+  // Corner metal angle posts
+  const trimParts: THREE.BufferGeometry[] = [];
+  for (const [cx, cz] of [
+    [-0.47, -0.47],
+    [0.47, -0.47],
+    [-0.47, 0.47],
+    [0.47, 0.47],
+  ]) {
+    const post = createBeveledBoxGeometry(0.09, 0.98, 0.09, 0.01, 0.01);
+    post.translate(cx, 0.5, cz);
+    trimParts.push(post);
+  }
+  group.add(new THREE.Mesh(mergeParts(trimParts, false), mats.darkTrim));
 
   return group;
 }
@@ -960,21 +1147,29 @@ export function buildTrashClusterModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
   const bagOffsets = [
-    { x: -0.28, z: -0.15, r: 0.34, sy: 0.9 },
-    { x: 0.28, z: 0.12, r: 0.38, sy: 0.82 },
-    { x: -0.04, z: 0.32, r: 0.28, sy: 0.95 },
+    { x: -0.28, z: -0.15, r: 0.34, sy: 0.85, seed: 11 },
+    { x: 0.28, z: 0.12, r: 0.38, sy: 0.78, seed: 23 },
+    { x: -0.04, z: 0.32, r: 0.28, sy: 0.9, seed: 37 },
   ];
+  const bagParts: THREE.BufferGeometry[] = [];
   for (const b of bagOffsets) {
-    const bag = new THREE.Mesh(new THREE.DodecahedronGeometry(b.r, 0), mats.trashBag);
-    bag.scale.set(1, b.sy, 1);
-    bag.position.set(b.x, b.r * b.sy * 0.85, b.z);
-    bag.castShadow = true;
-    group.add(bag);
+    const geo = createBoulderGeometry(b.r, b.seed, 1);
+    geo.scale(1, b.sy, 1);
+    geo.translate(b.x, 0.02, b.z);
+    bagParts.push(geo);
   }
+  const bags = new THREE.Mesh(mergeParts(bagParts, false), mats.trashBag);
+  bags.castShadow = true;
+  group.add(bags);
 
-  const box = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.28, 0.38), mats.wood);
-  box.position.set(0.32, 0.14, -0.28);
-  box.rotation.y = 0.45;
+  // Tilted crushed wooden/cardboard crate beside bags
+  const box = new THREE.Mesh(
+    createBeveledBoxGeometry(0.46, 0.26, 0.38, 0.02, 0.02),
+    mats.wood
+  );
+  box.position.set(0.32, 0.13, -0.28);
+  box.rotation.set(0.08, 0.45, -0.16);
+  box.castShadow = true;
   group.add(box);
 
   return group;
@@ -1003,77 +1198,122 @@ export function buildConcreteBarrierModel(mats: MaterialPalette): THREE.Group {
   });
   geo.rotateY(Math.PI * 0.5);
   geo.translate(-1.1, 0, 0);
+  applyTriplanarUVs(geo, 0.45);
 
   const mesh = new THREE.Mesh(geo, mats.concrete);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
 
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.16, 0.14, 0.24), mats.barrierHazard);
+  const stripe = new THREE.Mesh(
+    createBeveledBoxGeometry(2.14, 0.14, 0.24, 0.015, 0.02),
+    mats.barrierHazard
+  );
   stripe.position.y = 0.82;
   group.add(stripe);
 
   return group;
 }
 
+/**
+ * Fractured concrete slabs + jagged rock rubble + bent protruding steel rebar.
+ */
 export function buildRubblePileModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
-  const chunks = [
-    { x: 0, y: 0.25, z: 0, s: 0.65 },
-    { x: -0.45, y: 0.18, z: 0.28, s: 0.45 },
-    { x: 0.48, y: 0.2, z: -0.18, s: 0.48 },
-    { x: 0.12, y: 0.15, z: -0.42, s: 0.36 },
+  const concreteParts: THREE.BufferGeometry[] = [];
+  const slabA = createFracturedSlabGeometry(1.15, 0.92, 0.16, 17);
+  slabA.rotateZ(0.24);
+  slabA.rotateY(0.4);
+  slabA.translate(-0.15, 0.14, 0.08);
+  concreteParts.push(slabA);
+
+  const slabB = createFracturedSlabGeometry(0.85, 0.72, 0.14, 41);
+  slabB.rotateX(-0.28);
+  slabB.translate(0.38, 0.18, -0.2);
+  concreteParts.push(slabB);
+
+  const b1 = createBoulderGeometry(0.42, 71, 1);
+  b1.translate(-0.42, 0.02, 0.26);
+  const b2 = createBoulderGeometry(0.32, 93, 1);
+  b2.translate(0.18, 0.02, -0.38);
+  concreteParts.push(b1, b2);
+
+  const pileMesh = new THREE.Mesh(mergeParts(concreteParts, true, 0.6), mats.concrete);
+  pileMesh.castShadow = true;
+  pileMesh.receiveShadow = true;
+  group.add(pileMesh);
+
+  // Bent rusted steel rebar jutting out of broken slab
+  const rebarPts = [
+    new THREE.Vector3(-0.2, 0.12, 0.1),
+    new THREE.Vector3(0.05, 0.45, 0.02),
+    new THREE.Vector3(0.28, 0.56, -0.14),
   ];
-  for (const c of chunks) {
-    const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(c.s, 0), mats.concrete);
-    chunk.scale.set(1.2, 0.65, 1.0);
-    chunk.position.set(c.x, c.y, c.z);
-    chunk.rotation.set(c.x, c.z, 0.3);
-    chunk.castShadow = true;
-    chunk.receiveShadow = true;
-    group.add(chunk);
-  }
+  const rebar = new THREE.Mesh(createTubePathGeometry(rebarPts, 0.018, 6, 5), mats.rustedMetal);
+  group.add(rebar);
 
   return group;
 }
 
 export function buildShrubModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
+
+  // Woody gnarled lower branches
+  const stemParts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.4;
+    const pts = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(Math.cos(a) * 0.18, 0.28, Math.sin(a) * 0.18),
+      new THREE.Vector3(Math.cos(a) * 0.34, 0.5, Math.sin(a) * 0.34),
+    ];
+    stemParts.push(createTubePathGeometry(pts, 0.028, 5, 5));
+  }
+  group.add(new THREE.Mesh(mergeParts(stemParts, false), mats.barkWood));
+
+  // Irregular multi-lobed perturbed foliage pads
+  const leafParts: THREE.BufferGeometry[] = [];
   const blobs = [
-    { x: 0, y: 0.45, z: 0, r: 0.58 },
-    { x: -0.35, y: 0.32, z: 0.22, r: 0.4 },
-    { x: 0.36, y: 0.34, z: -0.18, r: 0.42 },
+    { x: 0, y: 0.45, z: 0, r: 0.56, seed: 51 },
+    { x: -0.34, y: 0.32, z: 0.22, r: 0.42, seed: 62 },
+    { x: 0.36, y: 0.34, z: -0.18, r: 0.44, seed: 73 },
   ];
   for (const b of blobs) {
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(b.r, 0), mats.foliage);
-    m.position.set(b.x, b.y, b.z);
-    m.castShadow = true;
-    group.add(m);
+    const g = createBoulderGeometry(b.r, b.seed, 1);
+    g.scale(1.15, 0.78, 1.15);
+    g.translate(b.x, b.y - 0.12, b.z);
+    leafParts.push(g);
   }
+  const foliageMesh = new THREE.Mesh(mergeParts(leafParts, false), mats.foliage);
+  foliageMesh.castShadow = true;
+  group.add(foliageMesh);
   return group;
 }
 
 export function buildHydrantModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.16, 0.72, 10),
-    mats.hydrantRed
-  );
-  body.position.y = 0.36;
+
+  const pts = [
+    new THREE.Vector2(0.18, 0),
+    new THREE.Vector2(0.18, 0.12),
+    new THREE.Vector2(0.14, 0.18),
+    new THREE.Vector2(0.14, 0.56),
+    new THREE.Vector2(0.17, 0.6),
+    new THREE.Vector2(0.15, 0.68),
+    new THREE.Vector2(0.08, 0.76),
+    new THREE.Vector2(0.0, 0.8),
+  ];
+  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 12), mats.hydrantRed);
   body.castShadow = true;
   group.add(body);
 
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), mats.hydrantRed);
-  cap.position.y = 0.72;
-  group.add(cap);
-
   const nozzle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.06, 0.36, 8),
+    new THREE.CylinderGeometry(0.055, 0.055, 0.38, 8),
     mats.darkTrim
   );
   nozzle.rotation.z = Math.PI * 0.5;
-  nozzle.position.y = 0.52;
+  nozzle.position.y = 0.48;
   group.add(nozzle);
 
   return group;
@@ -1086,28 +1326,26 @@ export function buildChainlinkFenceSegment(
   const group = new THREE.Group();
   const height = 2.15;
 
+  const metalParts: THREE.BufferGeometry[] = [];
   const postCount = Math.max(2, Math.round(length / 3.0) + 1);
-  const postGeo = new THREE.CylinderGeometry(0.045, 0.045, height, 6);
   for (let i = 0; i < postCount; i++) {
     const px = -length * 0.5 + (i / (postCount - 1)) * length;
-    const post = new THREE.Mesh(postGeo, mats.lampMetal);
-    post.position.set(px, height * 0.5, 0);
-    post.castShadow = true;
-    group.add(post);
+    const post = new THREE.CylinderGeometry(0.045, 0.05, height, 6);
+    post.translate(px, height * 0.5, 0);
+    metalParts.push(post);
   }
+  const topRail = new THREE.CylinderGeometry(0.03, 0.03, length, 6);
+  topRail.rotateZ(Math.PI * 0.5);
+  topRail.translate(0, height - 0.05, 0);
+  const midRail = new THREE.CylinderGeometry(0.025, 0.025, length, 6);
+  midRail.rotateZ(Math.PI * 0.5);
+  midRail.translate(0, height * 0.5, 0);
+  metalParts.push(topRail, midRail);
 
-  // Top & mid rails
-  const railGeo = new THREE.CylinderGeometry(0.03, 0.03, length, 6);
-  railGeo.rotateZ(Math.PI * 0.5);
-  const topRail = new THREE.Mesh(railGeo, mats.lampMetal);
-  topRail.position.y = height - 0.05;
-  group.add(topRail);
+  const frameMesh = new THREE.Mesh(mergeParts(metalParts, false), mats.lampMetal);
+  frameMesh.castShadow = true;
+  group.add(frameMesh);
 
-  const midRail = new THREE.Mesh(railGeo, mats.lampMetal);
-  midRail.position.y = height * 0.5;
-  group.add(midRail);
-
-  // Subtle translucent wire mesh panel
   const meshMat = new THREE.MeshStandardMaterial({
     color: 0x64748b,
     transparent: true,
@@ -1134,49 +1372,77 @@ export function buildWoodFenceSegment(
   const group = new THREE.Group();
   const height = 1.9;
 
+  const postParts: THREE.BufferGeometry[] = [];
   const postCount = Math.max(2, Math.round(length / 2.5) + 1);
-  const postGeo = new THREE.BoxGeometry(0.12, height, 0.12);
   for (let i = 0; i < postCount; i++) {
     const px = -length * 0.5 + (i / (postCount - 1)) * length;
-    const post = new THREE.Mesh(postGeo, mats.darkTrim);
-    post.position.set(px, height * 0.5, 0);
-    post.castShadow = true;
-    group.add(post);
+    const post = createBeveledBoxGeometry(0.12, height + 0.08, 0.12, 0.015, 0.01);
+    post.translate(px, (height + 0.08) * 0.5, 0);
+    postParts.push(post);
   }
+  const postsMesh = new THREE.Mesh(mergeParts(postParts, false), mats.darkTrim);
+  postsMesh.castShadow = true;
+  group.add(postsMesh);
 
-  const panel = new THREE.Mesh(
-    new THREE.BoxGeometry(length, height - 0.15, 0.08),
-    mats.wood
-  );
-  panel.position.y = height * 0.5;
-  panel.castShadow = true;
-  panel.receiveShadow = true;
-  group.add(panel);
+  // Vertical fence pickets & horizontal rails instead of 1 big flat board
+  const woodParts: THREE.BufferGeometry[] = [];
+  for (const ry of [0.45, 1.42]) {
+    const rail = createBeveledBoxGeometry(length, 0.08, 0.06, 0.01, 0.005);
+    rail.translate(0, ry, -0.02);
+    woodParts.push(rail);
+  }
+  const picketCount = Math.max(4, Math.round(length / 0.28));
+  const step = length / picketCount;
+  for (let i = 0; i < picketCount; i++) {
+    const px = -length * 0.5 + (i + 0.5) * step;
+    const ph = height - 0.12 - (i % 3 === 0 ? 0.07 : 0);
+    const picket = createBeveledBoxGeometry(step * 0.88, ph, 0.045, 0.008, 0.005);
+    picket.translate(px, ph * 0.5 + 0.05, 0.03);
+    woodParts.push(picket);
+  }
+  const fenceWood = new THREE.Mesh(mergeParts(woodParts, true, 0.7), mats.wood);
+  fenceWood.castShadow = true;
+  fenceWood.receiveShadow = true;
+  group.add(fenceWood);
 
   return group;
 }
 
 export function buildStreetSignpostModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 3.25, 8), mats.lampMetal);
-  pole.position.y = 1.625;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 3.3, 8), mats.lampMetal);
+  pole.position.y = 1.65;
   pole.castShadow = true;
-  group.add(pole);
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), mats.lampMetal);
+  finial.position.y = 3.32;
+  group.add(pole, finial);
 
-  const bladeMain = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.05), mats.signMainBlvd);
+  const bladeMain = new THREE.Mesh(
+    createBeveledBoxGeometry(1.15, 0.28, 0.05, 0.01, 0.015),
+    mats.signMainBlvd
+  );
   bladeMain.position.set(0.32, 3.05, 0);
   group.add(bladeMain);
 
-  const bladeCentral = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.05), mats.signCentralAve);
+  const bladeCentral = new THREE.Mesh(
+    createBeveledBoxGeometry(1.15, 0.28, 0.05, 0.01, 0.015),
+    mats.signCentralAve
+  );
   bladeCentral.position.set(0, 2.75, 0.32);
   bladeCentral.rotation.y = Math.PI * 0.5;
   group.add(bladeCentral);
 
-  const bladeDirEW = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.28, 0.05), mats.signDistrictNorth);
+  const bladeDirEW = new THREE.Mesh(
+    createBeveledBoxGeometry(1.65, 0.28, 0.05, 0.01, 0.015),
+    mats.signDistrictNorth
+  );
   bladeDirEW.position.set(0, 2.38, 0);
   group.add(bladeDirEW);
 
-  const bladeDirNS = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.28, 0.05), mats.signDistrictCross);
+  const bladeDirNS = new THREE.Mesh(
+    createBeveledBoxGeometry(1.65, 0.28, 0.05, 0.01, 0.015),
+    mats.signDistrictCross
+  );
   bladeDirNS.position.set(0, 2.06, 0);
   bladeDirNS.rotation.y = Math.PI * 0.5;
   group.add(bladeDirNS);
@@ -1184,44 +1450,92 @@ export function buildStreetSignpostModel(mats: MaterialPalette): THREE.Group {
   return group;
 }
 
+/**
+ * Open tubular wire-frame shopping cart (eliminates solid cube basket).
+ */
 export function buildShoppingCartModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
+  const metalParts: THREE.BufferGeometry[] = [];
 
-  // Base frame + 4 small wheels
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.06, 0.9), mats.lampMetal);
-  frame.position.y = 0.18;
-  group.add(frame);
+  // Base tubular chassis & upright rear push posts
+  const basePts = [
+    new THREE.Vector3(-0.26, 0.16, -0.4),
+    new THREE.Vector3(-0.24, 0.16, 0.38),
+    new THREE.Vector3(0.24, 0.16, 0.38),
+    new THREE.Vector3(0.26, 0.16, -0.4),
+  ];
+  metalParts.push(createTubePathGeometry(basePts, 0.02, 8, 6));
 
+  for (const px of [-0.26, 0.26]) {
+    const legPts = [
+      new THREE.Vector3(px, 0.16, -0.38),
+      new THREE.Vector3(px, 0.52, -0.38),
+      new THREE.Vector3(px, 0.94, -0.45),
+    ];
+    metalParts.push(createTubePathGeometry(legPts, 0.018, 6, 5));
+  }
+
+  // Open wire-frame tapered basket rails (top rim, mid rim, bottom rim + vertical ribs)
+  for (const [ry, bw, bl] of [
+    [0.44, 0.52, 0.72],
+    [0.64, 0.56, 0.78],
+    [0.84, 0.6, 0.84],
+  ]) {
+    const hw = bw * 0.5;
+    const hl = bl * 0.5;
+    const f = new THREE.CylinderGeometry(0.011, 0.011, bw, 5);
+    f.rotateZ(Math.PI * 0.5);
+    f.translate(0, ry, hl + 0.02);
+    const b = f.clone();
+    b.translate(0, 0, -bl);
+    const l = new THREE.CylinderGeometry(0.011, 0.011, bl, 5);
+    l.rotateX(Math.PI * 0.5);
+    l.translate(-hw, ry, 0.02);
+    const r = l.clone();
+    r.translate(bw, 0, 0);
+    metalParts.push(f, b, l, r);
+  }
+  // Vertical basket ribs
+  for (const rx of [-0.28, -0.14, 0, 0.14, 0.28]) {
+    for (const rz of [-0.36, 0.38]) {
+      const rib = new THREE.CylinderGeometry(0.009, 0.009, 0.42, 4);
+      rib.translate(rx, 0.64, rz);
+      metalParts.push(rib);
+    }
+  }
+  for (const rz of [-0.2, 0, 0.2]) {
+    for (const rx of [-0.28, 0.28]) {
+      const rib = new THREE.CylinderGeometry(0.009, 0.009, 0.42, 4);
+      rib.translate(rx, 0.64, rz);
+      metalParts.push(rib);
+    }
+  }
+
+  const cartFrame = new THREE.Mesh(mergeParts(metalParts, false), mats.lampMetal);
+  cartFrame.castShadow = true;
+  group.add(cartFrame);
+
+  // Rear red push handle
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.58, 8),
+    mats.hydrantRed
+  );
+  handle.rotation.z = Math.PI * 0.5;
+  handle.position.set(0, 0.94, -0.45);
+  group.add(handle);
+
+  // 4 caster wheels
   const wheelGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 8);
   wheelGeo.rotateZ(Math.PI * 0.5);
   for (const [wx, wz] of [
-    [-0.26, -0.36],
-    [0.26, -0.36],
-    [-0.26, 0.36],
-    [0.26, 0.36],
+    [-0.25, -0.36],
+    [0.25, -0.36],
+    [-0.23, 0.36],
+    [0.23, 0.36],
   ]) {
     const w = new THREE.Mesh(wheelGeo, mats.tireRubber);
     w.position.set(wx, 0.06, wz);
     group.add(w);
-  }
-
-  // Basket walls (lightweight wire look via dark metallic slats)
-  const basket = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.44, 0.82), mats.lampMetal);
-  basket.position.set(0, 0.64, 0.02);
-  basket.castShadow = true;
-  group.add(basket);
-
-  // Rear push bar
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.66, 8), mats.hydrantRed);
-  handle.rotation.z = Math.PI * 0.5;
-  handle.position.set(0, 0.96, -0.45);
-  group.add(handle);
-
-  const postGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.78, 6);
-  for (const px of [-0.28, 0.28]) {
-    const p = new THREE.Mesh(postGeo, mats.lampMetal);
-    p.position.set(px, 0.56, -0.42);
-    group.add(p);
   }
 
   return group;
@@ -1229,8 +1543,8 @@ export function buildShoppingCartModel(mats: MaterialPalette): THREE.Group {
 
 export function buildHazardConeClusterModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-  const baseGeo = new THREE.BoxGeometry(0.34, 0.04, 0.34);
-  const coneGeo = new THREE.ConeGeometry(0.14, 0.52, 8);
+  const baseGeo = createBeveledBoxGeometry(0.34, 0.045, 0.34, 0.01, 0.04);
+  const coneGeo = new THREE.ConeGeometry(0.14, 0.52, 10);
 
   const offsets = [
     { x: -0.35, z: -0.1, tilt: 0 },
@@ -1239,11 +1553,11 @@ export function buildHazardConeClusterModel(mats: MaterialPalette): THREE.Group 
   for (const o of offsets) {
     const sub = new THREE.Group();
     const base = new THREE.Mesh(baseGeo, mats.tireRubber);
-    base.position.y = 0.02;
+    base.position.y = 0.022;
     const cone = new THREE.Mesh(coneGeo, mats.safetyOrange);
     cone.position.y = 0.28;
     cone.castShadow = true;
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.1, 8), mats.lampBulbDead);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.1, 10), mats.lampBulbDead);
     band.position.y = 0.34;
     sub.add(base, cone, band);
     sub.position.set(o.x, 0, o.z);
@@ -1255,71 +1569,121 @@ export function buildHazardConeClusterModel(mats: MaterialPalette): THREE.Group 
 
 export function buildQuarantineSignModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
+  const postParts: THREE.BufferGeometry[] = [];
+  for (const px of [-0.78, 0.78]) {
+    const post = new THREE.CylinderGeometry(0.04, 0.045, 1.9, 6);
+    post.translate(px, 0.95, 0);
+    const foot = createBeveledBoxGeometry(0.24, 0.06, 0.38, 0.01, 0.02);
+    foot.translate(px, 0.03, 0);
+    postParts.push(post, foot);
+  }
+  group.add(new THREE.Mesh(mergeParts(postParts, false), mats.darkTrim));
 
-  const postL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.9, 0.08), mats.darkTrim);
-  postL.position.set(-0.78, 0.95, 0);
-  const postR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.9, 0.08), mats.darkTrim);
-  postR.position.set(0.78, 0.95, 0);
-  const board = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.64, 0.07), mats.signQuarantine);
+  const board = new THREE.Mesh(
+    createBeveledBoxGeometry(1.75, 0.64, 0.07, 0.015, 0.02),
+    mats.signQuarantine
+  );
   board.position.set(0, 1.56, 0);
   board.castShadow = true;
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.16, 0.06), mats.hazardStripe);
+  const bar = new THREE.Mesh(
+    createBeveledBoxGeometry(1.78, 0.16, 0.06, 0.01, 0.015),
+    mats.hazardStripe
+  );
   bar.position.set(0, 0.9, 0);
 
-  group.add(postL, postR, board, bar);
+  group.add(board, bar);
   return group;
 }
 
+/**
+ * Pillowed bulging cloth sandbags stacked in offset courses.
+ */
 export function buildSandbagBarricadeModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
-  const bagGeo = new THREE.BoxGeometry(0.58, 0.18, 0.34);
+  const bagGeo = createSandbagGeometry(0.58, 0.18, 0.34);
+  const bagParts: THREE.BufferGeometry[] = [];
 
   for (let row = 0; row < 3; row++) {
     const count = 4 - (row % 2);
     for (let i = 0; i < count; i++) {
-      const bx = (i - (count - 1) * 0.5) * 0.56;
-      const bag = new THREE.Mesh(bagGeo, mats.sandbag);
-      bag.position.set(bx, 0.09 + row * 0.17, (row % 2) * 0.04);
-      bag.rotation.y = (i % 2 === 0 ? 1 : -1) * 0.04;
-      bag.castShadow = true;
-      bag.receiveShadow = true;
-      group.add(bag);
+      const bx = (i - (count - 1) * 0.5) * 0.54;
+      const g = bagGeo.clone();
+      g.rotateY((i % 2 === 0 ? 1 : -1) * 0.05);
+      g.translate(bx, row * 0.15, (row % 2) * 0.035);
+      bagParts.push(g);
     }
   }
+  bagGeo.dispose();
+
+  const mesh = new THREE.Mesh(mergeParts(bagParts, true, 1.0), mats.sandbag);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
   return group;
 }
 
+/**
+ * Draped catenary survivor tarp shelter + rolled sleeping bag + boulder stone fire ring + charred logs.
+ */
 export function buildSurvivorCampModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
-  // Rolled bedroll
-  const mat = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.09, 1.75), mats.tarpBlue);
-  mat.position.set(-0.35, 0.045, 0);
-  mat.castShadow = true;
-  group.add(mat);
+  // Rolled cylindrical sleeping pad & plump pillow
+  const bagRoll = new THREE.Mesh(
+    createBeveledBoxGeometry(0.84, 0.1, 1.72, 0.035, 0.08),
+    mats.tarpBlue
+  );
+  bagRoll.position.set(-0.35, 0.05, 0);
+  bagRoll.castShadow = true;
+  const pillow = new THREE.Mesh(
+    createBeveledBoxGeometry(0.52, 0.12, 0.32, 0.04, 0.08),
+    mats.concrete
+  );
+  pillow.position.set(-0.35, 0.12, -0.62);
+  group.add(bagRoll, pillow);
 
-  const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.34), mats.concrete);
-  pillow.position.set(-0.35, 0.11, -0.62);
-  group.add(pillow);
+  // Wooden ridge poles + draped catenary tarp canopy
+  const poleParts: THREE.BufferGeometry[] = [];
+  for (const pz of [-0.78, 0.78]) {
+    const upright = new THREE.CylinderGeometry(0.03, 0.034, 1.28, 6);
+    upright.translate(-0.35, 0.64, pz);
+    poleParts.push(upright);
+  }
+  const ridgePole = new THREE.CylinderGeometry(0.025, 0.025, 1.75, 6);
+  ridgePole.rotateX(Math.PI * 0.5);
+  ridgePole.translate(-0.35, 1.24, 0);
+  poleParts.push(ridgePole);
+  group.add(new THREE.Mesh(mergeParts(poleParts, false), mats.wood));
 
-  // Small tarp overhang supported by two poles
-  const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.35, 6);
-  const p1 = new THREE.Mesh(poleGeo, mats.wood);
-  p1.position.set(-0.9, 0.675, -0.75);
-  const p2 = new THREE.Mesh(poleGeo, mats.wood);
-  p2.position.set(-0.9, 0.675, 0.75);
-  const tarpRoof = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.03, 1.9), mats.tarpBlue);
-  tarpRoof.position.set(-0.35, 1.22, 0);
-  tarpRoof.rotation.z = -0.32;
-  tarpRoof.castShadow = true;
-  group.add(p1, p2, tarpRoof);
+  const tarp = new THREE.Mesh(createDrapedTarpGeometry(1.75, 1.9, 1.22), mats.tarpBlue);
+  tarp.position.set(-0.35, 0, 0);
+  tarp.castShadow = true;
+  group.add(tarp);
 
-  // Fire ring / ash basin beside bedroll
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.44, 0.14, 8), mats.darkTrim);
-  ring.position.set(0.68, 0.07, 0.25);
-  const ash = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.05, 8), mats.rustedMetal);
-  ash.position.set(0.68, 0.12, 0.25);
-  group.add(ring, ash);
+  // Stone-ring campfire + crossed charred firewood logs
+  const stoneParts: THREE.BufferGeometry[] = [];
+  const stones = 8;
+  for (let i = 0; i < stones; i++) {
+    const a = (i / stones) * Math.PI * 2;
+    const stone = createBoulderGeometry(0.11, 200 + i * 17, 0);
+    stone.translate(0.68 + Math.cos(a) * 0.34, 0.0, 0.25 + Math.sin(a) * 0.34);
+    stoneParts.push(stone);
+  }
+  group.add(new THREE.Mesh(mergeParts(stoneParts, true, 1.0), mats.mossRock));
+
+  const logParts: THREE.BufferGeometry[] = [];
+  for (const rotY of [-0.45, 0.55, 1.4]) {
+    const log = new THREE.CylinderGeometry(0.04, 0.048, 0.48, 6);
+    log.rotateZ(Math.PI * 0.44);
+    log.rotateY(rotY);
+    log.translate(0.68, 0.08, 0.25);
+    logParts.push(log);
+  }
+  group.add(new THREE.Mesh(mergeParts(logParts, true, 1.0), mats.barkWood));
+
+  const ash = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 0.04, 8), mats.rustedMetal);
+  ash.position.set(0.68, 0.03, 0.25);
+  group.add(ash);
 
   return group;
 }
@@ -1330,16 +1694,43 @@ export function buildGroundDecalModel(
 ): THREE.Group {
   const group = new THREE.Group();
   const mat = kind === 'blood_scuffle' ? mats.bloodStain : mats.oilSlick;
-  const main = new THREE.Mesh(new THREE.CircleGeometry(0.95, 10), mat);
-  main.rotation.x = -Math.PI * 0.5;
+  const seed = kind === 'blood_scuffle' ? 401 : 509;
+  const main = new THREE.Mesh(createOrganicPatchGeometry(1.15, 0.85, seed, 12), mat);
   main.position.y = 0.015;
-  main.scale.set(1.3, 0.85, 1);
   group.add(main);
 
-  const sub = new THREE.Mesh(new THREE.CircleGeometry(0.45, 8), mat);
-  sub.rotation.x = -Math.PI * 0.5;
-  sub.position.set(0.7, 0.015, 0.35);
+  const sub = new THREE.Mesh(createOrganicPatchGeometry(0.5, 0.42, seed + 19, 9), mat);
+  sub.position.set(0.75, 0.015, 0.35);
   group.add(sub);
 
+  return group;
+}
+
+/**
+ * Stratified jagged rock boulder cluster for perimeter hills, roadside outcrops & parks.
+ */
+export function buildBoulderClusterModel(
+  seed: number,
+  scale: number,
+  mats: MaterialPalette
+): THREE.Group {
+  const group = new THREE.Group();
+  const parts: THREE.BufferGeometry[] = [];
+
+  const main = createBoulderGeometry(0.85 * scale, seed, 1);
+  parts.push(main);
+
+  const subA = createBoulderGeometry(0.5 * scale, seed + 29, 1);
+  subA.translate(0.68 * scale, -0.02, 0.36 * scale);
+  parts.push(subA);
+
+  const subB = createBoulderGeometry(0.42 * scale, seed + 53, 1);
+  subB.translate(-0.56 * scale, -0.02, -0.38 * scale);
+  parts.push(subB);
+
+  const rockMesh = new THREE.Mesh(mergeParts(parts, true, 0.55), mats.mossRock);
+  rockMesh.castShadow = true;
+  rockMesh.receiveShadow = true;
+  group.add(rockMesh);
   return group;
 }

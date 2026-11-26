@@ -87,6 +87,7 @@ import { StaffManager } from './StaffManager';
 import { BuiltWorld, buildNeighborhoodWorld } from './WorldBuilder';
 import { WorldEventManager } from './WorldEventManager';
 import { ZombieManager } from './ZombieManager';
+import { MeleeHitResult } from '../game/zombieAI';
 
 export interface Engine3DCallbacks {
   onHudChange: (hud: HudSnapshot) => void;
@@ -1798,8 +1799,8 @@ export class Game3DEngine {
       return;
     }
 
-    if (!attackRes.triggered || !attackRes.result) return;
-    const { result, killedSurgeId, staminaSpent, recoilKick, weaponId } = attackRes;
+    if (!attackRes.triggered) return;
+    const { result, killedSurgeId, staminaSpent, recoilKick, weaponId, pendingMelee } = attackRes;
 
     if (staminaSpent > 0) {
       this.controller.spendStamina(staminaSpent);
@@ -1826,6 +1827,17 @@ export class Game3DEngine {
       weaponId === 'service_pistol' ? 98 : weaponId === 'scrap_blade' ? 54 : 74
     );
 
+    if (pendingMelee || !result) {
+      this.emitHud(true);
+      return;
+    }
+
+    this.applyAttackHitFeedback(result, killedSurgeId);
+    this.emitHud(true);
+  }
+
+  private applyAttackHitFeedback(result: MeleeHitResult, killedSurgeId?: string): void {
+    const t = getTranslations();
     if (result.hit) {
       const hitAgent = result.targetId
         ? this.zombies.getAgents().find((z) => z.id === result.targetId)
@@ -1860,7 +1872,6 @@ export class Game3DEngine {
         1.7
       );
     }
-    this.emitHud(true);
   }
 
   public setTouchMove(x: number, y: number, sprint: boolean): void {
@@ -2187,8 +2198,21 @@ export class Game3DEngine {
         isFoggy: weatherSnap.weather === 'fog',
         playerSafe: this.insideShop,
         day: timeSnap.day,
-      }
+      },
+      this.controller.getAnimContext(),
+      this.controller.yaw
     );
+
+    if (zombieTick.deferredMeleeHit) {
+      if (zombieTick.deferredMeleeHit.recoilKick > 0) {
+        this.controller.addRecoilKick(zombieTick.deferredMeleeHit.recoilKick);
+      }
+      this.applyAttackHitFeedback(
+        zombieTick.deferredMeleeHit.result,
+        zombieTick.deferredMeleeHit.killedSurgeId
+      );
+      this.emitHud(true);
+    }
 
     if (zombieTick.reloadCompleted) {
       const t = getTranslations();
@@ -2218,7 +2242,9 @@ export class Game3DEngine {
         this.damagePulseId += 1;
         this.recentCombatTimer = 3.5;
         this.flashlightFlickerTimer = Math.max(this.flashlightFlickerTimer, 0.6);
-        this.controller.triggerDamageFlinch(Math.min(1.2, dealt / 14));
+        const flinchStrength = Math.min(1.2, dealt / 14);
+        this.controller.triggerDamageFlinch(flinchStrength);
+        this.zombies.triggerPlayerDamageFlinch(flinchStrength);
         this.interactions.pushToast(
           formatTpl(t.gameMessages.toasts.attackedByInfected, { dmg: Math.round(dealt) }),
           'warning',

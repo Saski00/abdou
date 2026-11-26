@@ -10,6 +10,14 @@ import {
 } from './interiorBuildings';
 import { MaterialPalette } from './proceduralModels';
 import { ResourceMaterialPalette, buildResourceModel } from './resourceModels';
+import {
+  applyTriplanarUVs,
+  createBeveledBoxGeometry,
+  createGableEndWallGeometry,
+  createGabledRoofGeometry,
+  createTubePathGeometry,
+  mergeParts,
+} from './proceduralGeometryKit';
 
 /**
  * Multi-part procedural cash register & trade ledger sitting on The Last Shop counter.
@@ -21,60 +29,81 @@ export function buildShopRegisterModel(
   const group = new THREE.Group();
 
   const drawerBase = new THREE.Mesh(
-    new THREE.BoxGeometry(0.56, 0.14, 0.44),
+    createBeveledBoxGeometry(0.56, 0.14, 0.44, 0.02, 0.02),
     mats.darkTrim
   );
   drawerBase.position.y = 0.07;
   drawerBase.castShadow = true;
   drawerBase.receiveShadow = true;
 
+  const pullPts = [
+    new THREE.Vector3(-0.07, 0.07, 0.22),
+    new THREE.Vector3(-0.07, 0.07, 0.25),
+    new THREE.Vector3(0.07, 0.07, 0.25),
+    new THREE.Vector3(0.07, 0.07, 0.22),
+  ];
   const drawerPull = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, 0.03, 0.04),
+    createTubePathGeometry(pullPts, 0.012, 6, 5),
     intMats.brassHandle
   );
-  drawerPull.position.set(0, 0.07, 0.23);
 
-  const upperBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.48, 0.2, 0.32),
-    mats.lampMetal
-  );
-  upperBody.position.set(0, 0.24, -0.04);
+  // Sloped/arched vintage register housing
+  const upperShape = new THREE.Shape();
+  upperShape.moveTo(-0.18, 0);
+  upperShape.lineTo(0.16, 0);
+  upperShape.lineTo(0.16, 0.11);
+  upperShape.lineTo(0.02, 0.22);
+  upperShape.lineTo(-0.16, 0.24);
+  upperShape.closePath();
+  const upperGeo = new THREE.ExtrudeGeometry(upperShape, {
+    depth: 0.44,
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.02,
+    bevelSegments: 2,
+  });
+  upperGeo.translate(0, 0, -0.22);
+  upperGeo.rotateY(-Math.PI * 0.5);
+  applyTriplanarUVs(upperGeo, 0.8);
+
+  const upperBody = new THREE.Mesh(upperGeo, mats.lampMetal);
+  upperBody.position.set(0, 0.14, -0.02);
   upperBody.castShadow = true;
 
   const keypad = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36, 0.04, 0.2),
+    createBeveledBoxGeometry(0.36, 0.04, 0.2, 0.01, 0.015),
     intMats.porcelain
   );
   keypad.position.set(-0.02, 0.21, 0.12);
   keypad.rotation.x = 0.42;
 
   const displayPost = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.14, 0.08),
+    new THREE.CylinderGeometry(0.032, 0.04, 0.15, 8),
     mats.darkTrim
   );
-  displayPost.position.set(0.12, 0.39, -0.08);
+  displayPost.position.set(0.12, 0.4, -0.08);
 
   const displayHead = new THREE.Mesh(
-    new THREE.BoxGeometry(0.24, 0.1, 0.07),
+    createBeveledBoxGeometry(0.24, 0.11, 0.075, 0.015, 0.02),
     mats.darkTrim
   );
-  displayHead.position.set(0.12, 0.47, -0.08);
+  displayHead.position.set(0.12, 0.48, -0.08);
 
   const readoutScreen = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.06, 0.015),
+    createBeveledBoxGeometry(0.2, 0.06, 0.015, 0.004, 0.005),
     mats.lampBulbLit
   );
-  readoutScreen.position.set(0.12, 0.47, -0.04);
+  readoutScreen.position.set(0.12, 0.48, -0.04);
 
   const ledgerCover = new THREE.Mesh(
-    new THREE.BoxGeometry(0.32, 0.025, 0.24),
+    createBeveledBoxGeometry(0.32, 0.025, 0.24, 0.006, 0.015),
     intMats.rugWeathered
   );
   ledgerCover.position.set(-0.5, 0.013, 0.04);
   ledgerCover.rotation.y = 0.16;
 
   const ledgerPages = new THREE.Mesh(
-    new THREE.BoxGeometry(0.29, 0.02, 0.21),
+    createBeveledBoxGeometry(0.29, 0.02, 0.21, 0.004, 0.008),
     intMats.porcelain
   );
   ledgerPages.position.set(-0.5, 0.028, 0.04);
@@ -95,7 +124,7 @@ export function buildShopRegisterModel(
 }
 
 /**
- * Multi-part reinforced safehouse storage locker placed in The Last Shop storeroom.
+ * Multi-part reinforced safehouse storage locker with arched trunk lid & brass padlock loop.
  */
 export function buildShopStorageChestModel(
   mats: MaterialPalette,
@@ -104,33 +133,51 @@ export function buildShopStorageChestModel(
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.96, 0.56, 0.56),
+    createBeveledBoxGeometry(0.96, 0.56, 0.56, 0.025, 0.03),
     intMats.cabinetWood
   );
   body.position.y = 0.28;
   body.castShadow = true;
   body.receiveShadow = true;
 
-  const lid = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 0.1, 0.6),
-    mats.darkTrim
-  );
-  lid.position.y = 0.61;
+  // Arched domed chest lid via ExtrudeGeometry
+  const archShape = new THREE.Shape();
+  archShape.moveTo(-0.3, 0);
+  archShape.lineTo(0.3, 0);
+  archShape.quadraticCurveTo(0.3, 0.18, 0, 0.2);
+  archShape.quadraticCurveTo(-0.3, 0.18, -0.3, 0);
+  archShape.closePath();
+  const lidGeo = new THREE.ExtrudeGeometry(archShape, {
+    depth: 0.98,
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.02,
+    bevelSegments: 2,
+    curveSegments: 8,
+  });
+  lidGeo.translate(0, 0, -0.49);
+  lidGeo.rotateY(Math.PI * 0.5);
+  applyTriplanarUVs(lidGeo, 0.6);
+
+  const lid = new THREE.Mesh(lidGeo, mats.darkTrim);
+  lid.position.y = 0.56;
   lid.castShadow = true;
 
-  const strapGeo = new THREE.BoxGeometry(0.08, 0.62, 0.61);
-  const leftStrap = new THREE.Mesh(strapGeo, mats.lampMetal);
-  leftStrap.position.set(-0.34, 0.32, 0);
-  const rightStrap = new THREE.Mesh(strapGeo, mats.lampMetal);
-  rightStrap.position.set(0.34, 0.32, 0);
+  const strapParts: THREE.BufferGeometry[] = [];
+  for (const sx of [-0.34, 0.34]) {
+    const band = createBeveledBoxGeometry(0.08, 0.64, 0.61, 0.01, 0.015);
+    band.translate(sx, 0.34, 0);
+    strapParts.push(band);
+  }
+  const straps = new THREE.Mesh(mergeParts(strapParts, false), mats.lampMetal);
 
   const clasp = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 0.12, 0.05),
+    createBeveledBoxGeometry(0.14, 0.12, 0.05, 0.012, 0.02),
     intMats.brassHandle
   );
   clasp.position.set(0, 0.53, 0.3);
 
-  group.add(body, lid, leftStrap, rightStrap, clasp);
+  group.add(body, lid, straps, clasp);
   return group;
 }
 
@@ -289,7 +336,7 @@ function buildStorageRackModel(
 ): THREE.Group {
   const group = new THREE.Group();
   const h = 1.85;
-  const legGeo = new THREE.BoxGeometry(0.06, h, 0.06);
+  const frameParts: THREE.BufferGeometry[] = [];
 
   for (const [lx, lz] of [
     [-w * 0.44, -d * 0.44],
@@ -297,38 +344,43 @@ function buildStorageRackModel(
     [-w * 0.44, d * 0.44],
     [w * 0.44, d * 0.44],
   ]) {
-    const leg = new THREE.Mesh(legGeo, mats.lampMetal);
-    leg.position.set(lx, h * 0.5, lz);
-    leg.castShadow = true;
-    group.add(leg);
+    const leg = new THREE.CylinderGeometry(0.026, 0.03, h, 6);
+    leg.translate(lx, h * 0.5, lz);
+    frameParts.push(leg);
   }
+  const frameMesh = new THREE.Mesh(mergeParts(frameParts, false), mats.lampMetal);
+  frameMesh.castShadow = true;
+  group.add(frameMesh);
 
   const shelfMat = tier >= 3 ? mats.darkTrim : mats.wood;
   for (const sy of [0.22, 0.84, 1.48]) {
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), shelfMat);
+    const plank = new THREE.Mesh(
+      createBeveledBoxGeometry(w, 0.05, d, 0.012, 0.015),
+      shelfMat
+    );
     plank.position.y = sy;
     plank.receiveShadow = true;
     group.add(plank);
   }
 
-  // Visual storage crates/boxes stacked on the rack
+  // Beveled storage crates & cylindrical supply drum stacked on rack
   const boxA = new THREE.Mesh(
-    new THREE.BoxGeometry(w * 0.72, 0.34, d * 0.36),
+    createBeveledBoxGeometry(w * 0.72, 0.34, d * 0.36, 0.02, 0.02),
     tier >= 3 ? intMats.cabinetWood : mats.wood
   );
   boxA.position.set(0, 0.41, -d * 0.2);
-  const boxB = new THREE.Mesh(
-    new THREE.BoxGeometry(w * 0.68, 0.32, d * 0.34),
+  const drum = new THREE.Mesh(
+    new THREE.CylinderGeometry(Math.min(w, d) * 0.22, Math.min(w, d) * 0.22, 0.34, 10),
     mats.darkTrim
   );
-  boxB.position.set(0, 1.03, d * 0.16);
+  drum.position.set(0, 1.03, d * 0.16);
   const boxC = new THREE.Mesh(
-    new THREE.BoxGeometry(w * 0.58, 0.24, d * 0.32),
+    createBeveledBoxGeometry(w * 0.58, 0.24, d * 0.32, 0.02, 0.02),
     intMats.porcelain
   );
   boxC.position.set(0, 1.62, -d * 0.08);
 
-  group.add(boxA, boxB, boxC);
+  group.add(boxA, drum, boxC);
   return group;
 }
 
@@ -439,25 +491,25 @@ export function buildShopProgressionGroup(
     floor.position.set(0, 0, annexCenterZ);
     floor.receiveShadow = true;
 
-    // Ceiling & roof parapet
+    // Ceiling & pitched gable roof matching main Last Shop architectural silhouette
     const ceiling = new THREE.Mesh(
       new THREE.BoxGeometry(annexW - 0.1, 0.14, annexD),
       intMats.ceilingSlab
     );
     ceiling.position.set(0, ceilingH + 0.07, annexCenterZ);
 
-    const parapet = new THREE.Mesh(
-      new THREE.BoxGeometry(annexW + 0.28, 0.42, annexD + 0.24),
-      mats.darkTrim
-    );
-    parapet.position.set(0, ceilingH + 0.32, annexCenterZ - 0.06);
-    parapet.castShadow = true;
-
-    const roofTar = new THREE.Mesh(
-      new THREE.BoxGeometry(annexW - 0.4, 0.12, annexD - 0.4),
+    const annexRoof = new THREE.Mesh(
+      createGabledRoofGeometry(annexW, annexD, 1.25, 0.38, 0.16, false),
       mats.roofTar
     );
-    roofTar.position.set(0, ceilingH + 0.52, annexCenterZ);
+    annexRoof.position.set(0, ceilingH + 0.15, annexCenterZ);
+    annexRoof.castShadow = true;
+
+    const annexGable = new THREE.Mesh(
+      createGableEndWallGeometry(annexW - 0.12, 1.18, 0.24),
+      mats.brick
+    );
+    annexGable.position.set(0, ceilingH + 0.14, -7.68);
 
     // West & East Annex brick walls
     const westWall = new THREE.Mesh(
@@ -476,7 +528,7 @@ export function buildShopProgressionGroup(
     eastWall.castShadow = true;
     eastWall.receiveShadow = true;
 
-    // North wall with central glass window
+    // North wall with framed glass window
     const northLeft = new THREE.Mesh(
       new THREE.BoxGeometry(3.0, ceilingH, 0.24),
       mats.brick
@@ -503,15 +555,21 @@ export function buildShopProgressionGroup(
     );
     northHeader.position.set(0, 2.9, -7.68);
 
+    const northWinFrame = new THREE.Mesh(
+      createBeveledBoxGeometry(2.86, 0.1, 0.34, 0.02, 0.02),
+      mats.darkTrim
+    );
+    northWinFrame.position.set(0, 1.0, -7.68);
+
     const northGlass = new THREE.Mesh(
       new THREE.BoxGeometry(2.74, 1.4, 0.04),
       intMats.windowGlass
     );
     northGlass.position.set(0, 1.7, -7.68);
 
-    // Door jamb around the archway
+    // Beveled door jamb around the archway
     const archHeader = new THREE.Mesh(
-      new THREE.BoxGeometry(1.62, 0.1, 0.3),
+      createBeveledBoxGeometry(1.66, 0.12, 0.32, 0.02, 0.02),
       mats.darkTrim
     );
     archHeader.position.set(-2.15, 2.38, -3.88);
@@ -527,14 +585,15 @@ export function buildShopProgressionGroup(
     g.add(
       floor,
       ceiling,
-      parapet,
-      roofTar,
+      annexRoof,
+      annexGable,
       westWall,
       eastWall,
       northLeft,
       northRight,
       northSill,
       northHeader,
+      northWinFrame,
       northGlass,
       archHeader,
       annexShelf,
@@ -821,7 +880,7 @@ export function buildShopProgressionGroup(
   const decoFridgeGroup = assets.instantiateAsset('deco.fridge', () => {
     const g = new THREE.Group();
     const cabinet = new THREE.Mesh(
-      new THREE.BoxGeometry(0.86, 1.92, 0.68),
+      createBeveledBoxGeometry(0.86, 1.92, 0.68, 0.03, 0.06),
       intMats.porcelain
     );
     cabinet.position.y = 0.96;
@@ -829,13 +888,13 @@ export function buildShopProgressionGroup(
     cabinet.receiveShadow = true;
 
     const header = new THREE.Mesh(
-      new THREE.BoxGeometry(0.84, 0.24, 0.69),
+      createBeveledBoxGeometry(0.84, 0.24, 0.69, 0.02, 0.04),
       mats.darkTrim
     );
     header.position.y = 1.8;
 
     const glassFront = new THREE.Mesh(
-      new THREE.BoxGeometry(0.72, 1.42, 0.04),
+      createBeveledBoxGeometry(0.72, 1.42, 0.04, 0.008, 0.02),
       intMats.windowGlass
     );
     glassFront.position.set(0, 0.92, 0.34);
@@ -846,11 +905,13 @@ export function buildShopProgressionGroup(
     );
     interiorGlow.position.set(0, 0.92, 0.28);
 
-    const handle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.44, 0.06),
-      mats.lampMetal
-    );
-    handle.position.set(0.32, 1.0, 0.37);
+    const handlePts = [
+      new THREE.Vector3(0.32, 1.24, 0.35),
+      new THREE.Vector3(0.32, 1.24, 0.4),
+      new THREE.Vector3(0.32, 0.78, 0.4),
+      new THREE.Vector3(0.32, 0.78, 0.35),
+    ];
+    const handle = new THREE.Mesh(createTubePathGeometry(handlePts, 0.018, 6, 5), mats.lampMetal);
 
     g.add(cabinet, header, glassFront, interiorGlow, handle);
     return g;

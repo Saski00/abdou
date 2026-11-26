@@ -23,6 +23,22 @@ const FRICTION = 11.0;
 const GRAVITY = 21.0;
 const JUMP_VELOCITY = 6.6;
 
+export interface PlayerAnimContext {
+  actualSpeed: number;
+  normalizedSpeed: number;
+  isMoving: boolean;
+  isSprinting: boolean;
+  isGrounded: boolean;
+  isExhausted: boolean;
+  isResting: boolean;
+  verticalVelocity: number;
+  landImpulse: number;
+  yawRate: number;
+  strafeFactor: number;
+  walkCycle: number;
+  breathPhase: number;
+}
+
 export class FirstPersonController {
   public position = new THREE.Vector3(0, 0, 0);
   public velocity = new THREE.Vector3(0, 0, 0);
@@ -43,6 +59,15 @@ export class FirstPersonController {
   private walkCycle = 0;
   private stepAccum = 0;
   private bobOffset = 0;
+  private bobSwayX = 0;
+  private breathPhase = 0;
+  private landImpulse = 0;
+  private landBobOffset = 0;
+  private strafeRoll = 0;
+  private yawRate = 0;
+  private actualMoveSpeed = 0;
+  private strafeFactor = 0;
+  private isRestingPose = false;
   private sensitivity = 1.0;
   private prefersReducedMotion = false;
 
@@ -62,6 +87,21 @@ export class FirstPersonController {
   private lowHpPhase = 0;
 
   private readonly _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  private readonly _animContext: PlayerAnimContext = {
+    actualSpeed: 0,
+    normalizedSpeed: 0,
+    isMoving: false,
+    isSprinting: false,
+    isGrounded: true,
+    isExhausted: false,
+    isResting: false,
+    verticalVelocity: 0,
+    landImpulse: 0,
+    yawRate: 0,
+    strafeFactor: 0,
+    walkCycle: 0,
+    breathPhase: 0,
+  };
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -97,6 +137,15 @@ export class FirstPersonController {
     this.walkCycle = 0;
     this.stepAccum = 0;
     this.bobOffset = 0;
+    this.bobSwayX = 0;
+    this.breathPhase = 0;
+    this.landImpulse = 0;
+    this.landBobOffset = 0;
+    this.strafeRoll = 0;
+    this.yawRate = 0;
+    this.actualMoveSpeed = 0;
+    this.strafeFactor = 0;
+    this.isRestingPose = false;
     this.heldKeys.clear();
     this.jumpRequested = false;
     this.touchMoveX = 0;
@@ -108,6 +157,23 @@ export class FirstPersonController {
     this.flinchPitch = 0;
     this.lowHpPhase = 0;
     this.syncCamera(0.016, true);
+  }
+
+  public getAnimContext(): PlayerAnimContext {
+    this._animContext.actualSpeed = this.actualMoveSpeed;
+    this._animContext.normalizedSpeed = clamp(this.actualMoveSpeed / SPRINT_SPEED, 0, 1);
+    this._animContext.isMoving = this.actualMoveSpeed > 0.35;
+    this._animContext.isSprinting = this.isSprinting && this.actualMoveSpeed > WALK_SPEED * 0.85;
+    this._animContext.isGrounded = this.isGrounded;
+    this._animContext.isExhausted = this.isExhausted;
+    this._animContext.isResting = this.isRestingPose;
+    this._animContext.verticalVelocity = this.velocity.y;
+    this._animContext.landImpulse = this.landImpulse;
+    this._animContext.yawRate = this.yawRate;
+    this._animContext.strafeFactor = this.strafeFactor;
+    this._animContext.walkCycle = this.walkCycle;
+    this._animContext.breathPhase = this.breathPhase;
+    return this._animContext;
   }
 
   public triggerDamageFlinch(strength = 1.0): void {
@@ -306,9 +372,14 @@ export class FirstPersonController {
     colliders: WorldColliders,
     options: { canSprint?: boolean; isResting?: boolean } = {}
   ): void {
-    // 1. Smooth camera look interpolation
+    const safeDt = Math.max(0.0001, dt);
+    const prevYaw = this.yaw;
+
+    // 1. Smooth camera look interpolation & angular velocity tracking
     this.yaw = THREE.MathUtils.damp(this.yaw, this.targetYaw, 26, dt);
     this.pitch = THREE.MathUtils.damp(this.pitch, this.targetPitch, 26, dt);
+    const rawYawRate = clamp((this.yaw - prevYaw) / safeDt, -6.5, 6.5);
+    this.yawRate = THREE.MathUtils.damp(this.yawRate, rawYawRate, 14, dt);
 
     // 2. Movement input in horizontal camera plane (WASD/Arrows + analog touch joystick)
     let forwardInput = this.touchMoveY;
@@ -380,6 +451,9 @@ export class FirstPersonController {
       }
     }
 
+    const prevX = this.position.x;
+    const prevZ = this.position.z;
+
     this.velocity.y -= GRAVITY * dt;
     this.position.x += this.velocity.x * dt;
     this.position.z += this.velocity.z * dt;
@@ -388,11 +462,28 @@ export class FirstPersonController {
     // 4. Horizontal XZ Collision Resolution (2 passes for crisp corner sliding)
     this.resolveHorizontalCollisions(colliders);
 
+    // Measure actual ground displacement so blocked movement never slides or triggers fake bob/footsteps
+    const actualMoved = Math.hypot(this.position.x - prevX, this.position.z - prevZ);
+    const rawActualSpeed = actualMoved / safeDt;
+    this.actualMoveSpeed = THREE.MathUtils.damp(this.actualMoveSpeed, rawActualSpeed, 18, dt);
+    if (this.actualMoveSpeed < 0.04 && !hasInput) {
+      this.actualMoveSpeed = 0;
+    }
+
+    // Compute lateral velocity projection onto camera right vector for subtle strafe banking
+    const rightVel = this.velocity.x * cosY - this.velocity.z * sinY;
+    const targetStrafe = clamp(rightVel / WALK_SPEED, -1, 1);
+    this.strafeFactor = THREE.MathUtils.damp(this.strafeFactor, targetStrafe, 12, dt);
+
     // 5. Vertical ground & sidewalk curb step-up
     const groundY = this.getGroundHeightAt(this.position.x, this.position.z, colliders);
     if (this.position.y <= groundY) {
-      if (!this.isGrounded && this.velocity.y < -3.5) {
-        this.sound.playLand();
+      if (!this.isGrounded && this.velocity.y < -2.2) {
+        const impactStrength = clamp((-this.velocity.y - 2.0) / 7.5, 0.2, 1.0);
+        this.landImpulse = Math.max(this.landImpulse, impactStrength);
+        if (this.velocity.y < -3.5) {
+          this.sound.playLand();
+        }
       }
       this.position.y = groundY;
       this.velocity.y = 0;
@@ -404,12 +495,22 @@ export class FirstPersonController {
       this.isGrounded = false;
     }
 
-    // 6. Head-bob & Footsteps
-    const actualSpeed = Math.hypot(this.velocity.x, this.velocity.z);
-    if (this.isGrounded && actualSpeed > 0.6) {
-      const cycleRate = wantsSprint ? 13.5 : 9.2;
-      this.walkCycle += cycleRate * dt;
-      this.stepAccum += actualSpeed * dt;
+    // 6. Breathing, Velocity-Coupled Head-bob, Landing Cushion & Footsteps
+    const isRestingIdle = Boolean(options.isResting) && !hasInput;
+    this.isRestingPose = isRestingIdle;
+    const breathRate = isRestingIdle ? 1.5 : this.isExhausted ? 3.8 : 2.1;
+    this.breathPhase += dt * breathRate;
+
+    this.landImpulse = THREE.MathUtils.damp(this.landImpulse, 0, 10, dt);
+    const targetLandDip = this.prefersReducedMotion ? 0 : -this.landImpulse * 0.115;
+    this.landBobOffset = THREE.MathUtils.damp(this.landBobOffset, targetLandDip, 18, dt);
+
+    const speedRatio = clamp(this.actualMoveSpeed / SPRINT_SPEED, 0, 1);
+    if (this.isGrounded && this.actualMoveSpeed > 0.45) {
+      // Stride rate scales proportionally with true ground speed (zero sliding)
+      const radsPerMeter = wantsSprint ? 1.88 : 2.15;
+      this.walkCycle += actualMoved * radsPerMeter;
+      this.stepAccum += actualMoved;
 
       const strideDist = wantsSprint ? 1.85 : 1.55;
       if (this.stepAccum >= strideDist) {
@@ -418,15 +519,25 @@ export class FirstPersonController {
         this.sound.playFootstep(wantsSprint, onRoad);
       }
 
-      const targetBob = this.prefersReducedMotion
-        ? 0
-        : Math.sin(this.walkCycle) * (wantsSprint ? 0.055 : 0.032);
+      const amp = wantsSprint ? 0.056 : 0.032 * clamp(this.actualMoveSpeed / WALK_SPEED, 0.25, 1);
+      const targetBob = this.prefersReducedMotion ? 0 : Math.sin(this.walkCycle) * amp;
+      const targetSwayX = this.prefersReducedMotion ? 0 : Math.cos(this.walkCycle * 0.5) * amp * 0.42;
       this.bobOffset = THREE.MathUtils.damp(this.bobOffset, targetBob, 16, dt);
+      this.bobSwayX = THREE.MathUtils.damp(this.bobSwayX, targetSwayX, 14, dt);
     } else {
-      this.bobOffset = THREE.MathUtils.damp(this.bobOffset, 0, 12, dt);
+      const idleBreathY = this.prefersReducedMotion
+        ? 0
+        : Math.sin(this.breathPhase) * (this.isExhausted ? 0.011 : 0.0045);
+      this.bobOffset = THREE.MathUtils.damp(this.bobOffset, idleBreathY, 10, dt);
+      this.bobSwayX = THREE.MathUtils.damp(this.bobSwayX, 0, 12, dt);
     }
 
-    const targetRestOffset = options.isResting && !hasInput ? -0.42 : 0;
+    const targetStrafeRoll = this.prefersReducedMotion
+      ? 0
+      : -this.strafeFactor * (0.011 + speedRatio * 0.008) - clamp(this.yawRate * 0.0035, -0.014, 0.014);
+    this.strafeRoll = THREE.MathUtils.damp(this.strafeRoll, targetStrafeRoll, 12, dt);
+
+    const targetRestOffset = isRestingIdle ? -0.42 : 0;
     this.restEyeOffset = THREE.MathUtils.damp(this.restEyeOffset, targetRestOffset, 10, dt);
 
     this.flinchRoll = THREE.MathUtils.damp(this.flinchRoll, 0, 14, dt);
@@ -441,19 +552,21 @@ export class FirstPersonController {
   }
 
   private syncCamera(_dt: number, _instant: boolean): void {
+    const cosY = Math.cos(this.yaw);
+    const sinY = Math.sin(this.yaw);
     this.camera.position.set(
-      this.position.x,
-      this.position.y + EYE_HEIGHT + this.bobOffset + this.restEyeOffset,
-      this.position.z
+      this.position.x + cosY * this.bobSwayX,
+      this.position.y + EYE_HEIGHT + this.bobOffset + this.landBobOffset + this.restEyeOffset,
+      this.position.z - sinY * this.bobSwayX
     );
     const lowHpSway =
       !this.prefersReducedMotion && this.health <= 32
         ? Math.sin(this.lowHpPhase) * 0.0065 * (1 - this.health / 36)
         : 0;
     this._euler.set(
-      clamp(this.pitch + this.flinchPitch, -Math.PI * 0.48, Math.PI * 0.48),
+      clamp(this.pitch + this.flinchPitch - this.landImpulse * 0.018, -Math.PI * 0.48, Math.PI * 0.48),
       this.yaw,
-      this.flinchRoll + lowHpSway,
+      this.flinchRoll + this.strafeRoll + lowHpSway,
       'YXZ'
     );
     this.camera.quaternion.setFromEuler(this._euler);

@@ -169,6 +169,8 @@ export interface CustomerAgent {
   yaw: number;
   vx: number;
   vz: number;
+  actualSpeed: number;
+  yawRate: number;
   budget: number;
   walkCycle: number;
   seed: number;
@@ -414,6 +416,8 @@ export function createCustomerAgent(
     yaw,
     vx: 0,
     vz: 0,
+    actualSpeed: 0,
+    yawRate: 0,
     budget,
     walkCycle: seqIndex * 1.4,
     seed,
@@ -586,10 +590,14 @@ function moveCustomerTowardTarget(
   const dx = c.targetX - c.x;
   const dz = c.targetZ - c.z;
   const dist = Math.hypot(dx, dz);
+  const safeDt = Math.max(0.001, dt);
 
   if (dist < 0.08) {
-    c.vx = 0;
-    c.vz = 0;
+    const decel = 1 - Math.exp(-14 * dt);
+    c.vx += (0 - c.vx) * decel;
+    c.vz += (0 - c.vz) * decel;
+    c.actualSpeed = Math.hypot(c.vx, c.vz);
+    c.yawRate += (0 - c.yawRate) * decel;
     return dist;
   }
 
@@ -619,8 +627,11 @@ function moveCustomerTowardTarget(
 
   const prevX = c.x;
   const prevZ = c.z;
-  c.vx = dirX * speed;
-  c.vz = dirZ * speed;
+  const prevYaw = c.yaw;
+  const desiredSpeed = dist < 0.45 ? speed * clamp(dist / 0.45, 0.35, 1) : speed;
+  const accelBlend = 1 - Math.exp(-11 * dt);
+  c.vx += (dirX * desiredSpeed - c.vx) * accelBlend;
+  c.vz += (dirZ * desiredSpeed - c.vz) * accelBlend;
   c.x += c.vx * dt;
   c.z += c.vz * dt;
 
@@ -628,13 +639,18 @@ function moveCustomerTowardTarget(
   c.y = getCustomerSurfaceHeight(c.x, c.z, colliders);
 
   const moved = Math.hypot(c.x - prevX, c.z - prevZ);
+  const instSpeed = moved / safeDt;
+  c.actualSpeed += (instSpeed - c.actualSpeed) * (1 - Math.exp(-12 * dt));
+
   if (moved > 0.002) {
     const moveYaw = Math.atan2(-dirX, -dirZ);
     c.yaw = lerpAngle(c.yaw, moveYaw, clamp(10 * dt, 0, 1));
-    c.walkCycle += speed * 3.4 * dt;
+    c.walkCycle += moved * 3.3;
   } else {
-    c.walkCycle += 1.2 * dt;
+    c.actualSpeed += (0 - c.actualSpeed) * (1 - Math.exp(-14 * dt));
   }
+  const yawDelta = normalizeAngle(c.yaw - prevYaw) / safeDt;
+  c.yawRate += (clamp(yawDelta, -6, 6) - c.yawRate) * (1 - Math.exp(-10 * dt));
 
   const remaining = Math.hypot(c.targetX - c.x, c.targetZ - c.z);
   if (c.lastProgressDist - remaining < 0.16 * dt) {
@@ -776,12 +792,18 @@ export function stepCustomersAI(
           result.requestOpenFrontDoor = true;
         }
         c.doorWaitTimer += ctx.dt;
+        c.vx = 0;
+        c.vz = 0;
+        c.actualSpeed += (0 - c.actualSpeed) * (1 - Math.exp(-14 * ctx.dt));
+        const prevYaw = c.yaw;
         // Face doorway while waiting for door to swing open
         const doorYaw = Math.atan2(
           -(LAST_SHOP_WAYPOINTS.entranceThreshold.x - c.x),
           -(LAST_SHOP_WAYPOINTS.entranceThreshold.z - c.z)
         );
         c.yaw = lerpAngle(c.yaw, doorYaw, clamp(8 * ctx.dt, 0, 1));
+        const yawDelta = normalizeAngle(c.yaw - prevYaw) / Math.max(0.001, ctx.dt);
+        c.yawRate += (clamp(yawDelta, -6, 6) - c.yawRate) * (1 - Math.exp(-10 * ctx.dt));
         if (c.doorWaitTimer > 4.0) {
           transitionCustomerToLeaving(c, 'Door blocked', 'doorBlocked');
         }
@@ -827,10 +849,14 @@ export function stepCustomersAI(
         c.browsePauseTimer -= ctx.dt;
         c.vx = 0;
         c.vz = 0;
+        c.actualSpeed += (0 - c.actualSpeed) * (1 - Math.exp(-14 * ctx.dt));
         c.walkCycle += 1.1 * ctx.dt;
+        const prevYaw = c.yaw;
         if (c.targetLookYaw !== null) {
           c.yaw = lerpAngle(c.yaw, c.targetLookYaw, clamp(6 * ctx.dt, 0, 1));
         }
+        const yawDelta = normalizeAngle(c.yaw - prevYaw) / Math.max(0.001, ctx.dt);
+        c.yawRate += (clamp(yawDelta, -6, 6) - c.yawRate) * (1 - Math.exp(-10 * ctx.dt));
         if (c.browsePauseTimer <= 0) {
           c.browseStopsRemaining -= 1;
           if (c.browseStopsRemaining > 0) {
@@ -968,10 +994,14 @@ export function stepCustomersAI(
       const speedMult = shopkeepers > 0 ? Math.min(2.6, 1 + shopkeepers * 0.9) : 1.0;
       c.vx = 0;
       c.vz = 0;
+      c.actualSpeed += (0 - c.actualSpeed) * (1 - Math.exp(-14 * ctx.dt));
       c.walkCycle += 1.3 * ctx.dt * speedMult;
+      const prevYaw = c.yaw;
       if (c.targetLookYaw !== null) {
         c.yaw = lerpAngle(c.yaw, c.targetLookYaw, clamp(8 * ctx.dt, 0, 1));
       }
+      const yawDelta = normalizeAngle(c.yaw - prevYaw) / Math.max(0.001, ctx.dt);
+      c.yawRate += (clamp(yawDelta, -6, 6) - c.yawRate) * (1 - Math.exp(-10 * ctx.dt));
       if (shopkeepers > 0) {
         c.statusKey = 'assisted';
         c.statusResourceId = undefined;

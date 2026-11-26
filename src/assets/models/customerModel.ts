@@ -1,115 +1,238 @@
 import * as THREE from 'three';
 import { CustomerAIState } from '../../game/types';
+import {
+  HumanHairStyle,
+  HumanHeadwearKind,
+  HumanoidSharedGeometries,
+  createHumanoidSharedGeometries,
+  damp,
+} from './characterGeometryKit';
 
-export interface CustomerSharedGeometries {
-  torso: THREE.BoxGeometry;
-  jacket: THREE.BoxGeometry;
-  belt: THREE.BoxGeometry;
-  backpack: THREE.BoxGeometry;
-  head: THREE.BoxGeometry;
-  cap: THREE.BoxGeometry;
-  visor: THREE.BoxGeometry;
-  arm: THREE.BoxGeometry;
-  leg: THREE.BoxGeometry;
-  shadowDisc: THREE.CircleGeometry;
-  statusMarker: THREE.OctahedronGeometry;
-  dispose: () => void;
+export type CustomerSharedGeometries = HumanoidSharedGeometries;
+
+export type CustomerAnimState = 'idle' | 'walk' | 'browsing' | 'purchasing' | 'carrying';
+
+export interface CustomerRigAnimData {
+  currentState: CustomerAnimState;
+  idlePhase: number;
+  smoothedSpeed: number;
+  smoothedYawRate: number;
 }
 
 export interface CustomerRig {
   root: THREE.Group;
   bodyPivot: THREE.Group;
+  spinePivot: THREE.Group;
   headPivot: THREE.Group;
   leftArmPivot: THREE.Group;
+  leftForearmPivot: THREE.Group;
   rightArmPivot: THREE.Group;
+  rightForearmPivot: THREE.Group;
   leftLegPivot: THREE.Group;
+  leftKneePivot: THREE.Group;
   rightLegPivot: THREE.Group;
+  rightKneePivot: THREE.Group;
   statusMarker: THREE.Mesh;
   statusMat: THREE.MeshBasicMaterial;
   shadowMat: THREE.MeshBasicMaterial;
+  animData: CustomerRigAnimData;
   dispose: () => void;
 }
 
-export function createCustomerSharedGeometries(): CustomerSharedGeometries {
-  const torso = new THREE.BoxGeometry(0.42, 0.54, 0.23);
-  const jacket = new THREE.BoxGeometry(0.46, 0.44, 0.26);
-  const belt = new THREE.BoxGeometry(0.47, 0.08, 0.27);
-  const backpack = new THREE.BoxGeometry(0.32, 0.38, 0.16);
-  const head = new THREE.BoxGeometry(0.28, 0.30, 0.28);
-  const cap = new THREE.BoxGeometry(0.30, 0.10, 0.31);
-  const visor = new THREE.BoxGeometry(0.28, 0.03, 0.12);
-  const arm = new THREE.BoxGeometry(0.12, 0.54, 0.12);
-  const leg = new THREE.BoxGeometry(0.15, 0.64, 0.16);
-  const shadowDisc = new THREE.CircleGeometry(0.38, 14);
-  shadowDisc.rotateX(-Math.PI * 0.5);
-  const statusMarker = new THREE.OctahedronGeometry(0.085, 0);
+interface CustomerVisualSpec {
+  bodyType: 'slim' | 'athletic' | 'stocky';
+  skinHex: number;
+  shirtHex: number;
+  jacketHex: number;
+  pantsHex: number;
+  bootHex: number;
+  hairStyle: HumanHairStyle;
+  hairHex: number;
+  headwear: HumanHeadwearKind;
+  headwearHex: number;
+  packKind: 'backpack' | 'courier';
+  packHex: number;
+  hasHoodieCollar: boolean;
+}
 
-  return {
-    torso,
-    jacket,
-    belt,
-    backpack,
-    head,
-    cap,
-    visor,
-    arm,
-    leg,
-    shadowDisc,
-    statusMarker,
-    dispose: () => {
-      torso.dispose();
-      jacket.dispose();
-      belt.dispose();
-      backpack.dispose();
-      head.dispose();
-      cap.dispose();
-      visor.dispose();
-      arm.dispose();
-      leg.dispose();
-      shadowDisc.dispose();
-      statusMarker.dispose();
-    },
-  };
+const CUSTOMER_APPEARANCE_BY_ID: Record<string, CustomerVisualSpec> = {
+  mara: {
+    bodyType: 'slim',
+    skinHex: 0xd9aa8b,
+    shirtHex: 0xcbd5e1,
+    jacketHex: 0x356883,
+    pantsHex: 0x262d38,
+    bootHex: 0x29211b,
+    hairStyle: 'ponytail_bun',
+    hairHex: 0x5c3424,
+    headwear: 'none',
+    headwearHex: 0x292524,
+    packKind: 'courier',
+    packHex: 0x57534e,
+    hasHoodieCollar: false,
+  },
+  cole: {
+    bodyType: 'stocky',
+    skinHex: 0xc28a68,
+    shirtHex: 0x94a3b8,
+    jacketHex: 0x9a4b14,
+    pantsHex: 0x22262e,
+    bootHex: 0x1f1b18,
+    hairStyle: 'short_crop',
+    hairHex: 0x26211e,
+    headwear: 'beanie',
+    headwearHex: 0x4b3b2c,
+    packKind: 'backpack',
+    packHex: 0x44403c,
+    hasHoodieCollar: false,
+  },
+  elena: {
+    bodyType: 'slim',
+    skinHex: 0xe0b99e,
+    shirtHex: 0xd6d3d1,
+    jacketHex: 0x456347,
+    pantsHex: 0x29303b,
+    bootHex: 0x36271d,
+    hairStyle: 'long_layered',
+    hairHex: 0x3b261c,
+    headwear: 'none',
+    headwearHex: 0x292524,
+    packKind: 'courier',
+    packHex: 0x3f4e43,
+    hasHoodieCollar: true,
+  },
+  jax: {
+    bodyType: 'athletic',
+    skinHex: 0x976548,
+    shirtHex: 0xb4b8be,
+    jacketHex: 0x7a4435,
+    pantsHex: 0x1f242c,
+    bootHex: 0x1a1715,
+    hairStyle: 'short_crop',
+    hairHex: 0x181615,
+    headwear: 'cap',
+    headwearHex: 0x2d3238,
+    packKind: 'backpack',
+    packHex: 0x674c38,
+    hasHoodieCollar: false,
+  },
+  nora: {
+    bodyType: 'slim',
+    skinHex: 0xcfa080,
+    shirtHex: 0xc2c8d0,
+    jacketHex: 0x475569,
+    pantsHex: 0x232830,
+    bootHex: 0x241d19,
+    hairStyle: 'side_part',
+    hairHex: 0x1f1a18,
+    headwear: 'hood',
+    headwearHex: 0x3b4859,
+    packKind: 'courier',
+    packHex: 0x334155,
+    hasHoodieCollar: true,
+  },
+};
+
+const CUSTOMER_FALLBACK_ORDER = ['mara', 'cole', 'elena', 'jax', 'nora'];
+
+export function createCustomerSharedGeometries(): CustomerSharedGeometries {
+  return createHumanoidSharedGeometries();
+}
+
+function getHairGeometry(
+  geos: HumanoidSharedGeometries,
+  style: HumanHairStyle
+): THREE.BufferGeometry {
+  switch (style) {
+    case 'messy':
+      return geos.hairMessy;
+    case 'long_layered':
+      return geos.hairLongLayered;
+    case 'ponytail_bun':
+      return geos.hairPonytailBun;
+    case 'side_part':
+      return geos.hairSidePart;
+    case 'bald_stubble':
+      return geos.hairStubble;
+    case 'short_crop':
+    default:
+      return geos.hairShortCrop;
+  }
 }
 
 /**
- * Builds a lightweight 9-part articulated survivor customer with bottom-center pivot at y=0.
- * Visually distinct from hunched zombies (upright posture, warmer survivor gear, backpack, no glowing eyes).
+ * Builds an articulated organic humanoid customer with bottom-center pivot at y=0.
+ * Visually distinct per named customer profile (face, hair, clothing layers, backpack, boots).
  */
 export function buildProceduralCustomerModel(
   geos: CustomerSharedGeometries,
-  variant = 0
+  variant = 0,
+  profileId?: string
 ): { group: THREE.Group; rig: CustomerRig } {
   const root = new THREE.Group();
-
-  const skinPalette = [0xd6a788, 0xc38e6d, 0xe0b99e, 0x9b6b4c, 0xcba182];
-  const jacketPalette = [0x3b6e8c, 0xb45309, 0x4b6b4d, 0x7c4a3a, 0x475569];
-  const packPalette = [0x57534e, 0x44403c, 0x3f4f44, 0x6b4f3a, 0x334155];
+  const resolvedId =
+    profileId && CUSTOMER_APPEARANCE_BY_ID[profileId]
+      ? profileId
+      : CUSTOMER_FALLBACK_ORDER[Math.abs(variant) % CUSTOMER_FALLBACK_ORDER.length];
+  const spec = CUSTOMER_APPEARANCE_BY_ID[resolvedId];
 
   const skinMat = new THREE.MeshStandardMaterial({
-    color: skinPalette[variant % skinPalette.length],
-    roughness: 0.78,
-    metalness: 0.02,
+    color: spec.skinHex,
+    roughness: 0.85,
+    metalness: 0.01,
+    vertexColors: true,
+    bumpMap: geos.textures.skinBump,
+    bumpScale: 0.004,
+  });
+  const shirtMat = new THREE.MeshStandardMaterial({
+    color: spec.shirtHex,
+    roughness: 0.9,
+    metalness: 0.03,
+    vertexColors: true,
+    bumpMap: geos.textures.fabricBump,
+    bumpScale: 0.006,
   });
   const jacketMat = new THREE.MeshStandardMaterial({
-    color: jacketPalette[variant % jacketPalette.length],
-    roughness: 0.85,
-    metalness: 0.06,
+    color: spec.jacketHex,
+    roughness: 0.86,
+    metalness: 0.05,
+    vertexColors: true,
+    bumpMap: geos.textures.fabricBump,
+    bumpScale: 0.008,
   });
   const pantsMat = new THREE.MeshStandardMaterial({
-    color: 0x262b35,
-    roughness: 0.9,
-    metalness: 0.04,
+    color: spec.pantsHex,
+    roughness: 0.91,
+    metalness: 0.03,
+    vertexColors: true,
+    bumpMap: geos.textures.fabricBump,
+    bumpScale: 0.006,
   });
   const packMat = new THREE.MeshStandardMaterial({
-    color: packPalette[variant % packPalette.length],
-    roughness: 0.72,
-    metalness: 0.12,
+    color: spec.packHex,
+    roughness: 0.78,
+    metalness: 0.1,
+    vertexColors: true,
   });
-  const capMat = new THREE.MeshStandardMaterial({
-    color: variant % 2 === 0 ? 0x292524 : 0x78350f,
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: spec.hairHex,
+    roughness: 0.92,
+    metalness: 0.04,
+    vertexColors: true,
+  });
+  const headwearMat = new THREE.MeshStandardMaterial({
+    color: spec.headwearHex,
     roughness: 0.88,
     metalness: 0.04,
+    vertexColors: true,
+  });
+  const scleraMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    roughness: 0.35,
+  });
+  const irisMat = new THREE.MeshStandardMaterial({
+    color: 0x1e1b18,
+    roughness: 0.25,
   });
   const shadowMat = new THREE.MeshBasicMaterial({
     color: 0x05070a,
@@ -127,110 +250,212 @@ export function buildProceduralCustomerModel(
   shadowMesh.position.y = 0.024;
   root.add(shadowMesh);
 
+  // Hip height at 0.84m so boot soles touch y = 0.0 cleanly
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.y = 0.66;
+  bodyPivot.position.y = 0.84;
   root.add(bodyPivot);
 
-  // Legs
+  const pelvisMesh = new THREE.Mesh(geos.pelvis, pantsMat);
+  pelvisMesh.castShadow = true;
+  pelvisMesh.receiveShadow = true;
+  bodyPivot.add(pelvisMesh);
+
+  const hipX = spec.bodyType === 'slim' ? 0.092 : spec.bodyType === 'stocky' ? 0.112 : 0.1;
+
+  // Articulated 2-segment Legs (Thigh + Knee -> Shin & Boot)
   const leftLegPivot = new THREE.Group();
-  leftLegPivot.position.set(-0.11, 0, 0);
-  const leftLegMesh = new THREE.Mesh(geos.leg, pantsMat);
-  leftLegMesh.position.y = -0.32;
-  leftLegMesh.castShadow = true;
-  leftLegMesh.receiveShadow = true;
-  leftLegPivot.add(leftLegMesh);
+  leftLegPivot.position.set(-hipX, -0.01, 0);
+  const leftThigh = new THREE.Mesh(geos.thigh, pantsMat);
+  leftThigh.castShadow = true;
+  leftThigh.receiveShadow = true;
+  leftLegPivot.add(leftThigh);
+
+  const leftKneePivot = new THREE.Group();
+  leftKneePivot.position.set(0, -0.39, 0);
+  const leftShin = new THREE.Mesh(geos.shinBoot, pantsMat);
+  leftShin.castShadow = true;
+  leftShin.receiveShadow = true;
+  leftKneePivot.add(leftShin);
+  leftLegPivot.add(leftKneePivot);
   bodyPivot.add(leftLegPivot);
 
   const rightLegPivot = new THREE.Group();
-  rightLegPivot.position.set(0.11, 0, 0);
-  const rightLegMesh = new THREE.Mesh(geos.leg, pantsMat);
-  rightLegMesh.position.y = -0.32;
-  rightLegMesh.castShadow = true;
-  rightLegMesh.receiveShadow = true;
-  rightLegPivot.add(rightLegMesh);
+  rightLegPivot.position.set(hipX, -0.01, 0);
+  const rightThigh = new THREE.Mesh(geos.thigh, pantsMat);
+  rightThigh.castShadow = true;
+  rightThigh.receiveShadow = true;
+  rightLegPivot.add(rightThigh);
+
+  const rightKneePivot = new THREE.Group();
+  rightKneePivot.position.set(0, -0.39, 0);
+  const rightShin = new THREE.Mesh(geos.shinBoot, pantsMat);
+  rightShin.castShadow = true;
+  rightShin.receiveShadow = true;
+  rightKneePivot.add(rightShin);
+  rightLegPivot.add(rightKneePivot);
   bodyPivot.add(rightLegPivot);
 
-  // Torso, jacket & survivor backpack (+Z is back, forward is -Z)
-  const torsoMesh = new THREE.Mesh(geos.torso, skinMat);
-  torsoMesh.position.y = 0.31;
+  // Spine & Torso layers
+  const spinePivot = new THREE.Group();
+  spinePivot.position.set(0, 0.04, 0);
+  bodyPivot.add(spinePivot);
+
+  const torsoGeo =
+    spec.bodyType === 'slim'
+      ? geos.torsoSlim
+      : spec.bodyType === 'stocky'
+        ? geos.torsoStocky
+        : geos.torsoAthletic;
+  const torsoMesh = new THREE.Mesh(torsoGeo, shirtMat);
   torsoMesh.castShadow = true;
   torsoMesh.receiveShadow = true;
-  bodyPivot.add(torsoMesh);
+  spinePivot.add(torsoMesh);
 
-  const jacketMesh = new THREE.Mesh(geos.jacket, jacketMat);
-  jacketMesh.position.y = 0.34;
+  const jacketMesh = new THREE.Mesh(geos.jacketOpen, jacketMat);
+  if (spec.bodyType === 'slim') jacketMesh.scale.set(0.92, 0.98, 0.94);
+  if (spec.bodyType === 'stocky') jacketMesh.scale.set(1.08, 1.01, 1.08);
   jacketMesh.castShadow = true;
   jacketMesh.receiveShadow = true;
-  bodyPivot.add(jacketMesh);
+  spinePivot.add(jacketMesh);
 
-  const beltMesh = new THREE.Mesh(geos.belt, packMat);
-  beltMesh.position.set(0, 0.09, 0);
-  bodyPivot.add(beltMesh);
+  if (spec.hasHoodieCollar) {
+    const collar = new THREE.Mesh(geos.hoodieCollar, jacketMat);
+    spinePivot.add(collar);
+  }
 
-  const packMesh = new THREE.Mesh(geos.backpack, packMat);
-  packMesh.position.set(0, 0.35, 0.19);
+  const beltMesh = new THREE.Mesh(geos.beltWithPouches, packMat);
+  if (spec.bodyType === 'slim') beltMesh.scale.set(0.92, 1, 0.94);
+  if (spec.bodyType === 'stocky') beltMesh.scale.set(1.08, 1, 1.08);
+  spinePivot.add(beltMesh);
+
+  const packMesh = new THREE.Mesh(
+    spec.packKind === 'courier' ? geos.courierPack : geos.backpack,
+    packMat
+  );
   packMesh.castShadow = true;
-  bodyPivot.add(packMesh);
+  spinePivot.add(packMesh);
 
-  // Head, cap & visor
+  // Sculpted Head, Eyes, Brows, Hair & Optional Headwear
   const headPivot = new THREE.Group();
-  headPivot.position.set(0, 0.64, 0);
-  const headMesh = new THREE.Mesh(geos.head, skinMat);
-  headMesh.position.y = 0.15;
+  headPivot.position.set(0, 0.53, 0);
+
+  const headGeo =
+    spec.bodyType === 'slim'
+      ? geos.headFemale
+      : spec.bodyType === 'stocky'
+        ? geos.headStocky
+        : geos.headHuman;
+  const headMesh = new THREE.Mesh(headGeo, skinMat);
   headMesh.castShadow = true;
   headMesh.receiveShadow = true;
   headPivot.add(headMesh);
 
-  const capMesh = new THREE.Mesh(geos.cap, capMat);
-  capMesh.position.set(0, 0.28, -0.015);
-  capMesh.castShadow = true;
-  headPivot.add(capMesh);
+  const eyeX = spec.bodyType === 'slim' ? 0.033 : 0.036;
+  const eyeZ = -0.095;
+  for (const sx of [-1, 1]) {
+    const sclera = new THREE.Mesh(geos.eyeSclera, scleraMat);
+    sclera.position.set(sx * eyeX, 0.142, eyeZ);
+    const iris = new THREE.Mesh(geos.eyeIris, irisMat);
+    iris.position.set(sx * eyeX, 0.142, eyeZ - 0.005);
+    const brow = new THREE.Mesh(geos.eyebrow, hairMat);
+    brow.position.set(sx * eyeX, 0.162, eyeZ - 0.004);
+    brow.rotation.z = sx * -0.06;
+    headPivot.add(sclera, iris, brow);
+  }
 
-  const visorMesh = new THREE.Mesh(geos.visor, capMat);
-  visorMesh.position.set(0, 0.255, -0.185);
-  headPivot.add(visorMesh);
-  bodyPivot.add(headPivot);
+  const hairMesh = new THREE.Mesh(getHairGeometry(geos, spec.hairStyle), hairMat);
+  hairMesh.castShadow = true;
+  headPivot.add(hairMesh);
 
-  // Arms hanging naturally at sides
+  if (spec.headwear === 'cap') {
+    const cap = new THREE.Mesh(geos.headwearCap, headwearMat);
+    cap.castShadow = true;
+    const visor = new THREE.Mesh(geos.headwearCapVisor, headwearMat);
+    headPivot.add(cap, visor);
+  } else if (spec.headwear === 'beanie') {
+    const beanie = new THREE.Mesh(geos.headwearBeanie, headwearMat);
+    beanie.castShadow = true;
+    headPivot.add(beanie);
+  } else if (spec.headwear === 'hood') {
+    const hood = new THREE.Mesh(geos.headwearHood, headwearMat);
+    hood.castShadow = true;
+    headPivot.add(hood);
+  }
+  spinePivot.add(headPivot);
+
+  // Articulated 2-segment Arms (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
+  const shoulderX = spec.bodyType === 'slim' ? 0.195 : spec.bodyType === 'stocky' ? 0.232 : 0.214;
+
   const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-0.29, 0.54, 0);
-  const leftArmMesh = new THREE.Mesh(geos.arm, jacketMat);
-  leftArmMesh.position.y = -0.23;
-  leftArmMesh.castShadow = true;
-  leftArmPivot.add(leftArmMesh);
-  bodyPivot.add(leftArmPivot);
+  leftArmPivot.position.set(-shoulderX, 0.45, 0);
+  const leftUpper = new THREE.Mesh(geos.upperArm, jacketMat);
+  leftUpper.castShadow = true;
+  leftArmPivot.add(leftUpper);
+
+  const leftForearmPivot = new THREE.Group();
+  leftForearmPivot.position.set(0, -0.26, 0);
+  const leftForearm = new THREE.Mesh(geos.forearm, jacketMat);
+  leftForearm.castShadow = true;
+  const leftHand = new THREE.Mesh(geos.handHuman, skinMat);
+  leftHand.position.set(0, -0.235, 0);
+  leftForearmPivot.add(leftForearm, leftHand);
+  leftArmPivot.add(leftForearmPivot);
+  spinePivot.add(leftArmPivot);
 
   const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(0.29, 0.54, 0);
-  const rightArmMesh = new THREE.Mesh(geos.arm, jacketMat);
-  rightArmMesh.position.y = -0.23;
-  rightArmMesh.castShadow = true;
-  rightArmPivot.add(rightArmMesh);
-  bodyPivot.add(rightArmPivot);
+  rightArmPivot.position.set(shoulderX, 0.45, 0);
+  const rightUpper = new THREE.Mesh(geos.upperArm, jacketMat);
+  rightUpper.castShadow = true;
+  rightArmPivot.add(rightUpper);
+
+  const rightForearmPivot = new THREE.Group();
+  rightForearmPivot.position.set(0, -0.26, 0);
+  const rightForearm = new THREE.Mesh(geos.forearm, jacketMat);
+  rightForearm.castShadow = true;
+  const rightHand = new THREE.Mesh(geos.handHuman, skinMat);
+  rightHand.position.set(0, -0.235, 0);
+  rightForearmPivot.add(rightForearm, rightHand);
+  rightArmPivot.add(rightForearmPivot);
+  spinePivot.add(rightArmPivot);
 
   // Subtle floating state marker above head (visible while browsing/purchasing)
   const statusMarker = new THREE.Mesh(geos.statusMarker, statusMat);
-  statusMarker.position.set(0, 1.84, 0);
+  statusMarker.position.set(0, 1.9, 0);
   statusMarker.visible = false;
   root.add(statusMarker);
 
   const rig: CustomerRig = {
     root,
     bodyPivot,
+    spinePivot,
     headPivot,
     leftArmPivot,
+    leftForearmPivot,
     rightArmPivot,
+    rightForearmPivot,
     leftLegPivot,
+    leftKneePivot,
     rightLegPivot,
+    rightKneePivot,
     statusMarker,
     statusMat,
     shadowMat,
+    animData: {
+      currentState: 'idle',
+      idlePhase: variant * 1.3,
+      smoothedSpeed: 0,
+      smoothedYawRate: 0,
+    },
     dispose: () => {
       skinMat.dispose();
+      shirtMat.dispose();
       jacketMat.dispose();
       pantsMat.dispose();
       packMat.dispose();
-      capMat.dispose();
+      hairMat.dispose();
+      headwearMat.dispose();
+      scleraMat.dispose();
+      irisMat.dispose();
       shadowMat.dispose();
       statusMat.dispose();
     },
@@ -244,60 +469,177 @@ export function animateCustomerRig(
   state: CustomerAIState,
   walkCycle: number,
   isMoving: boolean,
-  hasPurchase: boolean
+  hasPurchase: boolean,
+  dt = 0.016,
+  actualSpeed?: number,
+  yawRate = 0,
+  distSq = 0
 ): void {
   // Subtle state marker cue inside/around shop
   if (state === 'browsing') {
     rig.statusMarker.visible = true;
     rig.statusMat.color.setHex(0xf59e0b);
-    rig.statusMarker.position.y = 1.85 + Math.sin(walkCycle * 1.6) * 0.03;
+    rig.statusMarker.position.y = 1.9 + Math.sin(walkCycle * 1.6) * 0.03;
     rig.statusMarker.rotation.y = walkCycle * 0.7;
   } else if (state === 'going_to_checkout' || state === 'purchasing') {
     rig.statusMarker.visible = true;
     rig.statusMat.color.setHex(0x34d399);
-    rig.statusMarker.position.y = 1.85 + Math.sin(walkCycle * 2.2) * 0.035;
+    rig.statusMarker.position.y = 1.9 + Math.sin(walkCycle * 2.2) * 0.035;
     rig.statusMarker.rotation.y = walkCycle * 1.1;
   } else if (state === 'leaving' && hasPurchase) {
     rig.statusMarker.visible = true;
     rig.statusMat.color.setHex(0x94a3b8);
-    rig.statusMarker.position.y = 1.84;
+    rig.statusMarker.position.y = 1.89;
     rig.statusMarker.rotation.y = walkCycle * 0.4;
   } else {
     rig.statusMarker.visible = false;
   }
 
+  const isFarLod = distSq > 30 * 30;
+  const rawSpeed = actualSpeed ?? (isMoving ? 1.8 : 0);
+  rig.animData.smoothedSpeed = damp(rig.animData.smoothedSpeed, rawSpeed, 12, dt);
+  rig.animData.smoothedYawRate = damp(rig.animData.smoothedYawRate, yawRate, 10, dt);
+  rig.animData.idlePhase += dt * 1.5;
+
+  let animState: CustomerAnimState = 'idle';
   if (state === 'purchasing') {
-    rig.bodyPivot.rotation.x = 0.04;
-    rig.bodyPivot.rotation.z = 0;
-    rig.leftLegPivot.rotation.x = 0;
-    rig.rightLegPivot.rotation.x = 0;
-    rig.leftArmPivot.rotation.x = 0.15;
-    // Right arm gently extends toward register counter
-    rig.rightArmPivot.rotation.x = 0.72 + Math.sin(walkCycle * 2.4) * 0.1;
-    rig.headPivot.rotation.y = Math.sin(walkCycle * 1.1) * 0.08;
-    return;
+    animState = 'purchasing';
+  } else if (state === 'leaving' && hasPurchase && (rig.animData.smoothedSpeed > 0.14 || isMoving)) {
+    animState = 'carrying';
+  } else if (rig.animData.smoothedSpeed > 0.14 || isMoving) {
+    animState = 'walk';
+  } else if (state === 'browsing') {
+    animState = 'browsing';
+  }
+  rig.animData.currentState = animState;
+
+  const ph = rig.animData.idlePhase;
+  const turnLean = Math.max(-0.16, Math.min(0.16, rig.animData.smoothedYawRate * 0.06));
+  const turnHead = Math.max(-0.28, Math.min(0.28, rig.animData.smoothedYawRate * 0.095));
+
+  let tBodyY = 0.84;
+  let tBodyRx = 0.015;
+  let tBodyRz = 0;
+  let tSpineRx = 0.015;
+  let tSpineRy = 0;
+  let tHeadRx = 0;
+  let tHeadRy = 0;
+  let tHeadRz = 0;
+  let tLegLx = 0.03;
+  let tLegRx = -0.03;
+  let tKneeLx = 0.05;
+  let tKneeRx = 0.05;
+  let tArmLx = 0.06;
+  let tArmRx = 0.08;
+  let tForeLx = 0.22;
+  let tForeRx = 0.24;
+  let blend = 10;
+
+  if (animState === 'purchasing') {
+    tBodyY = 0.84 + (isFarLod ? 0 : Math.sin(ph * 1.1) * 0.005);
+    tBodyRx = 0.03;
+    tBodyRz = turnLean * 0.35;
+    tSpineRx = 0.055;
+    tSpineRy = Math.sin(ph * 1.4) * 0.04;
+    tLegLx = 0.04;
+    tLegRx = -0.04;
+    tKneeLx = 0.06;
+    tKneeRx = 0.06;
+    tArmLx = 0.14;
+    tForeLx = 0.28;
+    tArmRx = 0.68 + Math.sin(ph * 2.2) * 0.1;
+    tForeRx = 0.48 + Math.cos(ph * 2.2) * 0.06;
+    tHeadRx = 0.02;
+    tHeadRy = Math.sin(ph * 1.1) * 0.1 + turnHead * 0.5;
+    blend = 11;
+  } else if (animState === 'browsing') {
+    const breath = isFarLod ? 0 : Math.sin(ph * 1.2) * 0.007;
+    tBodyY = 0.84 + breath;
+    tBodyRx = 0.02;
+    tBodyRz = turnLean * 0.3;
+    tSpineRx = 0.045;
+    tSpineRy = Math.sin(ph * 0.8) * 0.05;
+    tLegLx = 0.05;
+    tLegRx = -0.05;
+    tKneeLx = 0.06;
+    tKneeRx = 0.05;
+    tArmLx = 0.08;
+    tForeLx = 0.24;
+    tArmRx = 0.38 + Math.sin(ph * 1.35) * 0.1;
+    tForeRx = 0.62 + Math.cos(ph * 1.35) * 0.07;
+    tHeadRx = Math.sin(ph * 0.9) * 0.06;
+    tHeadRy = Math.sin(ph * 0.85) * 0.34 + turnHead * 0.5;
+    blend = 10;
+  } else if (animState === 'walk' || animState === 'carrying') {
+    const isCarrying = animState === 'carrying';
+    const speedRatio = Math.min(1.2, Math.max(0.25, rig.animData.smoothedSpeed / 1.85));
+    const s = Math.sin(walkCycle);
+    const c = Math.cos(walkCycle);
+    const stride = s * 0.45 * Math.min(1.06, speedRatio + 0.15);
+    const hipDip = Math.abs(s) * 0.021;
+
+    tBodyY = 0.84 - hipDip;
+    tBodyRx = 0.03;
+    tBodyRz = c * 0.024 + turnLean;
+    tSpineRx = isCarrying ? 0.03 : 0.04;
+    tSpineRy = -s * (isCarrying ? 0.035 : 0.055) + turnHead * 0.25;
+
+    tLegLx = stride;
+    tLegRx = -stride;
+    tKneeLx = Math.max(0.06, -c * 0.56 + 0.12);
+    tKneeRx = Math.max(0.06, c * 0.56 + 0.12);
+
+    tArmLx = -stride * 0.72;
+    tForeLx = 0.26 + Math.max(0, -s) * 0.32;
+    if (isCarrying) {
+      // Cradles purchased supplies naturally against chest/side while walking out
+      tArmRx = 0.44 + stride * 0.14;
+      tForeRx = 0.96;
+    } else {
+      tArmRx = stride * 0.72;
+      tForeRx = 0.26 + Math.max(0, s) * 0.32;
+    }
+    tHeadRy = Math.sin(walkCycle * 0.4) * 0.08 + turnHead;
+    tHeadRz = -turnLean * 0.35;
+    blend = 13;
+  } else {
+    // Stationary idle
+    const breath = isFarLod ? 0 : Math.sin(ph * 1.2) * 0.008;
+    tBodyY = 0.84 + breath;
+    tBodyRx = 0.015;
+    tBodyRz = turnLean * 0.35;
+    tSpineRx = 0.015;
+    tLegLx = 0.03;
+    tLegRx = -0.03;
+    tKneeLx = 0.05;
+    tKneeRx = 0.05;
+    tArmLx = 0.06;
+    tForeLx = 0.22;
+    tArmRx = 0.08;
+    tForeRx = 0.24;
+    tHeadRy = Math.sin(ph * 0.5) * 0.1 + turnHead;
+    blend = 10;
   }
 
-  if (!isMoving) {
-    // Calm browsing / waiting stance
-    rig.bodyPivot.rotation.x = 0.02;
-    rig.bodyPivot.rotation.z = 0;
-    rig.leftLegPivot.rotation.x = 0;
-    rig.rightLegPivot.rotation.x = 0;
-    rig.leftArmPivot.rotation.x = 0.08;
-    rig.rightArmPivot.rotation.x = state === 'browsing' ? 0.32 + Math.sin(walkCycle) * 0.08 : 0.08;
-    rig.headPivot.rotation.y =
-      state === 'browsing' ? Math.sin(walkCycle * 0.85) * 0.34 : Math.sin(walkCycle * 0.5) * 0.1;
-    return;
-  }
+  // Single-writer damped joint application
+  const limbBlend = isFarLod ? blend : Math.max(blend, 13);
+  rig.bodyPivot.position.y = damp(rig.bodyPivot.position.y, tBodyY, blend, dt);
+  rig.bodyPivot.rotation.x = damp(rig.bodyPivot.rotation.x, tBodyRx, blend, dt);
+  rig.bodyPivot.rotation.z = damp(rig.bodyPivot.rotation.z, tBodyRz, blend, dt);
+  rig.spinePivot.rotation.x = damp(rig.spinePivot.rotation.x, tSpineRx, blend, dt);
+  rig.spinePivot.rotation.y = damp(rig.spinePivot.rotation.y, tSpineRy, blend, dt);
 
-  // Upright natural human walking stride
-  const stride = Math.sin(walkCycle) * 0.44;
-  rig.leftLegPivot.rotation.x = stride;
-  rig.rightLegPivot.rotation.x = -stride;
-  rig.leftArmPivot.rotation.x = -stride * 0.75;
-  rig.rightArmPivot.rotation.x = stride * 0.75;
-  rig.bodyPivot.rotation.x = 0.04;
-  rig.bodyPivot.rotation.z = Math.cos(walkCycle) * 0.025;
-  rig.headPivot.rotation.y = Math.sin(walkCycle * 0.4) * 0.08;
+  rig.headPivot.rotation.x = damp(rig.headPivot.rotation.x, tHeadRx, blend, dt);
+  rig.headPivot.rotation.y = damp(rig.headPivot.rotation.y, tHeadRy, blend, dt);
+  rig.headPivot.rotation.z = damp(rig.headPivot.rotation.z, tHeadRz, blend, dt);
+
+  rig.leftLegPivot.rotation.x = damp(rig.leftLegPivot.rotation.x, tLegLx, limbBlend, dt);
+  rig.rightLegPivot.rotation.x = damp(rig.rightLegPivot.rotation.x, tLegRx, limbBlend, dt);
+  rig.leftKneePivot.rotation.x = damp(rig.leftKneePivot.rotation.x, tKneeLx, limbBlend, dt);
+  rig.rightKneePivot.rotation.x = damp(rig.rightKneePivot.rotation.x, tKneeRx, limbBlend, dt);
+
+  rig.leftArmPivot.rotation.x = damp(rig.leftArmPivot.rotation.x, tArmLx, limbBlend, dt);
+  rig.rightArmPivot.rotation.x = damp(rig.rightArmPivot.rotation.x, tArmRx, limbBlend, dt);
+  rig.leftForearmPivot.rotation.x = damp(rig.leftForearmPivot.rotation.x, tForeLx, limbBlend, dt);
+  rig.rightForearmPivot.rotation.x = damp(rig.rightForearmPivot.rotation.x, tForeRx, limbBlend, dt);
 }

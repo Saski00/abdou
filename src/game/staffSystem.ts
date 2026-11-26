@@ -162,11 +162,12 @@ export interface WorldSurvivorEntity {
   y: number;
   z: number;
   yaw: number;
+  yawRate: number;
   recruited: boolean;
   animPhase: number;
 }
 
-export const WORLD_SURVIVOR_SPAWNS: Omit<WorldSurvivorEntity, 'y' | 'recruited' | 'animPhase'>[] = [
+export const WORLD_SURVIVOR_SPAWNS: Omit<WorldSurvivorEntity, 'y' | 'yawRate' | 'recruited' | 'animPhase'>[] = [
   {
     id: 'surv_maya',
     name: 'Maya',
@@ -275,12 +276,15 @@ export interface EmployeeAgent {
   yaw: number;
   vx: number;
   vz: number;
+  actualSpeed: number;
+  yawRate: number;
   walkCycle: number;
   avoidDir: number;
   waypointIndex: number;
   workTimer: number;
   attackCooldown: number;
   swingTimer: number;
+  swingMaxTimer: number;
   hitFlashTimer: number;
   targetZombieId: string | null;
   recovering: boolean;
@@ -474,9 +478,13 @@ function moveEmployeeToward(
   const dx = tx - emp.x;
   const dz = tz - emp.z;
   const dist = Math.hypot(dx, dz);
+  const safeDt = Math.max(0.001, dt);
   if (dist < 0.14) {
-    emp.vx = 0;
-    emp.vz = 0;
+    const decel = 1 - Math.exp(-14 * dt);
+    emp.vx += (0 - emp.vx) * decel;
+    emp.vz += (0 - emp.vz) * decel;
+    emp.actualSpeed = Math.hypot(emp.vx, emp.vz);
+    emp.yawRate += (0 - emp.yawRate) * decel;
     return dist;
   }
 
@@ -518,21 +526,30 @@ function moveEmployeeToward(
 
   const prevX = emp.x;
   const prevZ = emp.z;
-  emp.vx = dirX * speed;
-  emp.vz = dirZ * speed;
+  const prevYaw = emp.yaw;
+  const desiredSpeed = dist < 0.55 ? speed * clamp(dist / 0.55, 0.35, 1) : speed;
+  const accelBlend = 1 - Math.exp(-11 * dt);
+  emp.vx += (dirX * desiredSpeed - emp.vx) * accelBlend;
+  emp.vz += (dirZ * desiredSpeed - emp.vz) * accelBlend;
   emp.x += emp.vx * dt;
   emp.z += emp.vz * dt;
 
   resolveEmployeeCollisions(emp, radius, colliders, allEmployees, playerX, playerZ);
   emp.y = getCustomerSurfaceHeight(emp.x, emp.z, colliders);
 
-  if (Math.hypot(emp.x - prevX, emp.z - prevZ) > 0.002) {
+  const actualMoved = Math.hypot(emp.x - prevX, emp.z - prevZ);
+  const instSpeed = actualMoved / safeDt;
+  emp.actualSpeed += (instSpeed - emp.actualSpeed) * (1 - Math.exp(-12 * dt));
+
+  if (actualMoved > 0.002) {
     const moveYaw = Math.atan2(-dirX, -dirZ);
     emp.yaw = lerpAngle(emp.yaw, moveYaw, clamp(10 * dt, 0, 1));
-    emp.walkCycle += speed * 3.2 * dt;
+    emp.walkCycle += actualMoved * 3.15;
   } else {
-    emp.walkCycle += 1.2 * dt;
+    emp.actualSpeed += (0 - emp.actualSpeed) * (1 - Math.exp(-14 * dt));
   }
+  const yawDelta = normalizeAngle(emp.yaw - prevYaw) / safeDt;
+  emp.yawRate += (clamp(yawDelta, -6, 6) - emp.yawRate) * (1 - Math.exp(-10 * dt));
 
   return Math.hypot(tx - emp.x, tz - emp.z);
 }
@@ -571,6 +588,7 @@ export class StaffSystem {
       ...s,
       costResources: { ...s.costResources },
       y: colliders ? getCustomerSurfaceHeight(s.x, s.z, colliders) : 0.16,
+      yawRate: 0,
       recruited: false,
       animPhase: idx * 1.35,
     }));
@@ -703,6 +721,8 @@ export class StaffSystem {
       yaw: 0,
       vx: 0,
       vz: 0,
+      actualSpeed: 0,
+      yawRate: 0,
       walkCycle: 0,
       avoidDir: this.employees.length % 2 === 0 ? 1 : -1,
       waypointIndex: 0,
@@ -714,6 +734,7 @@ export class StaffSystem {
             : 0,
       attackCooldown: 0,
       swingTimer: 0,
+      swingMaxTimer: 0.3,
       hitFlashTimer: 0,
       targetZombieId: null,
       recovering: false,
@@ -952,6 +973,8 @@ export class StaffSystem {
           emp.taskLabel = staffMsg.taskUnpaid;
           emp.vx = 0;
           emp.vz = 0;
+          emp.actualSpeed = 0;
+          emp.yawRate = 0;
         }
       }
 
@@ -984,6 +1007,8 @@ export class StaffSystem {
       if (emp.status === 'unpaid') {
         emp.vx = 0;
         emp.vz = 0;
+        emp.actualSpeed = 0;
+        emp.yawRate = 0;
         emp.walkCycle += dt * 0.9;
         continue;
       }
@@ -1082,7 +1107,11 @@ export class StaffSystem {
     if (dist <= 0.25) {
       emp.vx = 0;
       emp.vz = 0;
+      emp.actualSpeed += (0 - emp.actualSpeed) * (1 - Math.exp(-14 * dt));
+      const prevYaw = emp.yaw;
       emp.yaw = lerpAngle(emp.yaw, STAFF_WAYPOINTS.shopkeeperCounter.lookYaw, clamp(6 * dt, 0, 1));
+      const yawDelta = normalizeAngle(emp.yaw - prevYaw) / Math.max(0.001, dt);
+      emp.yawRate += (clamp(yawDelta, -6, 6) - emp.yawRate) * (1 - Math.exp(-10 * dt));
       emp.walkCycle += dt * 1.4;
     }
   }
@@ -1169,13 +1198,18 @@ export class StaffSystem {
       } else {
         emp.vx = 0;
         emp.vz = 0;
+        emp.actualSpeed += (0 - emp.actualSpeed) * (1 - Math.exp(-14 * dt));
+        const prevYaw = emp.yaw;
         const faceYaw = Math.atan2(-(targetZombie.x - emp.x), -(targetZombie.z - emp.z));
         emp.yaw = lerpAngle(emp.yaw, faceYaw, clamp(12 * dt, 0, 1));
+        const yawDelta = normalizeAngle(emp.yaw - prevYaw) / Math.max(0.001, dt);
+        emp.yawRate += (clamp(yawDelta, -6, 6) - emp.yawRate) * (1 - Math.exp(-10 * dt));
         emp.walkCycle += dt * 1.8;
 
         if (emp.attackCooldown <= 0) {
           emp.attackCooldown = this.config.guardAttackCooldownSec;
-          emp.swingTimer = 0.28;
+          emp.swingTimer = 0.30;
+          emp.swingMaxTimer = 0.30;
           result.guardSwingCount += 1;
 
           targetZombie.health = Math.max(0, targetZombie.health - this.config.guardAttackDamage);
@@ -1528,6 +1562,8 @@ export class StaffSystem {
           yaw: 0,
           vx: 0,
           vz: 0,
+          actualSpeed: 0,
+          yawRate: 0,
           walkCycle: 0,
           avoidDir: idx % 2 === 0 ? 1 : -1,
           waypointIndex: 0,
@@ -1539,6 +1575,7 @@ export class StaffSystem {
                 : 0,
           attackCooldown: 0,
           swingTimer: 0,
+          swingMaxTimer: 0.3,
           hitFlashTimer: 0,
           targetZombieId: null,
           recovering: false,

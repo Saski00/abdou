@@ -14,6 +14,7 @@ import {
 } from '../assets/models/interiorBuildings';
 import {
   MaterialPalette,
+  buildBoulderClusterModel,
   buildChainlinkFenceSegment,
   buildConcreteBarrierModel,
   buildCrateModel,
@@ -35,6 +36,16 @@ import {
   buildVehicleModel,
   buildWoodFenceSegment,
 } from '../assets/models/proceduralModels';
+import {
+  TerrainFlatZone,
+  createGrassTuftGeometry,
+  createOrganicPatchGeometry,
+  createProceduralTreeGeometries,
+  createSculptedTerrainGeometry,
+  createSidewalkSlabGeometry,
+  createSkylineSilhouetteGeometry,
+  sampleTerrainHeight,
+} from '../assets/models/proceduralGeometryKit';
 import {
   buildHingedGateModel,
   buildKeyPickupModel,
@@ -375,7 +386,34 @@ export function buildNeighborhoodWorld(
   const detailDecorGroup = new THREE.Group();
   root.add(detailDecorGroup);
 
-  // 1. Extended wasteland ground plane (prevents horizon void)
+  // 1. Sculpted wasteland ground plane (flush inside street grid, organic hills on outer perimeter)
+  const flatZones: TerrainFlatZone[] = [
+    ...map.roads.map((r) => ({
+      minX: r.x - r.w * 0.5,
+      maxX: r.x + r.w * 0.5,
+      minZ: r.z - r.d * 0.5,
+      maxZ: r.z + r.d * 0.5,
+    })),
+    ...map.sidewalks.map((sw) => ({
+      minX: sw.x - sw.w * 0.5,
+      maxX: sw.x + sw.w * 0.5,
+      minZ: sw.z - sw.d * 0.5,
+      maxZ: sw.z + sw.d * 0.5,
+    })),
+    ...ENTERABLE_BUILDINGS.map((b) => ({
+      minX: b.x - b.w * 0.5 - 0.5,
+      maxX: b.x + b.w * 0.5 + 0.5,
+      minZ: b.z - b.d * 0.5 - 0.5,
+      maxZ: b.z + b.d * 0.5 + 0.5,
+    })),
+    ...map.buildings.map((b) => ({
+      minX: b.x - b.w * 0.5 - 0.5,
+      maxX: b.x + b.w * 0.5 + 0.5,
+      minZ: b.z - b.d * 0.5 - 0.5,
+      maxZ: b.z + b.d * 0.5 + 0.5,
+    })),
+  ];
+
   const groundMat = new THREE.MeshStandardMaterial({
     map: textures.wasteland,
     normalMap: textures.wastelandNormal,
@@ -385,16 +423,15 @@ export function buildNeighborhoodWorld(
   });
   localDisposables.push(groundMat);
 
-  const groundGeo = new THREE.PlaneGeometry(250, 250);
-  groundGeo.rotateX(-Math.PI * 0.5);
+  const groundGeo = createSculptedTerrainGeometry(250, 88, flatZones);
   const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.position.y = -0.02;
+  ground.position.y = 0;
   ground.receiveShadow = true;
   root.add(ground);
   localDisposables.push(groundGeo);
 
-  // 1b. Distant Perimeter City Skyline (1 InstancedMesh draw call, atmospheric horizon depth)
-  const skylineGeo = new THREE.BoxGeometry(1, 1, 1);
+  // 1b. Distant Perimeter City Skyline (1 InstancedMesh draw call, stepped ruined silhouettes)
+  const skylineGeo = createSkylineSilhouetteGeometry();
   const skylineMat = new THREE.MeshStandardMaterial({
     color: 0x161b23,
     roughness: 0.94,
@@ -408,6 +445,7 @@ export function buildNeighborhoodWorld(
   const _skyPos = new THREE.Vector3();
   const _skyQuat = new THREE.Quaternion();
   const _skyScale = new THREE.Vector3();
+  const _yAxis = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < skylineCount; i++) {
     const angle = (i / skylineCount) * Math.PI * 2 + 0.11;
     const dist = 94 + ((i * 17) % 24);
@@ -416,8 +454,9 @@ export function buildNeighborhoodWorld(
     const bw = 9 + ((i * 7) % 10);
     const bd = 9 + ((i * 11) % 9);
     const bh = 11 + ((i * 13) % 22);
-    _skyPos.set(sx, bh * 0.5 - 0.1, sz);
-    _skyQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle + (i % 3) * 0.2);
+    const terrainY = sampleTerrainHeight(sx, sz, flatZones);
+    _skyPos.set(sx, terrainY - 0.25, sz);
+    _skyQuat.setFromAxisAngle(_yAxis, angle + (i % 3) * 0.2);
     _skyScale.set(bw, bh, bd);
     _skyMat.compose(_skyPos, _skyQuat, _skyScale);
     skylineMesh.setMatrixAt(i, _skyMat);
@@ -464,8 +503,7 @@ export function buildNeighborhoodWorld(
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
   });
-  const tarPatchGeo = new THREE.PlaneGeometry(2.4, 1.4);
-  tarPatchGeo.rotateX(-Math.PI * 0.5);
+  const tarPatchGeo = createOrganicPatchGeometry(1.45, 0.9, 777, 11);
   const tarPatchMat = new THREE.MeshStandardMaterial({
     color: 0x13161c,
     roughness: 0.65,
@@ -504,6 +542,49 @@ export function buildNeighborhoodWorld(
     patch.receiveShadow = true;
     detailDecorGroup.add(patch);
   }
+
+  // Organic weathered dirt/gravel shoulder patches softening outer road edges (1 InstancedMesh)
+  const shoulderGeo = createOrganicPatchGeometry(1.85, 0.95, 813, 10);
+  const shoulderMat = new THREE.MeshStandardMaterial({
+    color: 0x3b352c,
+    roughness: 0.96,
+    metalness: 0.01,
+    transparent: true,
+    opacity: 0.72,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  const shoulderSpots: [number, number, number, number][] = [];
+  for (let sx = -46; sx <= 46; sx += 7.5) {
+    if (Math.abs(sx) < 9 || Math.abs(sx - 31) < 9 || Math.abs(sx + 29) < 9) continue;
+    shoulderSpots.push([sx, -38.1, ((sx * 17) % 5) * 0.2, 0.9 + ((Math.abs(sx) * 7) % 3) * 0.15]);
+    shoulderSpots.push([sx, 39.1, ((sx * 11) % 5) * 0.25, 0.9 + ((Math.abs(sx) * 5) % 3) * 0.15]);
+  }
+  for (let sz = -28; sz <= 28; sz += 8) {
+    if (Math.abs(sz) < 9) continue;
+    shoulderSpots.push([-46.1, sz, Math.PI * 0.5 + (sz % 3) * 0.15, 0.95]);
+    shoulderSpots.push([47.1, sz, Math.PI * 0.5 - (sz % 3) * 0.15, 0.95]);
+  }
+  if (shoulderSpots.length > 0) {
+    const shoulderMesh = new THREE.InstancedMesh(shoulderGeo, shoulderMat, shoulderSpots.length);
+    shoulderMesh.receiveShadow = true;
+    const _sMat = new THREE.Matrix4();
+    const _sPos = new THREE.Vector3();
+    const _sQuat = new THREE.Quaternion();
+    const _sScale = new THREE.Vector3();
+    for (let i = 0; i < shoulderSpots.length; i++) {
+      const [sx, sz, rot, sc] = shoulderSpots[i];
+      _sPos.set(sx, 0.012, sz);
+      _sQuat.setFromAxisAngle(_yAxis, rot);
+      _sScale.set(sc, 1, sc * 0.85);
+      _sMat.compose(_sPos, _sQuat, _sScale);
+      shoulderMesh.setMatrixAt(i, _sMat);
+    }
+    shoulderMesh.instanceMatrix.needsUpdate = true;
+    detailDecorGroup.add(shoulderMesh);
+  }
+  localDisposables.push(shoulderGeo, shoulderMat);
 
   // Road Markings (with polygonOffset to avoid Z-fighting)
   const yellowLineMat = new THREE.MeshStandardMaterial({
@@ -612,7 +693,7 @@ export function buildNeighborhoodWorld(
   localDisposables.push(swMat);
 
   for (const sw of map.sidewalks) {
-    const swGeo = new THREE.BoxGeometry(sw.w, SIDEWALK_HEIGHT, sw.d);
+    const swGeo = createSidewalkSlabGeometry(sw.w, sw.d, SIDEWALK_HEIGHT, 0.55);
     const swMesh = new THREE.Mesh(swGeo, swMat);
     swMesh.position.set(sw.x, SIDEWALK_HEIGHT * 0.5, sw.z);
     swMesh.receiveShadow = true;
@@ -1372,6 +1453,284 @@ export function buildNeighborhoodWorld(
       z: so.z,
       group: soGroup,
     });
+  }
+
+  // 14. Organic Flora & Geology: Procedural Trees, Stratified Boulders & Instanced Scrub Grass
+  const distToSegment2D = (
+    px: number,
+    pz: number,
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number
+  ): number => {
+    const vx = x2 - x1;
+    const vz = z2 - z1;
+    const lenSq = vx * vx + vz * vz;
+    if (lenSq < 1e-6) return Math.hypot(px - x1, pz - z1);
+    const t = Math.max(0, Math.min(1, ((px - x1) * vx + (pz - z1) * vz) / lenSq));
+    return Math.hypot(px - (x1 + t * vx), pz - (z1 + t * vz));
+  };
+
+  const isOnSidewalk = (x: number, z: number): boolean =>
+    map.sidewalks.some(
+      (sw) =>
+        x >= sw.x - sw.w * 0.5 + 0.15 &&
+        x <= sw.x + sw.w * 0.5 - 0.15 &&
+        z >= sw.z - sw.d * 0.5 + 0.15 &&
+        z <= sw.z + sw.d * 0.5 - 0.15
+    );
+
+  const isSpotClear = (x: number, z: number, pad: number): boolean => {
+    if (Math.hypot(x - map.playerSpawn.x, z - map.playerSpawn.z) < 2.8 + pad) return false;
+    for (const r of map.roads) {
+      if (
+        x >= r.x - r.w * 0.5 - pad &&
+        x <= r.x + r.w * 0.5 + pad &&
+        z >= r.z - r.d * 0.5 - pad &&
+        z <= r.z + r.d * 0.5 + pad
+      ) {
+        return false;
+      }
+    }
+    for (const eb of ENTERABLE_BUILDINGS) {
+      // Extra margin to protect exterior doors, porches, and Shop Level 3 North Annex
+      const annexPadN = eb.archetype === 'shop' ? 3.8 : 1.0;
+      if (
+        x >= eb.x - eb.w * 0.5 - 1.2 - pad &&
+        x <= eb.x + eb.w * 0.5 + 1.2 + pad &&
+        z >= eb.z - eb.d * 0.5 - annexPadN - pad &&
+        z <= eb.z + eb.d * 0.5 + 1.6 + pad
+      ) {
+        return false;
+      }
+      for (const d of eb.doors) {
+        if (Math.hypot(x - (eb.x + d.hingeX), z - (eb.z + d.hingeZ)) < 2.6 + pad) {
+          return false;
+        }
+      }
+    }
+    for (const b of map.buildings) {
+      if (
+        x >= b.x - b.w * 0.5 - 1.0 - pad &&
+        x <= b.x + b.w * 0.5 + 1.0 + pad &&
+        z >= b.z - b.d * 0.5 - 1.0 - pad &&
+        z <= b.z + b.d * 0.5 + 1.0 + pad
+      ) {
+        return false;
+      }
+    }
+    for (const f of map.fences) {
+      if (distToSegment2D(x, z, f.x1, f.z1, f.x2, f.z2) < 0.8 + pad) return false;
+    }
+    for (const g of map.gates) {
+      if (distToSegment2D(x, z, g.x1, g.z1, g.x2, g.z2) < 1.8 + pad) return false;
+    }
+    for (const v of map.vehicles) {
+      if (Math.hypot(x - v.x, z - v.z) < 2.5 + pad) return false;
+    }
+    for (const l of map.lamps) {
+      if (Math.hypot(x - l.x, z - l.z) < 1.1 + pad) return false;
+    }
+    for (const p of map.props) {
+      if (Math.hypot(x - p.x, z - p.z) < 1.4 + pad) return false;
+    }
+    for (const c of map.containers) {
+      if (Math.hypot(x - c.x, z - c.z) < 1.3 + pad) return false;
+    }
+    for (const r of map.resources) {
+      if (Math.hypot(x - r.x, z - r.z) < 1.1 + pad) return false;
+    }
+    return true;
+  };
+
+  // Shared tree archetypes (variants 0, 1: blighted foliage; variant 2: skeletal deadwood)
+  const treeArchetypes = [
+    createProceduralTreeGeometries(0),
+    createProceduralTreeGeometries(1),
+    createProceduralTreeGeometries(2),
+  ];
+  for (const arch of treeArchetypes) {
+    localDisposables.push(arch.woodGeo);
+    if (arch.foliageGeo) localDisposables.push(arch.foliageGeo);
+  }
+
+  const placedTrees: { x: number; z: number; y: number; scale: number }[] = [];
+  const treeCandidates: [number, number, 0 | 1 | 2, number, number][] = [
+    // In-town yards, alleys & vacant lots
+    [-34.2, -11.6, 1, 0.9, 0.3],
+    [-26.8, -12.8, 2, 0.85, 1.4],
+    [-35.4, -24.5, 0, 0.96, 2.2],
+    [35.4, -25.2, 1, 0.92, 0.7],
+    [26.2, -25.4, 2, 0.88, 2.8],
+    [-35.4, 10.2, 0, 0.95, 1.1],
+    [-34.8, 26.2, 1, 1.0, 2.5],
+    [-26.4, 26.8, 2, 0.86, 0.4],
+    [-19.2, 26.2, 0, 0.94, 1.9],
+    [-9.4, 27.0, 1, 0.88, 3.1],
+    [28.4, 27.6, 2, 0.9, 0.9],
+    [35.6, 27.2, 0, 0.96, 2.4],
+    // Outer north lots & lab perimeter strip
+    [-17.2, -41.5, 1, 0.95, 1.6],
+    [-10.4, -47.2, 0, 1.02, 0.2],
+    [10.4, -41.8, 2, 0.92, 2.1],
+    [16.4, -47.2, 1, 0.98, 1.0],
+    // Outer south precinct & clinic flanks
+    [-10.4, 47.4, 0, 0.96, 2.7],
+    [34.6, 42.2, 1, 0.92, 0.6],
+    [34.2, 47.6, 2, 0.88, 1.8],
+    // Outer perimeter wasteland ridges (horizon & perimeter depth)
+    [-53.8, -39.5, 0, 1.15, 0.4],
+    [-54.2, -25.8, 2, 1.08, 1.9],
+    [-53.2, 25.5, 1, 1.12, 2.6],
+    [-54.5, 39.5, 0, 1.18, 1.1],
+    [53.5, -39.5, 1, 1.14, 2.2],
+    [54.2, -24.5, 0, 1.1, 0.8],
+    [53.4, 25.8, 2, 1.08, 3.0],
+    [54.0, 39.8, 1, 1.16, 1.5],
+    [-41.5, -54.5, 0, 1.14, 0.9],
+    [-26.5, -55.2, 2, 1.05, 2.4],
+    [10.5, -55.4, 1, 1.12, 1.3],
+    [40.2, -54.6, 0, 1.16, 2.8],
+    [-40.2, 54.6, 1, 1.12, 0.5],
+    [9.8, 55.4, 0, 1.15, 2.0],
+    [38.8, 54.6, 2, 1.08, 1.2],
+  ];
+
+  for (const [tx, tz, variant, scale, rotY] of treeCandidates) {
+    if (!isSpotClear(tx, tz, 0.95)) continue;
+    const onSw = isOnSidewalk(tx, tz);
+    const ty = onSw ? SIDEWALK_HEIGHT : sampleTerrainHeight(tx, tz, flatZones);
+    const arch = treeArchetypes[variant];
+
+    const tGroup = new THREE.Group();
+    tGroup.position.set(tx, ty, tz);
+    tGroup.rotation.y = rotY;
+    tGroup.scale.setScalar(scale);
+
+    const trunkMesh = new THREE.Mesh(arch.woodGeo, mats.barkWood);
+    trunkMesh.castShadow = true;
+    trunkMesh.receiveShadow = true;
+    tGroup.add(trunkMesh);
+
+    if (arch.foliageGeo) {
+      const canopyMesh = new THREE.Mesh(arch.foliageGeo, mats.foliage);
+      canopyMesh.castShadow = true;
+      canopyMesh.receiveShadow = true;
+      tGroup.add(canopyMesh);
+    }
+    root.add(tGroup);
+    placedTrees.push({ x: tx, z: tz, y: ty, scale });
+
+    if (
+      tx > map.bounds.minX &&
+      tx < map.bounds.maxX &&
+      tz > map.bounds.minZ &&
+      tz < map.bounds.maxZ
+    ) {
+      colliders.circles.push({ x: tx, z: tz, radius: 0.34 * scale });
+    }
+  }
+
+  // Stratified boulder clusters in vacant lots, outer roadsides & perimeter slopes
+  const boulderCandidates: [number, number, number, number, number][] = [
+    [-24.2, -13.2, 101, 0.9, 0.3],
+    [-16.8, -47.2, 202, 1.05, 1.2],
+    [13.8, -46.8, 303, 0.95, 2.1],
+    [-35.2, 27.6, 404, 0.9, 0.8],
+    [35.2, 11.4, 505, 0.85, 1.7],
+    [35.4, 46.2, 606, 1.0, 2.5],
+    [-11.2, 41.2, 707, 0.85, 0.4],
+    [-51.8, -10.5, 808, 1.35, 1.1],
+    [-52.4, 11.5, 909, 1.45, 2.3],
+    [52.2, -11.0, 1010, 1.4, 0.7],
+    [52.6, 11.8, 1111, 1.32, 1.9],
+    [2.5, -52.5, 1212, 1.28, 2.8],
+    [-46.8, -52.2, 1313, 1.38, 0.6],
+    [47.2, 52.4, 1414, 1.35, 1.4],
+  ];
+  for (const [bx, bz, seed, scale, rotY] of boulderCandidates) {
+    if (!isSpotClear(bx, bz, 0.85)) continue;
+    const onSw = isOnSidewalk(bx, bz);
+    const by = onSw ? SIDEWALK_HEIGHT : sampleTerrainHeight(bx, bz, flatZones);
+    const cluster = buildBoulderClusterModel(seed, scale, mats);
+    cluster.position.set(bx, by, bz);
+    cluster.rotation.y = rotY;
+    root.add(cluster);
+
+    if (
+      bx > map.bounds.minX &&
+      bx < map.bounds.maxX &&
+      bz > map.bounds.minZ &&
+      bz < map.bounds.maxZ
+    ) {
+      colliders.circles.push({ x: bx, z: bz, radius: 0.72 * scale });
+    }
+  }
+
+  // Instanced Wild Grass & Scrub Tufts (single draw call across tree roots, lots, curb borders & hills)
+  const grassGeo = createGrassTuftGeometry();
+  const grassMat = new THREE.MeshStandardMaterial({
+    color: 0x455235,
+    roughness: 0.94,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+  });
+  localDisposables.push(grassGeo, grassMat);
+
+  const grassTransforms: { x: number; y: number; z: number; rot: number; sx: number; sy: number }[] = [];
+  const pushGrass = (gx: number, gz: number, rot: number, sc: number, syMul = 1) => {
+    if (!isSpotClear(gx, gz, 0.25)) return;
+    const onSw = isOnSidewalk(gx, gz);
+    const gy = onSw ? SIDEWALK_HEIGHT : sampleTerrainHeight(gx, gz, flatZones);
+    grassTransforms.push({ x: gx, y: gy, z: gz, rot, sx: sc, sy: sc * syMul });
+  };
+
+  // Ring grass clusters around placed trees
+  for (let ti = 0; ti < placedTrees.length; ti++) {
+    const t = placedTrees[ti];
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + ti * 0.7;
+      const dist = 0.65 + ((ti + k) % 3) * 0.35;
+      pushGrass(
+        t.x + Math.cos(a) * dist,
+        t.z + Math.sin(a) * dist,
+        a + 0.5,
+        0.85 + ((ti + k) % 3) * 0.2,
+        1.0
+      );
+    }
+  }
+
+  // Natural scrub scattered along vacant lots, fence lines, and perimeter berms
+  for (let i = 0; i < 120; i++) {
+    const h1 = Math.sin(i * 12.9898 + 4.1414) * 43758.5453;
+    const h2 = Math.sin(i * 78.233 + 1.913) * 24634.6345;
+    const u = h1 - Math.floor(h1);
+    const v = h2 - Math.floor(h2);
+    const gx = (u - 0.5) * 116;
+    const gz = (v - 0.5) * 116;
+    pushGrass(gx, gz, u * Math.PI * 2, 0.75 + v * 0.65, 0.85 + (i % 4) * 0.15);
+  }
+
+  if (grassTransforms.length > 0) {
+    const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassTransforms.length);
+    grassMesh.receiveShadow = true;
+    grassMesh.castShadow = false;
+    const _gMat = new THREE.Matrix4();
+    const _gPos = new THREE.Vector3();
+    const _gQuat = new THREE.Quaternion();
+    const _gScale = new THREE.Vector3();
+    for (let i = 0; i < grassTransforms.length; i++) {
+      const g = grassTransforms[i];
+      _gPos.set(g.x, g.y, g.z);
+      _gQuat.setFromAxisAngle(_yAxis, g.rot);
+      _gScale.set(g.sx, g.sy, g.sx);
+      _gMat.compose(_gPos, _gQuat, _gScale);
+      grassMesh.setMatrixAt(i, _gMat);
+    }
+    grassMesh.instanceMatrix.needsUpdate = true;
+    detailDecorGroup.add(grassMesh);
   }
 
   return {

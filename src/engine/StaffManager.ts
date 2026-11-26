@@ -46,6 +46,7 @@ export class StaffManager {
   private employeeViews: EmployeeEntityView[] = [];
   private frontDoor: WorldDoorInteractable | null = null;
   private backDoor: WorldDoorInteractable | null = null;
+  private lodFrameCount = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -106,6 +107,7 @@ export class StaffManager {
           const built = buildProceduralStaffModel(this.sharedGeos, {
             variant: surv.variant,
             kind: 'survivor',
+            survivorId: surv.id,
             name: survName,
             subtitle: t.gameMessages.staff.wildSurvivorBadge,
           });
@@ -146,6 +148,7 @@ export class StaffManager {
           variant: agent.variant,
           kind: 'employee',
           profession: agent.profession,
+          survivorId: agent.survivorId,
           name: empName,
           subtitle: profShort,
         });
@@ -323,49 +326,89 @@ export class StaffManager {
       this.interactions.pushToast(notice.text, notice.tone, 2.8);
     }
 
+    this.lodFrameCount = (this.lodFrameCount + 1) & 0x3fffffff;
+
     // Update world survivor views
-    for (const v of this.survivorViews) {
+    for (let i = 0; i < this.survivorViews.length; i++) {
+      const v = this.survivorViews[i];
       const s = v.entity;
       if (s.recruited) {
         v.group.visible = false;
         continue;
       }
-      const dist = Math.hypot(playerX - s.x, playerZ - s.z);
+      const dx = playerX - s.x;
+      const dz = playerZ - s.z;
+      const distSq = dx * dx + dz * dz;
+      const dist = Math.sqrt(distSq);
+      const prevYaw = s.yaw;
       if (dist < 4.5) {
-        const targetYaw = Math.atan2(-(playerX - s.x), -(playerZ - s.z));
-        s.yaw = THREE.MathUtils.lerp(s.yaw, targetYaw, Math.min(1, dt * 3.5));
+        const targetYaw = Math.atan2(-dx, -dz);
+        let diff = targetYaw - s.yaw;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        s.yaw += diff * Math.min(1, dt * 4.5);
+        while (s.yaw > Math.PI) s.yaw -= Math.PI * 2;
+        while (s.yaw < -Math.PI) s.yaw += Math.PI * 2;
       }
+      let yawDiff = s.yaw - prevYaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      const instYawRate = dt > 0.001 ? Math.max(-5, Math.min(5, yawDiff / dt)) : 0;
+      s.yawRate += (instYawRate - s.yawRate) * Math.min(1, dt * 10);
+
       v.group.position.set(s.x, s.y, s.z);
       v.group.rotation.y = s.yaw;
       if (v.rig) {
         if (v.rig.labelSprite) {
           v.rig.labelSprite.visible = dist < 13.5;
         }
+        const isFar = distSq > 30 * 30;
+        if (isFar && ((this.lodFrameCount + i) & 1) !== 0) {
+          continue;
+        }
         animateStaffRig(v.rig, {
           status: 'survivor',
           walkCycle: s.animPhase,
           isMoving: false,
+          actualSpeed: 0,
+          yawRate: s.yawRate,
+          isTalking: dist < 4.2,
+          distSq,
+          dt: isFar ? dt * 2 : dt,
         });
       }
     }
 
     // Update hired employee views
-    for (const v of this.employeeViews) {
+    for (let i = 0; i < this.employeeViews.length; i++) {
+      const v = this.employeeViews[i];
       const a = v.agent;
       v.group.position.set(a.x, a.y, a.z);
       v.group.rotation.y = a.yaw;
       if (v.rig) {
+        const dx = playerX - a.x;
+        const dz = playerZ - a.z;
+        const distSq = dx * dx + dz * dz;
         if (v.rig.labelSprite) {
-          const dist = Math.hypot(playerX - a.x, playerZ - a.z);
-          v.rig.labelSprite.visible = dist < 15.0;
+          v.rig.labelSprite.visible = distSq < 15.0 * 15.0;
         }
-        const isMoving = Math.hypot(a.vx, a.vz) > 0.12;
+        const isFar = distSq > 30 * 30 && a.swingTimer <= 0 && a.hitFlashTimer <= 0;
+        if (isFar && ((this.lodFrameCount + i) & 1) !== 0) {
+          continue;
+        }
+        const isMoving = a.actualSpeed > 0.14;
         animateStaffRig(v.rig, {
           status: a.status,
           walkCycle: a.walkCycle,
           isMoving,
           swingTimer: a.swingTimer,
+          swingMaxTimer: a.swingMaxTimer,
           hitFlashTimer: a.hitFlashTimer,
+          actualSpeed: a.actualSpeed,
+          yawRate: a.yawRate,
+          isRecovering: a.recovering,
+          distSq,
+          dt: isFar ? dt * 2 : dt,
         });
       }
     }

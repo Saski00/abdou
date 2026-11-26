@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { ResourceId } from '../../game/types';
 import { MaterialPalette } from './proceduralModels';
+import {
+  createBeveledBoxGeometry,
+  createFracturedSlabGeometry,
+  createTubePathGeometry,
+  mergeParts,
+} from './proceduralGeometryKit';
 
 export interface ResourceMaterialPalette {
   tinMetal: THREE.MeshStandardMaterial;
@@ -192,47 +198,37 @@ export function buildScrapMetalModel(
 ): THREE.Group {
   const group = new THREE.Group();
 
-  // Base rusted plate
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.035, 0.32), mats.rustedMetal);
-  plate.position.set(0, 0.018, 0);
+  // Jagged fractured metal plate
+  const plate = new THREE.Mesh(createFracturedSlabGeometry(0.46, 0.34, 0.03, 73), mats.rustedMetal);
+  plate.position.set(0, 0.005, 0);
   plate.rotation.y = 0.2;
   plate.castShadow = true;
   plate.receiveShadow = true;
 
-  // Bent steel pipe
-  const pipe = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.042, 0.042, 0.44, 10),
-    resMats.steelPipe
-  );
-  pipe.rotation.z = Math.PI * 0.5;
-  pipe.rotation.y = -0.35;
-  pipe.position.set(0.02, 0.075, -0.02);
+  // Curved bent steel pipe elbow
+  const pipePts = [
+    new THREE.Vector3(-0.2, 0.055, -0.04),
+    new THREE.Vector3(0.0, 0.075, -0.02),
+    new THREE.Vector3(0.18, 0.065, 0.08),
+  ];
+  const pipe = new THREE.Mesh(createTubePathGeometry(pipePts, 0.035, 8, 7), resMats.steelPipe);
   pipe.castShadow = true;
 
-  // Angled L-bracket / flange plate
-  const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.03, 0.16), resMats.tinMetal);
-  bracket.position.set(-0.06, 0.08, 0.06);
-  bracket.rotation.set(0.25, 0.5, -0.18);
-  bracket.castShadow = true;
-
-  // Gear / wheel hub ring
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.11, 0.11, 0.045, 12),
-    mats.rustedMetal
-  );
-  hub.position.set(0.11, 0.06, 0.07);
-  hub.rotation.x = 0.22;
+  // Perforated gear / sprocket wheel ring
+  const hub = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.025, 6, 12), mats.rustedMetal);
+  hub.rotation.x = Math.PI * 0.44;
+  hub.position.set(0.1, 0.055, 0.06);
   hub.castShadow = true;
 
-  group.add(plate, pipe, bracket, hub);
+  group.add(plate, pipe, hub);
   return group;
 }
 
 export function buildWoodModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
-  const plankGeo = new THREE.BoxGeometry(0.58, 0.065, 0.13);
-  const strapGeo = new THREE.BoxGeometry(0.04, 0.15, 0.31);
+  const plankGeo = createBeveledBoxGeometry(0.58, 0.065, 0.13, 0.012, 0.015);
+  const strapGeo = createBeveledBoxGeometry(0.04, 0.15, 0.31, 0.006, 0.01);
 
   const p1 = new THREE.Mesh(plankGeo, mats.wood);
   p1.position.set(0, 0.032, -0.08);
@@ -265,26 +261,44 @@ export function buildMedicalSuppliesModel(
 ): THREE.Group {
   const group = new THREE.Group();
 
-  // White polymer hard case
-  const box = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.15, 0.28), resMats.medCaseWhite);
+  // Rounded polymer med hard-case
+  const box = new THREE.Mesh(
+    createBeveledBoxGeometry(0.38, 0.15, 0.28, 0.028, 0.045),
+    resMats.medCaseWhite
+  );
   box.position.y = 0.075;
   box.castShadow = true;
   box.receiveShadow = true;
 
-  // Carry handle on front edge
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.045), mats.darkTrim);
-  handle.position.set(0, 0.075, 0.155);
+  // Curved tubular carry handle
+  const handlePts = [
+    new THREE.Vector3(-0.06, 0.075, 0.135),
+    new THREE.Vector3(-0.06, 0.075, 0.175),
+    new THREE.Vector3(0.06, 0.075, 0.175),
+    new THREE.Vector3(0.06, 0.075, 0.135),
+  ];
+  const handle = new THREE.Mesh(createTubePathGeometry(handlePts, 0.014, 6, 5), mats.darkTrim);
 
-  // Two dark clasp latches
-  const latchL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.03), mats.darkTrim);
-  latchL.position.set(-0.11, 0.09, 0.145);
-  const latchR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.03), mats.darkTrim);
-  latchR.position.set(0.11, 0.09, 0.145);
+  const latchL = new THREE.Mesh(
+    createBeveledBoxGeometry(0.04, 0.06, 0.03, 0.008, 0.01),
+    mats.darkTrim
+  );
+  latchL.position.set(-0.11, 0.09, 0.142);
+  const latchR = new THREE.Mesh(
+    createBeveledBoxGeometry(0.04, 0.06, 0.03, 0.008, 0.01),
+    mats.darkTrim
+  );
+  latchR.position.set(0.11, 0.09, 0.142);
 
-  // Raised Red Cross emblem on lid
-  const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.016, 0.044), mats.hydrantRed);
+  const crossH = new THREE.Mesh(
+    createBeveledBoxGeometry(0.14, 0.016, 0.044, 0.004, 0.005),
+    mats.hydrantRed
+  );
   crossH.position.set(0, 0.154, 0);
-  const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.016, 0.14), mats.hydrantRed);
+  const crossV = new THREE.Mesh(
+    createBeveledBoxGeometry(0.044, 0.016, 0.14, 0.004, 0.005),
+    mats.hydrantRed
+  );
   crossV.position.set(0, 0.154, 0);
 
   group.add(box, handle, latchL, latchR, crossH, crossV);
@@ -315,15 +329,18 @@ export const WORKTABLE_HEIGHT = 0.78;
 export function buildWorktableModel(mats: MaterialPalette): THREE.Group {
   const group = new THREE.Group();
 
-  // Tabletop surface flush at WORKTABLE_HEIGHT (0.78m)
-  const top = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 0.82), mats.wood);
-  top.position.y = WORKTABLE_HEIGHT - 0.035;
+  // Beveled heavy butcher-block workbench top
+  const top = new THREE.Mesh(
+    createBeveledBoxGeometry(1.55, 0.075, 0.82, 0.02, 0.03),
+    mats.wood
+  );
+  top.position.y = WORKTABLE_HEIGHT - 0.0375;
   top.castShadow = true;
   top.receiveShadow = true;
   group.add(top);
 
-  // 4 steel legs
-  const legGeo = new THREE.BoxGeometry(0.08, WORKTABLE_HEIGHT - 0.07, 0.08);
+  // Tubular steel legs + diagonal cross-bracing
+  const frameParts: THREE.BufferGeometry[] = [];
   const legOffsets = [
     [-0.68, -0.32],
     [0.68, -0.32],
@@ -331,14 +348,28 @@ export function buildWorktableModel(mats: MaterialPalette): THREE.Group {
     [0.68, 0.32],
   ];
   for (const [lx, lz] of legOffsets) {
-    const leg = new THREE.Mesh(legGeo, mats.darkTrim);
-    leg.position.set(lx, (WORKTABLE_HEIGHT - 0.07) * 0.5, lz);
-    leg.castShadow = true;
-    group.add(leg);
+    const leg = new THREE.CylinderGeometry(0.036, 0.032, WORKTABLE_HEIGHT - 0.07, 8);
+    leg.translate(lx, (WORKTABLE_HEIGHT - 0.07) * 0.5, lz);
+    frameParts.push(leg);
   }
+  const rearBrace = new THREE.CylinderGeometry(0.018, 0.018, 1.44, 6);
+  rearBrace.rotateZ(Math.PI * 0.42);
+  rearBrace.translate(0, 0.45, -0.32);
+  frameParts.push(rearBrace);
 
-  // Lower shelf
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.045, 0.68), mats.wood);
+  // Mounted bench vise on front-right corner
+  const vise = createBeveledBoxGeometry(0.16, 0.13, 0.22, 0.015, 0.02);
+  vise.translate(0.56, WORKTABLE_HEIGHT + 0.06, 0.34);
+  frameParts.push(vise);
+
+  const frameMesh = new THREE.Mesh(mergeParts(frameParts, false), mats.darkTrim);
+  frameMesh.castShadow = true;
+  group.add(frameMesh);
+
+  const shelf = new THREE.Mesh(
+    createBeveledBoxGeometry(1.38, 0.048, 0.68, 0.012, 0.02),
+    mats.wood
+  );
   shelf.position.y = 0.24;
   shelf.receiveShadow = true;
   group.add(shelf);
@@ -354,29 +385,23 @@ export function buildHingedGateModel(
   const pivot = new THREE.Group();
 
   if (kind === 'chainlink') {
-    const frameTop = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.07, 0.07),
-      mats.lampMetal
-    );
-    frameTop.position.set(width * 0.5, 1.92, 0);
+    const metalParts: THREE.BufferGeometry[] = [];
+    const topBar = new THREE.CylinderGeometry(0.035, 0.035, width, 7);
+    topBar.rotateZ(Math.PI * 0.5);
+    topBar.translate(width * 0.5, 1.92, 0);
+    const botBar = new THREE.CylinderGeometry(0.035, 0.035, width, 7);
+    botBar.rotateZ(Math.PI * 0.5);
+    botBar.translate(width * 0.5, 0.14, 0);
+    const postHinge = new THREE.CylinderGeometry(0.045, 0.048, 2.0, 8);
+    postHinge.translate(0.03, 1.0, 0);
+    const postLatch = new THREE.CylinderGeometry(0.04, 0.04, 1.98, 8);
+    postLatch.translate(width - 0.04, 0.99, 0);
+    const diag = new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(width * 0.88, 1.68), 6);
+    diag.rotateZ(-Math.atan2(width * 0.88, 1.68));
+    diag.translate(width * 0.5, 1.03, 0);
+    metalParts.push(topBar, botBar, postHinge, postLatch, diag);
 
-    const frameBot = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.07, 0.07),
-      mats.lampMetal
-    );
-    frameBot.position.set(width * 0.5, 0.14, 0);
-
-    const postHinge = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.045, 0.045, 2.0, 8),
-      mats.lampMetal
-    );
-    postHinge.position.set(0.03, 1.0, 0);
-
-    const postLatch = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.04, 1.98, 8),
-      mats.lampMetal
-    );
-    postLatch.position.set(width - 0.04, 0.99, 0);
+    pivot.add(new THREE.Mesh(mergeParts(metalParts, false), mats.lampMetal));
 
     const meshMat = new THREE.MeshStandardMaterial({
       color: 0x4b5563,
@@ -390,35 +415,34 @@ export function buildHingedGateModel(
     );
     grid.position.set(width * 0.5, 1.03, 0);
 
-    // Amber latch handle on the swinging edge so players notice it is interactive
     const handle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.12, 0.14),
+      createBeveledBoxGeometry(0.16, 0.12, 0.14, 0.015, 0.02),
       mats.barrierHazard
     );
     handle.position.set(width - 0.18, 1.04, 0);
 
-    pivot.add(frameTop, frameBot, postHinge, postLatch, grid, handle);
+    pivot.add(grid, handle);
   } else {
-    const railTop = new THREE.Mesh(new THREE.BoxGeometry(width, 0.09, 0.09), mats.wood);
-    railTop.position.set(width * 0.5, 1.65, 0);
-    const railBot = new THREE.Mesh(new THREE.BoxGeometry(width, 0.09, 0.09), mats.wood);
-    railBot.position.set(width * 0.5, 0.42, 0);
-    pivot.add(railTop, railBot);
+    const woodParts: THREE.BufferGeometry[] = [];
+    const railTop = createBeveledBoxGeometry(width, 0.09, 0.09, 0.01, 0.01);
+    railTop.translate(width * 0.5, 1.65, 0);
+    const railBot = createBeveledBoxGeometry(width, 0.09, 0.09, 0.01, 0.01);
+    railBot.translate(width * 0.5, 0.42, 0);
+    woodParts.push(railTop, railBot);
 
     const plankCount = Math.max(4, Math.floor(width / 0.28));
     const step = width / plankCount;
     for (let i = 0; i < plankCount; i++) {
-      const plank = new THREE.Mesh(
-        new THREE.BoxGeometry(step * 0.86, 1.88, 0.055),
-        mats.wood
-      );
-      plank.position.set((i + 0.5) * step, 0.96, 0.04);
-      plank.castShadow = true;
-      pivot.add(plank);
+      const plank = createBeveledBoxGeometry(step * 0.86, 1.88, 0.055, 0.008, 0.008);
+      plank.translate((i + 0.5) * step, 0.96, 0.04);
+      woodParts.push(plank);
     }
+    const gateWood = new THREE.Mesh(mergeParts(woodParts, true, 0.65), mats.wood);
+    gateWood.castShadow = true;
+    pivot.add(gateWood);
 
     const latch = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.1, 0.15),
+      createBeveledBoxGeometry(0.18, 0.1, 0.15, 0.015, 0.02),
       mats.barrierHazard
     );
     latch.position.set(width - 0.16, 1.02, 0.04);
@@ -436,31 +460,61 @@ export function buildSupplyContainerModel(
   const group = new THREE.Group();
   const bodyMat = kind === 'supply_case' ? resMats.caseOlive : resMats.toolRed;
 
-  // Base chest box (0.86 x 0.44 x 0.52)
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.52), bodyMat);
-  base.position.y = 0.21;
+  // Beveled rugged base case with structural side ribs
+  const baseParts: THREE.BufferGeometry[] = [];
+  const main = createBeveledBoxGeometry(0.86, 0.42, 0.52, 0.03, 0.04);
+  main.translate(0, 0.21, 0);
+  baseParts.push(main);
+  for (const rx of [-0.28, 0, 0.28]) {
+    const rib = createBeveledBoxGeometry(0.05, 0.36, 0.55, 0.01, 0.01);
+    rib.translate(rx, 0.21, 0);
+    baseParts.push(rib);
+  }
+  const base = new THREE.Mesh(mergeParts(baseParts, false), bodyMat);
   base.castShadow = true;
   base.receiveShadow = true;
 
-  // Inner dark tray recess visible once lid opens
+  // Side tubular carry handles
+  for (const sx of [-0.45, 0.45]) {
+    const pts = [
+      new THREE.Vector3(sx, 0.24, -0.09),
+      new THREE.Vector3(sx + Math.sign(sx) * 0.04, 0.24, -0.09),
+      new THREE.Vector3(sx + Math.sign(sx) * 0.04, 0.24, 0.09),
+      new THREE.Vector3(sx, 0.24, 0.09),
+    ];
+    group.add(new THREE.Mesh(createTubePathGeometry(pts, 0.014, 6, 5), mats.darkTrim));
+  }
+
   const interior = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.04, 0.42), mats.darkTrim);
   interior.position.y = 0.41;
 
-  // Hinged lid pivot at rear edge (z = -0.26, y = 0.42)
+  // Hinged beveled lid
   const lidPivot = new THREE.Group();
   lidPivot.position.set(0, 0.42, -0.26);
 
-  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.1, 0.54), bodyMat);
-  lid.position.set(0, 0.05, 0.26);
+  const lid = new THREE.Mesh(
+    createBeveledBoxGeometry(0.88, 0.11, 0.54, 0.03, 0.04),
+    bodyMat
+  );
+  lid.position.set(0, 0.055, 0.26);
   lid.castShadow = true;
 
-  const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.04), mats.barrierHazard);
+  const clasp = new THREE.Mesh(
+    createBeveledBoxGeometry(0.14, 0.075, 0.045, 0.01, 0.01),
+    mats.barrierHazard
+  );
   clasp.position.set(0, 0.01, 0.53);
 
-  const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.11, 0.55), mats.darkTrim);
-  strapL.position.set(-0.28, 0.05, 0.26);
-  const strapR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.11, 0.55), mats.darkTrim);
-  strapR.position.set(0.28, 0.05, 0.26);
+  const strapL = new THREE.Mesh(
+    createBeveledBoxGeometry(0.06, 0.12, 0.55, 0.01, 0.01),
+    mats.darkTrim
+  );
+  strapL.position.set(-0.28, 0.055, 0.26);
+  const strapR = new THREE.Mesh(
+    createBeveledBoxGeometry(0.06, 0.12, 0.55, 0.01, 0.01),
+    mats.darkTrim
+  );
+  strapR.position.set(0.28, 0.055, 0.26);
 
   lidPivot.add(lid, clasp, strapL, strapR);
   group.add(base, interior, lidPivot);
@@ -477,20 +531,20 @@ export function buildKeyPickupModel(
 
   if (keyKind === 'keycard') {
     const card = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.02, 0.19),
+      createBeveledBoxGeometry(0.28, 0.022, 0.19, 0.005, 0.02),
       resMats.medCaseWhite
     );
     card.position.y = 0.014;
     card.castShadow = true;
 
     const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.282, 0.022, 0.048),
+      new THREE.BoxGeometry(0.282, 0.024, 0.048),
       mats.beaconRed
     );
     stripe.position.set(0, 0.014, -0.052);
 
     const chip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.065, 0.024, 0.05),
+      createBeveledBoxGeometry(0.065, 0.025, 0.05, 0.004, 0.008),
       mats.beaconCyan
     );
     chip.position.set(-0.065, 0.014, 0.03);
@@ -498,23 +552,25 @@ export function buildKeyPickupModel(
     group.add(card, stripe, chip);
   } else {
     const tag = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.02, 0.095),
+      createBeveledBoxGeometry(0.16, 0.022, 0.095, 0.005, 0.025),
       mats.beaconAmber
     );
     tag.position.set(-0.095, 0.015, 0);
     tag.rotation.y = 0.3;
 
     const bow = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.056, 0.056, 0.02, 12),
+      new THREE.TorusGeometry(0.046, 0.014, 6, 12),
       mats.beaconAmber
     );
+    bow.rotation.x = Math.PI * 0.5;
     bow.position.set(0.02, 0.016, 0);
     bow.castShadow = true;
 
     const shaft = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.016, 0.025),
+      new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6),
       resMats.tinMetal
     );
+    shaft.rotation.z = Math.PI * 0.5;
     shaft.position.set(0.115, 0.016, 0);
 
     const teeth = new THREE.Mesh(
@@ -528,4 +584,3 @@ export function buildKeyPickupModel(
 
   return group;
 }
-

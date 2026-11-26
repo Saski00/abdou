@@ -44,6 +44,7 @@ export class CustomerManager {
   };
   private lastAccepting = true;
   private lastStatusReason = '';
+  private lodFrameCount = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -88,7 +89,11 @@ export class CustomerManager {
     const group = this.assets.instantiateAsset(
       'npc.customer',
       () => {
-        const built = buildProceduralCustomerModel(this.sharedGeos, agent.profile.variant);
+        const built = buildProceduralCustomerModel(
+          this.sharedGeos,
+          agent.profile.variant,
+          agent.profile.id
+        );
         rig = built.rig;
         return built.group;
       },
@@ -210,19 +215,33 @@ export class CustomerManager {
       this.entities = remaining;
     }
 
+    this.lodFrameCount = (this.lodFrameCount + 1) & 0x3fffffff;
+
     // Sync 3D transforms & animations
-    for (const ent of this.entities) {
+    for (let i = 0; i < this.entities.length; i++) {
+      const ent = this.entities[i];
       const a = ent.agent;
       ent.group.position.set(a.x, a.y, a.z);
       ent.group.rotation.y = a.yaw;
       if (ent.rig) {
-        const isMoving = Math.hypot(a.vx, a.vz) > 0.12;
+        const dx = a.x - playerX;
+        const dz = a.z - playerZ;
+        const distSq = dx * dx + dz * dz;
+        const isFar = distSq > 30 * 30;
+        if (isFar && ((this.lodFrameCount + i) & 1) !== 0) {
+          continue;
+        }
+        const isMoving = a.actualSpeed > 0.14;
         animateCustomerRig(
           ent.rig,
           a.state,
           a.walkCycle,
           isMoving,
-          a.purchaseCompleted && a.selectedPurchase !== null
+          a.purchaseCompleted && a.selectedPurchase !== null,
+          isFar ? dt * 2 : dt,
+          a.actualSpeed,
+          a.yawRate,
+          distSq
         );
       }
     }

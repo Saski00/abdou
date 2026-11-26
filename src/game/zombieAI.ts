@@ -26,6 +26,21 @@ export type ZombieAIState =
 
 export type ZombieArchetypeId = 'walker' | 'runner' | 'brute';
 
+export type ZombieGaitStyle = 'shuffling' | 'limping' | 'stiff' | 'feral' | 'heavy';
+
+export type ZombieAnimState =
+  | 'idle'
+  | 'roaming'
+  | 'suspicious'
+  | 'investigating'
+  | 'alert'
+  | 'chasing'
+  | 'searching'
+  | 'attack_windup'
+  | 'attack_recovery'
+  | 'stunned'
+  | 'dead';
+
 export interface ZombieArchetypeConfig {
   id: ZombieArchetypeId;
   label: string;
@@ -285,6 +300,7 @@ export interface ZombieAgent {
   id: string;
   surgeId?: string;
   config: ZombieArchetypeConfig;
+  gaitStyle: ZombieGaitStyle;
   state: ZombieAIState;
   homeX: number;
   homeZ: number;
@@ -294,6 +310,8 @@ export interface ZombieAgent {
   yaw: number;
   vx: number;
   vz: number;
+  actualSpeed: number;
+  yawRate: number;
   health: number;
   maxHealth: number;
   targetX: number;
@@ -308,6 +326,8 @@ export interface ZombieAgent {
   searchTimer: number;
   searchStep: number;
   stunTimer: number;
+  stunMaxTimer: number;
+  hitDirectionSign: number;
   loseSightTimer: number;
   sensorTimer: number;
   steerTimer: number;
@@ -315,6 +335,7 @@ export interface ZombieAgent {
   steerDirZ: number;
   attackCooldown: number;
   attackWindup: number;
+  attackRecoveryTimer: number;
   attackDealtInSwing: boolean;
   hitFlashTimer: number;
   deathTimer: number;
@@ -474,6 +495,13 @@ export function isPointBlocked(
   return false;
 }
 
+function resolveZombieGaitStyle(archetypeId: ZombieArchetypeId, index: number): ZombieGaitStyle {
+  if (archetypeId === 'runner') return 'feral';
+  if (archetypeId === 'brute') return 'heavy';
+  const walkerGaits: ZombieGaitStyle[] = ['shuffling', 'limping', 'stiff'];
+  return walkerGaits[Math.abs(index) % walkerGaits.length];
+}
+
 export function createZombieAgent(
   spawn: ZombieSpawnConfig,
   index: number,
@@ -485,6 +513,7 @@ export function createZombieAgent(
     id: spawn.id,
     surgeId: spawn.surgeId,
     config,
+    gaitStyle: resolveZombieGaitStyle(config.id, index),
     state: 'idle',
     homeX: spawn.homeX,
     homeZ: spawn.homeZ,
@@ -494,6 +523,8 @@ export function createZombieAgent(
     yaw: spawn.yaw,
     vx: 0,
     vz: 0,
+    actualSpeed: 0,
+    yawRate: 0,
     health: config.maxHealth,
     maxHealth: config.maxHealth,
     targetX: spawn.homeX,
@@ -508,6 +539,8 @@ export function createZombieAgent(
     searchTimer: 0,
     searchStep: 0,
     stunTimer: 0,
+    stunMaxTimer: config.stunDurationSec,
+    hitDirectionSign: index % 2 === 0 ? 1 : -1,
     loseSightTimer: 0,
     // Stagger sensor ticks across zombies so ray/LOS checks never bunch up on 1 frame
     sensorTimer: (index * 0.05) % config.sensorIntervalSec,
@@ -516,6 +549,7 @@ export function createZombieAgent(
     steerDirZ: -Math.cos(spawn.yaw),
     attackCooldown: 0,
     attackWindup: 0,
+    attackRecoveryTimer: 0,
     attackDealtInSwing: false,
     hitFlashTimer: 0,
     deathTimer: 0,
@@ -900,7 +934,9 @@ export function stepZombiesAI(
   const playerSafe =
     Boolean(context?.playerSafe) || isPointInSafeZone(playerX, playerZ, 0.05, colliders);
 
+  const safeDt = Math.max(0.0001, dt);
   for (const z of zombies) {
+    const prevYaw = z.yaw;
     if (z.hitFlashTimer > 0) {
       z.hitFlashTimer = Math.max(0, z.hitFlashTimer - dt);
     }
@@ -909,11 +945,18 @@ export function stepZombiesAI(
       z.deathTimer += dt;
       z.vx = 0;
       z.vz = 0;
+      z.actualSpeed = 0;
+      z.yawRate = 0;
+      z.attackWindup = 0;
+      z.attackRecoveryTimer = 0;
       continue;
     }
 
     if (z.attackCooldown > 0) {
       z.attackCooldown = Math.max(0, z.attackCooldown - dt);
+    }
+    if (z.attackRecoveryTimer > 0) {
+      z.attackRecoveryTimer = Math.max(0, z.attackRecoveryTimer - dt);
     }
 
     const cfg = z.config;
@@ -1107,18 +1150,30 @@ export function stepZombiesAI(
 
       if (z.attackWindup > 0) {
         z.attackWindup -= dt;
+        // Subtle forward step into strike during the final lunge phase of the windup
+        if (z.attackWindup < cfg.attackWindupSec * 0.42 && distToPlayer > 0.85) {
+          const lungeStep = (cfg.id === 'runner' ? 1.8 : 1.2) * dt;
+          const invD = 1 / Math.max(0.001, distToPlayer);
+          z.x += dxToPlayer * invD * lungeStep;
+          z.z += dzToPlayer * invD * lungeStep;
+          resolveZombieCollisions(z, colliders, zombies, playerX, playerZ, false);
+          z.y = getSurfaceHeightAt(z.x, z.z, colliders);
+        }
         if (z.attackWindup <= 0 && !z.attackDealtInSwing) {
           z.attackDealtInSwing = true;
+          z.attackRecoveryTimer = cfg.id === 'brute' ? 0.46 : cfg.id === 'runner' ? 0.3 : 0.38;
           if (
             !playerDead &&
             !playerSafe &&
-            distToPlayer <= cfg.attackRange + 0.35 &&
+            distToPlayer <= cfg.attackRange + 0.38 &&
             hasLineOfSight2D(z.x, z.z, playerX, playerZ, colliders)
           ) {
             result.playerDamage += cfg.attackDamage;
             result.attackedById = z.id;
           }
         }
+      } else if (z.attackRecoveryTimer > 0) {
+        // Hold brief post-strike follow-through before chasing or winding up again
       } else if (playerDead || playerSafe) {
         beginSearchingAt(z, z.lastKnownX, z.lastKnownZ, colliders);
       } else if (distToPlayer > cfg.attackRange + 0.28) {
@@ -1231,8 +1286,13 @@ export function stepZombiesAI(
         }
       }
 
-      z.vx = dirX * moveSpeed;
-      z.vz = dirZ * moveSpeed;
+      const prevX = z.x;
+      const prevZ = z.z;
+      const targetVx = dirX * moveSpeed;
+      const targetVz = dirZ * moveSpeed;
+      const accelBlend = 1 - Math.exp(-(z.state === 'chasing' ? 9.5 : 7.2) * dt);
+      z.vx += (targetVx - z.vx) * accelBlend;
+      z.vz += (targetVz - z.vz) * accelBlend;
       z.x += z.vx * dt;
       z.z += z.vz * dt;
 
@@ -1241,7 +1301,15 @@ export function stepZombiesAI(
 
       const moveYaw = Math.atan2(-dirX, -dirZ);
       z.yaw = lerpAngle(z.yaw, moveYaw, clamp(8.8 * dt, 0, 1));
-      z.walkCycle += moveSpeed * 3.1 * dt;
+
+      // Compute true ground displacement & speed to prevent foot sliding in place
+      const actualMoved = Math.hypot(z.x - prevX, z.z - prevZ);
+      const rawActualSpeed = actualMoved / safeDt;
+      z.actualSpeed += (rawActualSpeed - z.actualSpeed) * (1 - Math.exp(-12 * dt));
+      if (actualMoved > 0.002) {
+        const strideCyclePerMeter = cfg.id === 'runner' ? 2.55 : cfg.id === 'brute' ? 3.25 : 2.95;
+        z.walkCycle += actualMoved * strideCyclePerMeter;
+      }
 
       // Universal anti-stuck check across all moving states
       if (!farCalm) {
@@ -1280,12 +1348,21 @@ export function stepZombiesAI(
         z.lastProgressDist = newDist;
       }
     } else {
-      z.vx = 0;
-      z.vz = 0;
+      const decelBlend = 1 - Math.exp(-11.5 * dt);
+      z.vx *= 1 - decelBlend;
+      z.vz *= 1 - decelBlend;
+      if (Math.hypot(z.vx, z.vz) < 0.04) {
+        z.vx = 0;
+        z.vz = 0;
+      }
+      z.actualSpeed += (0 - z.actualSpeed) * decelBlend;
       if (!veryFarCalm) {
         z.walkCycle += (z.state === 'suspicious' || z.state === 'alert' ? 2.2 : 1.4) * dt;
       }
     }
+
+    const rawYawRate = clamp(normalizeAngle(z.yaw - prevYaw) / safeDt, -6.5, 6.5);
+    z.yawRate += (rawYawRate - z.yawRate) * (1 - Math.exp(-10 * dt));
   }
 
   return result;
@@ -1323,6 +1400,7 @@ export function applyZombieDamage(
     target.state = 'dead';
     target.deathTimer = 0;
     target.attackWindup = 0;
+    target.attackRecoveryTimer = 0;
     return {
       hit: true,
       killed: true,
@@ -1333,11 +1411,17 @@ export function applyZombieDamage(
     };
   }
 
-  // Surviving zombie briefly staggers, interrupts any windup, then locks onto attacker
+  // Surviving zombie briefly staggers away from impact side, interrupts windup, then locks onto attacker
   const stunMult = (options.stunMultiplier ?? 1.0) * (crit ? 1.18 : 1.0);
+  const stunDur = target.config.stunDurationSec * stunMult;
+  const hitYaw = Math.atan2(-(playerX - target.x), -(playerZ - target.z));
+  const relHitAngle = normalizeAngle(hitYaw - target.yaw);
+  target.hitDirectionSign = relHitAngle >= 0 ? 1 : -1;
   target.state = 'stunned';
-  target.stunTimer = target.config.stunDurationSec * stunMult;
+  target.stunTimer = stunDur;
+  target.stunMaxTimer = Math.max(0.15, stunDur);
   target.attackWindup = 0;
+  target.attackRecoveryTimer = 0;
   target.awareness = 1;
   target.lastKnownX = playerX;
   target.lastKnownZ = playerZ;
