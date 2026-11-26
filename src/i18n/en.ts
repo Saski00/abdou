@@ -103,6 +103,15 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     languageEnglish: 'English',
     languageArabic: 'العربية',
     masterVolumeLabel: 'Master Volume',
+    ambientVolumeLabel: 'Ambience',
+    sfxVolumeLabel: 'Effects',
+    musicVolumeLabel: 'Tension',
+    dialogueVolumeLabel: 'Radio / Cues',
+    horrorAudioLabel: 'Horror Audio',
+    horrorAudioDesc: 'Heartbeat, whispers & building creaks',
+    horrorFull: 'Full',
+    horrorReduced: 'Reduced',
+    horrorOff: 'Off',
     mutedLabel: 'Muted',
     lookSensLabel: 'Look Sensitivity',
     screenOrientationLabel: 'Screen Orientation',
@@ -1903,7 +1912,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       actionLabel: 'Inspect Marks',
       noteTitle: 'Roadblock Clue',
       noteText:
-        'Heavy boot prints dragged toward the northern sandbags—defenders fell back in a hurry.',
+        'Heavy boot prints dragged toward the northern sandbags—only a torn radio strap remains in the ash.',
     },
     p_decal_vale: {
       name: 'Shattered Glass Trail',
@@ -1915,7 +1924,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       name: 'Triage Drag Marks',
       actionLabel: 'Inspect Marks',
       noteTitle: 'Clinic Courtyard Clue',
-      noteText: 'Gurney tracks and dropped triage tags point into Mercy Clinic’s exam wing.',
+      noteText: 'Gurney tracks and dropped triage tags vanish into Mercy Clinic’s unlit exam wing.',
     },
     p_decal_oil_auto: {
       name: 'Fresh Oil Spill',
@@ -1968,7 +1977,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       actionLabel: 'Inspect',
       noteTitle: 'Patrol Bunker',
       noteText:
-        'Chalk tally marks count days until radio batteries died. The 148.6 MHz repeater still has intact wiring.',
+        'Shaky chalk tallies stop abruptly at Day 9 ("HEARD THEM IN THE FOG"). The 148.6 MHz repeater wiring is still intact.',
     },
     p_sand_police: {
       name: 'Precinct Sandbags',
@@ -2237,6 +2246,288 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
         'You have steady cash—check the Shop Counter (E) Upgrades tab to expand capacity, or talk to neighborhood survivors to hire staff.',
       touchMessage:
         'You have steady cash—approach the Shop Counter, tap Manage, and open the Upgrades tab, or talk to survivors around town to hire staff.',
+    },
+  },
+  worldEvents: {
+    categories: {
+      exploration: 'Discovery',
+      zombie_activity: 'Infected Activity',
+      survivor: 'Survivor',
+      shop: 'Last Shop',
+      atmosphere: 'Street Signal',
+    },
+    ui: {
+      respondBtn: 'Respond',
+      approachHint: 'Approach ({bearing} {dist}m)',
+      secondsLeft: '{sec}s',
+      cardHint: 'Choose how to respond. Timed encounters vanish if ignored.',
+      dismissBtn: 'Ignore',
+      closeAria: 'Close encounter dialog',
+      needItemDisabled: 'Need {qty} {item}',
+      needMoneyDisabled: 'Need {amount}',
+      packFullDisabled: 'Pack full — store gear first',
+      noiseLoud: 'Loud Noise',
+      noiseAudible: 'Audible',
+      goodwillBadge: 'Goodwill Lv {level}',
+      mapPinLabel: 'Event · {title}',
+      mapPinDist: '{bearing} {dist}m',
+    },
+    anchors: {
+      anchor_shop_porch: 'Last Shop Front Porch',
+      anchor_crossroads_east: 'East Main Crossroads',
+      anchor_diner_camp: 'Starlight Diner Lot',
+      anchor_maple_alley: 'Maple Service Alley',
+      anchor_evac_lot: 'Mercer Evac Lot',
+      anchor_freight_alley: 'Freight Alley Behind Vale',
+      anchor_industrial_yard: 'Depot Scrap Yard',
+      anchor_police_lot: 'Precinct Parking Lot',
+      anchor_clinic_bay: 'Mercy Clinic Ambulance Bay',
+      anchor_roadblock_edge: 'North Roadblock Approach',
+    },
+    toasts: {
+      signalExpired: 'The distress signal cut out into static.',
+      traderDeparted: 'The wandering trader moved on down Main Street.',
+      encounterExpired: 'The street encounter passed quietly.',
+      cacheExpired: 'Someone else cleared the abandoned supply drop.',
+      prowlerNearbyCue: 'Heavy footsteps echo from a nearby street corner.',
+      noiseAttractsCue: 'Loose metal clatters nearby—infected turn toward the sound.',
+      perimeterWarningCue: 'Infected spotted probing near The Last Shop perimeter!',
+      goodwillDiscountNotice: 'Goodwill increased (-${discount} recruit fees)',
+      packFullPartialEvent: 'Pack full — left overflow behind',
+      silhouetteVanishedCue: 'The shadow down the street slips back into the mist.',
+    },
+    events: {
+      ev_supply_drop_alley: {
+        title: 'Abandoned Supply Cache',
+        description:
+          'A strapped emergency crate sits tucked beside a rusted shutter. Its latch can be pried cleanly with scrap metal or smashed open in a hurry.',
+        choices: {
+          pry_careful: {
+            label: 'Pry Lock Carefully',
+            hint: 'Uses 1 Scrap Metal · +$12, Food & Medkit · Quiet',
+            outcomeToast: 'Pried the latch cleanly (+$12, +1 Food, +1 Medkit).',
+          },
+          smash_grab: {
+            label: 'Smash Latch & Grab',
+            hint: 'Free · +1 Food, +1 Water · Loud noise draws nearby infected',
+            outcomeToast: 'Forced the crate open (+1 Food, +1 Water) — loud clang echoed!',
+          },
+          leave_cache: {
+            label: 'Leave It Alone',
+            hint: 'Stay quiet and move on',
+            outcomeToast: 'Left the supply cache undisturbed.',
+          },
+        },
+      },
+      ev_distress_signal: {
+        title: 'Emergency Distress Beacon',
+        description:
+          'A blinking hand-cranked transponder chirps on the curb before its battery dies. Recovering the unit intact may carry survivor data and salvage.',
+        choices: {
+          recover_beacon: {
+            label: 'Recover Intact Unit',
+            hint: '+$22, +1 Scrap Metal, +1 Water · Low noise',
+            outcomeToast: 'Recovered the distress unit intact (+$22, +1 Scrap, +1 Water).',
+          },
+          salvage_battery: {
+            label: 'Rip Out Salvage Coils',
+            hint: '+$10, +2 Scrap Metal · Loud snap alerts infected',
+            outcomeToast: 'Stripped heavy copper coils (+$10, +2 Scrap) — loud spark!',
+          },
+          ignore_signal: {
+            label: 'Let Signal Fade',
+            hint: 'Avoid exposure and keep moving',
+            outcomeToast: 'Ignored the blinking beacon.',
+          },
+        },
+      },
+      ev_env_forgotten_stash: {
+        title: 'Forgotten Civil Defense Locker',
+        description:
+          'Rain runoff exposed an unlocked civil-defense floor crate hidden behind fallen corrugated sheets.',
+        choices: {
+          claim_stash: {
+            label: 'Claim Hidden Supplies',
+            hint: 'One-time find · +$25, +2 Wood, +1 Medkit',
+            outcomeToast: 'Claimed forgotten civil-defense stash (+$25, +2 Wood, +1 Medkit).',
+          },
+          leave_stash: {
+            label: 'Mark & Leave For Now',
+            hint: 'Save pack space',
+            outcomeToast: 'Left the hidden locker sealed for later.',
+          },
+        },
+      },
+      ev_danger_warning_cues: {
+        title: 'Fresh Scuff Marks & Broken Glass',
+        description:
+          'Recent drag marks and crushed glass cross the pavement ahead—infected are active close to this block.',
+      },
+      ev_prowling_pack: {
+        title: 'Roaming Infected Sighting',
+        description:
+          'Low groans drift across the asphalt as wandering infected cut across the neighboring street.',
+      },
+      ev_noise_convergence: {
+        title: 'Metallic Clatter Nearby',
+        description:
+          'A loose rooftop tin crashed onto the street nearby, pulling infected heads toward the sound.',
+      },
+      ev_night_stalker: {
+        title: 'Shadow in the Fog',
+        description:
+          'Something shifts just beyond your flashlight beam—stay sharp in low visibility.',
+      },
+      ev_injured_traveler: {
+        title: 'Injured Straggler',
+        description:
+          'A limping traveler leans against a concrete bollard, clutching a bruised ribs wrap and offering spare cash for help.',
+        choices: {
+          treat_medkit: {
+            label: 'Treat Wounds With Medkit',
+            hint: 'Uses 1 Medkit · +$34, +1 Scrap · +1 Survivor Goodwill',
+            outcomeToast: 'Patched the traveler up (+$34, +1 Scrap Metal).',
+          },
+          share_water: {
+            label: 'Share Clean Water',
+            hint: 'Uses 1 Water · +$16 · +1 Survivor Goodwill',
+            outcomeToast: 'Shared clean water (+$16 grateful tip).',
+          },
+          leave_traveler: {
+            label: 'Keep Distance',
+            hint: 'Conserve your supplies',
+            outcomeToast: 'Walked past without sparing supplies.',
+          },
+        },
+      },
+      ev_hiding_survivor: {
+        title: 'Survivor Hiding From Infected',
+        description:
+          'A scout crouched behind overturned pallets whispers for rations before slipping back toward safer blocks.',
+        choices: {
+          share_ration_escort: {
+            label: 'Share Ration & Timber Cache',
+            hint: 'Uses 1 Food · +$22, +2 Wood · +1 Survivor Goodwill',
+            outcomeToast: 'Shared rations — survivor left hidden timber & cash (+$22, +2 Wood).',
+          },
+          warn_quietly: {
+            label: 'Point Out Safe Alley',
+            hint: 'Free · +$8 scouting tip',
+            outcomeToast: 'Pointed out a clear alley; scout tossed spare change (+$8).',
+          },
+        },
+      },
+      ev_distrustful_scavenger: {
+        title: 'Wary Street Scavenger',
+        description:
+          'An armed scavenger watches from behind a rusted barrier, pipe raised, guarding a pile of salvaged parts.',
+        choices: {
+          barter_food: {
+            label: 'Trade Ration Peacefully',
+            hint: 'Uses 1 Food · +$14, +2 Scrap Metal',
+            outcomeToast: 'Traded food peacefully for scrap (+$14, +2 Scrap Metal).',
+          },
+          stand_firm: {
+            label: 'Press Back & Claim Plank',
+            hint: '+1 Wood · Loud confrontation draws nearby infected',
+            outcomeToast: 'Barked down the scavenger (+1 Wood) — shouting drew attention!',
+          },
+          back_away: {
+            label: 'Back Off Slowly',
+            hint: 'Avoid trouble',
+            outcomeToast: 'Backed away without provoking a fight.',
+          },
+        },
+      },
+      ev_shop_wandering_trader: {
+        title: 'Wandering Caravan Trader',
+        description:
+          'A hooded pack-trader stopped by The Last Shop porch for a brief barter window.',
+        choices: {
+          trade_scrap_for_med: {
+            label: 'Barter Scrap for Medkit',
+            hint: 'Uses 2 Scrap Metal · +1 Medkit',
+            outcomeToast: 'Bartered 2 Scrap Metal for +1 Medical Supplies.',
+          },
+          buy_rations_bundle: {
+            label: 'Buy Ration Bundle ($22)',
+            hint: 'Costs $22 · +2 Food, +1 Water',
+            outcomeToast: 'Bought trader ration bundle (-$22, +2 Food, +1 Water).',
+          },
+          sell_pack_crate: {
+            label: 'Sell Food & Water Combo',
+            hint: 'Uses 1 Food & 1 Water · +$38',
+            outcomeToast: 'Sold combo supplies to the caravan trader (+$38).',
+          },
+          dismiss_trader: {
+            label: 'Wave Trader On',
+            hint: 'Decline barter',
+            outcomeToast: 'Thanked the wandering trader and closed the porch deal.',
+          },
+        },
+      },
+      ev_shop_shelter_seeker: {
+        title: 'Knocking at Last Shop Door',
+        description:
+          'A tired courier knocks softly under your porch light, asking for a brief breather and clean water before moving north.',
+        choices: {
+          offer_shelter_water: {
+            label: 'Offer Rest & Water',
+            hint: 'Uses 1 Water · +$26 · +1 Survivor Goodwill',
+            outcomeToast: 'Sheltered the courier briefly (+$26 grateful payment).',
+          },
+          offer_warmth_only: {
+            label: 'Let Them Catch Breath',
+            hint: 'Free · +$10 tip',
+            outcomeToast: 'Let the courier rest on the porch (+$10 tip).',
+          },
+          turn_away: {
+            label: 'Keep Door Bolted',
+            hint: 'Stay closed',
+            outcomeToast: 'Kept the shop bolted for safety.',
+          },
+        },
+      },
+      ev_shop_perimeter_scare: {
+        title: 'Shop Perimeter Scare',
+        description:
+          'Glass rattles outside The Last Shop as a stray infected wanders toward Main Boulevard.',
+      },
+      ev_atmo_radio_static: {
+        title: 'Broken Emergency Broadcast',
+        description:
+          'Your pocket scanner briefly picks up a distorted repeater tone from the northern hills before fading.',
+      },
+      ev_atmo_power_flicker: {
+        title: 'Streetlight Grid Surge',
+        description:
+          'Old overhead transformers hum and sputter in the damp air as dim street and hallway bulbs briefly fail.',
+      },
+      ev_atmo_fresh_tracks: {
+        title: 'Tracks in Wet Ash',
+        description:
+          'Fresh bootprints and dragging heel marks trail toward the alley—someone passed here minutes ago.',
+      },
+      ev_atmo_distant_silhouette: {
+        title: 'Shadow Watching Downstream',
+        description:
+          'For a heartbeat, a motionless figure stands in the distant mist before dissolving when you look closer.',
+      },
+      ev_atmo_radio_cutoff: {
+        title: 'Voice Cut Into Dead Air',
+        description:
+          'A whispered warning crackles over 148.6 MHz—then cuts sharply to hollow dead air.',
+      },
+      ev_atmo_building_sound: {
+        title: 'Hollow Knocks Behind the Wall',
+        description:
+          'Two slow knocks echo through the empty drywall somewhere deeper inside the abandoned structure.',
+      },
+      ev_atmo_uncanny_silence: {
+        title: 'Sudden Uncanny Stillness',
+        description:
+          'Wind and distant street echoes drop away all at once, leaving an uneasy, heavy silence.',
+      },
     },
   },
 };

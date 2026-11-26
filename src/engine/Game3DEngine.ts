@@ -35,6 +35,7 @@ import {
   GameScreenState,
   GameSettings,
   HudSnapshot,
+  LocationDangerLevel,
   ResourceId,
   ShopModalTab,
   StoryObjectInspectionData,
@@ -44,6 +45,12 @@ import { WeatherSystem } from '../game/weatherSystem';
 import { GuidanceSystem } from '../game/guidanceSystem';
 import { craftWorkbenchRecipe as runWorkbenchRecipe } from '../game/craftingSystem';
 import { computeResponsiveCameraFov } from '../game/responsiveLayout';
+import {
+  WORLD_EVENT_BY_ID,
+  WorldEventChoiceOutcome,
+  WorldEventSystem,
+  WorldEventTriggerSideEffects,
+} from '../game/worldEvents';
 import {
   LOCATION_BY_ID,
   REGION_BY_ID,
@@ -70,6 +77,7 @@ import { FirstPersonController } from './FirstPersonController';
 import { InteractionManager } from './InteractionManager';
 import { StaffManager } from './StaffManager';
 import { BuiltWorld, buildNeighborhoodWorld } from './WorldBuilder';
+import { WorldEventManager } from './WorldEventManager';
 import { ZombieManager } from './ZombieManager';
 
 export interface Engine3DCallbacks {
@@ -82,6 +90,7 @@ export interface Engine3DCallbacks {
   onWorkbenchRequested: (workbenchName: string) => void;
   onSurvivorInteractRequested: (survivorId: string) => void;
   onStoryObjectInspectRequested: (data: StoryObjectInspectionData) => void;
+  onWorldEventPromptRequested?: (eventId: string) => void;
   onEndingTriggered: () => void;
   onFlashlightToggled: (on: boolean) => void;
   onGameOver: (reason: string) => void;
@@ -131,8 +140,10 @@ export class Game3DEngine {
   private customers: CustomerManager;
   private zombies: ZombieManager;
   private staff: StaffManager;
+  private worldEventManager: WorldEventManager;
   private missions = new MissionSystem();
   private guidance = new GuidanceSystem();
+  private worldEvents = new WorldEventSystem();
 
   private sunLight: THREE.DirectionalLight;
   private hemiLight: THREE.HemisphereLight;
@@ -161,6 +172,7 @@ export class Game3DEngine {
   private mapOpen = false;
   private storyNoteOpen = false;
   private workbenchOpen = false;
+  private worldEventOpen = false;
   private endingOpen = false;
   private activeContextTitle: string | null = null;
   private activeContextMessage: string | null = null;
@@ -178,6 +190,7 @@ export class Game3DEngine {
   private attackPulseId = 0;
   private recentCombatTimer = 0;
   private moveNoiseCooldown = 0;
+  private noiseLevel = 0;
   private lastInteractAtMs = 0;
   private lastSalesSnapshotCount = 0;
   private lastReplenishDay = 1;
@@ -193,8 +206,15 @@ export class Game3DEngine {
 
   private birdTimer = 11;
   private creakTimer = 8;
+  private waterDripTimer = 7;
+  private metalGroanTimer = 14;
   private distantGroanTimer = 9;
   private ambientWorldEventTimer = 28;
+  private uncannySilenceTimer = 0;
+  private flashlightFlickerTimer = 0;
+  private heartbeatCooldown = 0;
+  private tensionLevel = 0;
+  private ashPerfCounter = 0;
 
   constructor(
     container: HTMLElement,
@@ -206,6 +226,13 @@ export class Game3DEngine {
     this.settings = { ...initialSettings };
     setLanguage(this.settings.language);
     this.sound = sound;
+    this.sound.setSettings(initialSettings.masterVolume, initialSettings.muted, {
+      ambientVolume: initialSettings.ambientVolume,
+      sfxVolume: initialSettings.sfxVolume,
+      musicVolume: initialSettings.musicVolume,
+      dialogueVolume: initialSettings.dialogueVolume,
+      horrorAudioLevel: initialSettings.horrorAudioLevel,
+    });
     this.callbacks = callbacks;
 
     this.isSoftwareGl = detectSoftwareWebGL();
@@ -385,6 +412,13 @@ export class Game3DEngine {
       this.zombies,
       this.sound
     );
+    this.worldEventManager = new WorldEventManager(this.scene);
+    this.interactions.setWorldEventInteractionProvider(
+      () => this.worldEventManager.getInteractTargets(),
+      (eventId) => {
+        this.openActiveWorldEventPrompt(eventId);
+      }
+    );
     this.interactions.setSurvivorInteractionProvider(
       () => this.staff.getSurvivorInteractTargets(),
       (survivorId) => {
@@ -507,6 +541,7 @@ export class Game3DEngine {
       this.mapOpen ||
       this.storyNoteOpen ||
       this.workbenchOpen ||
+      this.worldEventOpen ||
       this.endingOpen
     );
   }
@@ -536,12 +571,14 @@ export class Game3DEngine {
     this.economy.reset();
     this.missions.reset();
     this.guidance.reset();
+    this.worldEvents.reset();
     this.audioAtmoTimer = 0;
     this.autosaveTimer = 0;
     this.damagePulseId = 0;
     this.attackPulseId = 0;
     this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
+    this.noiseLevel = 0;
     this.lastSalesSnapshotCount = 0;
     this.inventoryOpen = false;
     this.shopOpen = false;
@@ -550,6 +587,7 @@ export class Game3DEngine {
     this.mapOpen = false;
     this.storyNoteOpen = false;
     this.workbenchOpen = false;
+    this.worldEventOpen = false;
     this.endingOpen = false;
     this.zoneCooldowns.clear();
     this.discoveredLocationIds = new Set(['last_shop']);
@@ -578,6 +616,14 @@ export class Game3DEngine {
     this.syncWorldShopProgression();
     this.zombies.reset();
     this.staff.reset();
+    this.staff.system.setGoodwillLevel(0);
+    this.worldEventManager.sync(
+      null,
+      this.world.colliders,
+      this.elapsedTime,
+      NEIGHBORHOOD_MAP.playerSpawn.x,
+      NEIGHBORHOOD_MAP.playerSpawn.z
+    );
     this.controller.spawnAt(
       NEIGHBORHOOD_MAP.playerSpawn.x,
       NEIGHBORHOOD_MAP.playerSpawn.z,
@@ -642,6 +688,7 @@ export class Game3DEngine {
       discoveredRegionIds: Array.from(this.discoveredRegionIds),
       claimedDiscoveryRewardIds: Array.from(this.claimedDiscoveryRewardIds),
       guidance: this.guidance.exportState(),
+      worldEvents: this.worldEvents.exportState(),
     };
 
     const ok = saveGameToStorage(payload);
@@ -676,6 +723,7 @@ export class Game3DEngine {
     this.mapOpen = false;
     this.storyNoteOpen = false;
     this.workbenchOpen = false;
+    this.worldEventOpen = false;
     this.endingOpen = false;
     this.zoneCooldowns.clear();
     this.audioAtmoTimer = 0;
@@ -684,6 +732,7 @@ export class Game3DEngine {
     this.attackPulseId = 0;
     this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
+    this.noiseLevel = 0;
 
     this.timeSystem.setHour(
       (saved.timeWeather?.timeOfDay ?? 8 / 24) * 24,
@@ -699,9 +748,18 @@ export class Game3DEngine {
     this.syncWorldShopProgression();
     this.zombies.importState(saved.zombies);
     this.staff.system.importState(saved.staff, this.world.colliders);
+    this.worldEvents.importState(saved.worldEvents);
+    this.staff.system.setGoodwillLevel(this.worldEvents.survivorGoodwill);
     this.staff.syncAfterLoad();
     this.missions.importState(saved.missions);
     this.guidance.importState(saved.guidance);
+    this.worldEventManager.sync(
+      this.worldEvents.activeEvent,
+      this.world.colliders,
+      this.elapsedTime,
+      saved.player?.x ?? NEIGHBORHOOD_MAP.playerSpawn.x,
+      saved.player?.z ?? NEIGHBORHOOD_MAP.playerSpawn.z
+    );
 
     this.discoveredLocationIds = new Set(['last_shop']);
     if (Array.isArray(saved.discoveredLocationIds)) {
@@ -867,6 +925,170 @@ export class Game3DEngine {
     this.emitHud(true);
   }
 
+  public setWorldEventOpen(open: boolean): void {
+    this.worldEventOpen = open;
+    if (open) {
+      this.controller.clearInputs();
+      this.controller.exitPointerLock();
+    }
+    this.zombies.setFirstPersonWeaponVisible(
+      this.screenState === 'PLAYING' && !this.isModalBlockingInput()
+    );
+    this.emitHud(true);
+  }
+
+  public openActiveWorldEventPrompt(eventId?: string): void {
+    if (this.screenState !== 'PLAYING') return;
+    const active = this.worldEvents.activeEvent;
+    if (!active) return;
+    if (eventId && active.eventId !== eventId) return;
+    const def = WORLD_EVENT_BY_ID[active.eventId];
+    if (!def || def.choices.length === 0) return;
+
+    this.sound.unlock();
+    this.sound.playUiClick(580);
+    this.callbacks.onWorldEventPromptRequested?.(active.eventId);
+    this.emitHud(true);
+  }
+
+  public dismissWorldEventBanner(): void {
+    this.worldEvents.dismissBanner();
+    this.sound.playUiClick(440);
+    this.emitHud(true);
+  }
+
+  public resolveWorldEventChoice(choiceId: string): boolean {
+    if (this.screenState !== 'PLAYING') return false;
+    const timeSnap = this.timeSystem.getSnapshot();
+    const outcome = this.worldEvents.resolveChoice(choiceId, {
+      money: this.economy.getMoney(),
+      inventory: this.interactions.inventory,
+      packCapacity: getPackCapacity(this.economy.getShopLevel()),
+    });
+    if (!outcome) return false;
+
+    if (!outcome.ok) {
+      this.sound.playUiClick(340);
+      this.interactions.pushToast(outcome.toast.text, outcome.toast.tone, 2.5);
+      this.emitHud(true);
+      return false;
+    }
+
+    this.applyWorldEventChoiceOutcome(outcome, timeSnap.formattedTime, timeSnap.nightFactor);
+    return true;
+  }
+
+  private applyWorldEventChoiceOutcome(
+    outcome: WorldEventChoiceOutcome,
+    timeLabel: string,
+    nightFactor: number
+  ): void {
+    this.interactions.inventory = outcome.nextInventory;
+    if (outcome.moneyDelta !== 0) {
+      this.economy.applyWorldEventMoneyDelta(outcome.moneyDelta, outcome.toast.text, timeLabel);
+    }
+
+    if (outcome.goodwillDelta > 0) {
+      this.staff.system.setGoodwillLevel(this.worldEvents.survivorGoodwill);
+    }
+
+    const px = this.controller.position.x;
+    const pz = this.controller.position.z;
+    if (outcome.noiseEvent) {
+      this.zombies.emitNoise(
+        {
+          x: outcome.noiseEvent.x,
+          z: outcome.noiseEvent.z,
+          radius: outcome.noiseEvent.radius,
+          source: 'interact',
+        },
+        nightFactor
+      );
+      this.raiseNoiseLevel(Math.min(100, outcome.noiseEvent.radius * 5.2));
+    }
+    if (outcome.alertZombiesRadius && outcome.alertZombiesRadius > 0) {
+      this.zombies.redirectStreetZombies(
+        outcome.noiseEvent?.x ?? px,
+        outcome.noiseEvent?.z ?? pz,
+        2,
+        outcome.alertZombiesRadius
+      );
+    }
+
+    this.playWorldEventSoundCue(outcome.soundCue);
+
+    if (outcome.goodwillDelta > 0) {
+      const discount = Math.min(10, this.worldEvents.survivorGoodwill * 5);
+      const t = getTranslations();
+      const goodwillMsg = formatTpl(t.worldEvents.toasts.goodwillDiscountNotice, { discount });
+      this.interactions.pushToast(`${outcome.toast.text} · ${goodwillMsg}`, outcome.toast.tone, 3.4);
+    } else {
+      this.interactions.pushToast(outcome.toast.text, outcome.toast.tone, 3.0);
+    }
+
+    this.worldEventManager.sync(
+      this.worldEvents.activeEvent,
+      this.world.colliders,
+      this.elapsedTime,
+      px,
+      pz
+    );
+    this.emitHud(true);
+  }
+
+  private playWorldEventSoundCue(
+    cue:
+      | 'pickup'
+      | 'cash'
+      | 'radio'
+      | 'creak'
+      | 'thud'
+      | 'groan'
+      | 'bell'
+      | 'radio_cutoff'
+      | 'knock'
+      | 'apparition'
+      | undefined
+  ): void {
+    if (!cue) return;
+    switch (cue) {
+      case 'pickup':
+        this.sound.playPickup();
+        break;
+      case 'cash':
+        this.sound.playCashRegister();
+        break;
+      case 'radio':
+        this.sound.playRadioPing();
+        break;
+      case 'creak':
+        this.sound.playWoodCreak();
+        break;
+      case 'thud':
+        this.sound.playDistantThud(false);
+        break;
+      case 'groan':
+        this.sound.playZombieGroan();
+        break;
+      case 'bell':
+        this.sound.playShopBell();
+        break;
+      case 'radio_cutoff':
+        this.sound.playRadioStaticCutoff();
+        break;
+      case 'knock':
+        this.sound.playBuildingKnock();
+        break;
+      case 'apparition':
+        this.sound.playApparitionSting();
+        break;
+    }
+  }
+
+  private raiseNoiseLevel(amount: number): void {
+    this.noiseLevel = Math.max(this.noiseLevel, Math.min(100, amount));
+  }
+
   public craftWorkbenchRecipe(recipeId: string): boolean {
     if (this.screenState !== 'PLAYING') return false;
     this.sound.unlock();
@@ -882,6 +1104,7 @@ export class Game3DEngine {
         radius: 8.5,
         source: 'interact',
       });
+      this.raiseNoiseLevel(54);
     } else {
       this.sound.playUiClick(340);
     }
@@ -1266,6 +1489,8 @@ export class Game3DEngine {
     const targetKind = target?.kind;
     const wasAlreadySearched =
       (target?.kind === 'vehicle' || target?.kind === 'searchable_prop') && target.searched;
+    const wasLockedContainer =
+      target?.kind === 'container' && Boolean(target.requiresToolResource) && !target.unlocked;
 
     if (this.interactions.interact()) {
       const emitsPhysicalNoise =
@@ -1274,12 +1499,19 @@ export class Game3DEngine {
         targetKind === 'resource' ||
         ((targetKind === 'vehicle' || targetKind === 'searchable_prop') && !wasAlreadySearched);
       if (emitsPhysicalNoise) {
-        this.zombies.emitNoise({
-          x: this.controller.position.x,
-          z: this.controller.position.z,
-          radius: 12.5,
-          source: 'interact',
-        });
+        if (wasLockedContainer) {
+          this.sound.playWoodCreak();
+        }
+        this.zombies.emitNoise(
+          {
+            x: this.controller.position.x,
+            z: this.controller.position.z,
+            radius: wasLockedContainer ? 15.5 : 12.5,
+            source: 'interact',
+          },
+          this.timeSystem.getSnapshot().nightFactor
+        );
+        this.raiseNoiseLevel(wasLockedContainer ? 92 : 68);
       }
       this.emitHud(true);
     } else if (this.interactions.latestToast) {
@@ -1302,6 +1534,7 @@ export class Game3DEngine {
     this.hasAttacked = true;
     this.attackPulseId += 1;
     this.recentCombatTimer = 2.8;
+    this.raiseNoiseLevel(82);
     const t = getTranslations();
     if (result.killed) {
       this.interactions.pushToast(t.gameMessages.toasts.infectedDefeated, 'resource', 2.2);
@@ -1388,10 +1621,17 @@ export class Game3DEngine {
     this.mapOpen = false;
     this.storyNoteOpen = false;
     this.workbenchOpen = false;
+    this.worldEventOpen = false;
     this.endingOpen = false;
     this.activeContextTitle = null;
     this.activeContextMessage = null;
     this.contextTimer = 0;
+    this.noiseLevel = 0;
+    this.uncannySilenceTimer = 0;
+    this.flashlightFlickerTimer = 0;
+    this.tensionLevel = 0;
+    this.worldEvents.reset();
+    this.worldEventManager.sync(null, this.world.colliders, this.elapsedTime, 0, 0);
     this.timeSystem.setHour(17.9, 1);
     this.weatherSystem.reset('clear');
     this.setScreenState('MENU');
@@ -1404,8 +1644,15 @@ export class Game3DEngine {
     setLanguage(next.language);
     if (next.language !== prevLang) {
       this.staff.refreshLocalization();
+      this.worldEventManager.refreshLocalization();
     }
-    this.sound.setSettings(next.masterVolume, next.muted);
+    this.sound.setSettings(next.masterVolume, next.muted, {
+      ambientVolume: next.ambientVolume,
+      sfxVolume: next.sfxVolume,
+      musicVolume: next.musicVolume,
+      dialogueVolume: next.dialogueVolume,
+      horrorAudioLevel: next.horrorAudioLevel,
+    });
     this.controller.setSensitivity(next.mouseSensitivity);
     this.timeSystem.setDayLengthSeconds(
       next.dayLengthSeconds || DEFAULT_DAY_LENGTH_SECONDS
@@ -1443,9 +1690,10 @@ export class Game3DEngine {
 
   private update(dt: number): void {
     this.elapsedTime += dt;
-    this.updateAshParticles(dt);
+    const isPerfMode = this.settings.lightingQuality === 'performance';
 
     if (this.screenState === 'MENU') {
+      this.updateAshParticles(dt, 0.25, isPerfMode);
       // Smooth 3D cinematic orbit overlooking the Last Shop & twilight intersection
       const t = this.elapsedTime * 0.14;
       this.camera.position.set(
@@ -1526,8 +1774,10 @@ export class Game3DEngine {
       rainIntensity: weatherSnap.rainIntensity,
     });
 
-    // Emit lightweight movement/jump noise events for zombies
+    // Emit lightweight movement/jump noise events for zombies & smooth HUD noise decay
+    this.noiseLevel = Math.max(0, this.noiseLevel - 28 * dt);
     if (jumpCount > 0) {
+      this.raiseNoiseLevel(68);
       this.zombies.emitNoise(
         {
           x: this.controller.position.x,
@@ -1535,12 +1785,14 @@ export class Game3DEngine {
           radius: 11.5,
           source: 'jump',
         },
-        timeSnap.nightFactor
+        timeSnap.nightFactor,
+        weatherSnap.rainIntensity
       );
     }
     this.moveNoiseCooldown = Math.max(0, this.moveNoiseCooldown - dt);
     if (isMoving && this.moveNoiseCooldown <= 0) {
       this.moveNoiseCooldown = isSprinting ? 0.36 : 0.62;
+      this.raiseNoiseLevel(isSprinting ? 58 : 24);
       this.zombies.emitNoise(
         {
           x: this.controller.position.x,
@@ -1548,7 +1800,8 @@ export class Game3DEngine {
           radius: isSprinting ? 14.5 : 6.5,
           source: isSprinting ? 'sprint' : 'walk',
         },
-        timeSnap.nightFactor
+        timeSnap.nightFactor,
+        weatherSnap.rainIntensity
       );
     }
 
@@ -1587,7 +1840,13 @@ export class Game3DEngine {
       isMoving,
       isSprinting,
       timeSnap.nightFactor,
-      this.settings.flashlightOn
+      this.settings.flashlightOn,
+      {
+        rainIntensity: weatherSnap.rainIntensity,
+        isFoggy: weatherSnap.weather === 'fog',
+        playerSafe: this.insideShop,
+        day: timeSnap.day,
+      }
     );
 
     if (this.recentCombatTimer > 0) {
@@ -1603,6 +1862,8 @@ export class Game3DEngine {
       if (dealt > 0) {
         this.damagePulseId += 1;
         this.recentCombatTimer = 3.5;
+        this.flashlightFlickerTimer = Math.max(this.flashlightFlickerTimer, 0.6);
+        this.controller.triggerDamageFlinch(Math.min(1.2, dealt / 14));
         this.interactions.pushToast(
           formatTpl(t.gameMessages.toasts.attackedByInfected, { dmg: Math.round(dealt) }),
           'warning',
@@ -1739,6 +2000,13 @@ export class Game3DEngine {
       forceHudFromDiscovery = true;
     }
 
+    if (this.uncannySilenceTimer > 0) {
+      this.uncannySilenceTimer = Math.max(0, this.uncannySilenceTimer - dt);
+    }
+    if (this.flashlightFlickerTimer > 0) {
+      this.flashlightFlickerTimer = Math.max(0, this.flashlightFlickerTimer - dt);
+    }
+
     this.atmosphere.update(
       dt,
       this.elapsedTime,
@@ -1748,7 +2016,70 @@ export class Game3DEngine {
       pz,
       this.settings.lightingQuality
     );
-    this.ashMat.opacity = Math.max(0.08, 0.36 * (1 - weatherSnap.rainIntensity * 0.8));
+    this.updateAshParticles(dt, weatherSnap.windGust, isPerfMode);
+    this.ashMat.opacity = Math.max(
+      0.08,
+      (0.36 + weatherSnap.windGust * 0.14) * (1 - weatherSnap.rainIntensity * 0.8)
+    );
+
+    // Subtle flashlight micro-dip during power surges or impact shock (never turns off)
+    const powerFlicker = this.atmosphere.getPowerFlickerIntensity();
+    if (this.settings.flashlightOn && (powerFlicker > 0.05 || this.flashlightFlickerTimer > 0)) {
+      const dip =
+        Math.sin(this.elapsedTime * 34) * Math.cos(this.elapsedTime * 19) > 0.25 ? 0.58 : 0.94;
+      this.flashlight.intensity = 18 * dip;
+    } else {
+      this.flashlight.intensity = 18;
+    }
+
+    // Compute smooth psychological tension level (0..1) from danger, health, darkness, and isolation
+    let nearDangerScore = 0;
+    for (const z of this.zombies.getAgents()) {
+      if (z.state === 'dead') continue;
+      const zd = Math.hypot(z.x - px, z.z - pz);
+      if (zd < 16) {
+        const proximity = Math.max(0, 1 - zd / 16);
+        const stateWeight =
+          z.state === 'chasing' || z.state === 'attacking'
+            ? 0.65
+            : z.state === 'alert' || z.state === 'investigating' || z.state === 'searching'
+              ? 0.42
+              : 0.16;
+        nearDangerScore = Math.max(nearDangerScore, proximity * stateWeight + 0.18);
+      }
+    }
+    const lowHpRatio = Math.max(0, (42 - this.survival.health) / 42);
+    const highDangerZoneBoost =
+      !this.insideShop &&
+      (activeRegion.id === 'research_facility' ||
+        activeRegion.id === 'police_station' ||
+        activeRegion.id === 'military_checkpoint')
+        ? 0.16
+        : 0;
+    let targetTension = this.insideShop
+      ? lowHpRatio * 0.28
+      : Math.min(
+          1,
+          lowHpRatio * 0.65 +
+            nearDangerScore +
+            (this.recentCombatTimer > 0 ? 0.26 : 0) +
+            highDangerZoneBoost +
+            timeSnap.nightFactor * (this.settings.flashlightOn ? 0.1 : 0.24) +
+            powerFlicker * 0.18 +
+            (this.uncannySilenceTimer > 0 ? 0.15 : 0)
+        );
+    targetTension = Math.max(0, Math.min(1, targetTension));
+    this.tensionLevel += (targetTension - this.tensionLevel) * Math.min(1, dt * 2.5);
+
+    this.heartbeatCooldown = Math.max(0, this.heartbeatCooldown - dt);
+    if (
+      !modalBlocked &&
+      this.heartbeatCooldown <= 0 &&
+      (this.survival.health <= 32 || (!this.insideShop && this.tensionLevel >= 0.64))
+    ) {
+      this.heartbeatCooldown = this.survival.health <= 25 ? 0.92 : 1.18;
+      this.sound.playHeartbeatPulse(Math.max(this.tensionLevel, lowHpRatio));
+    }
 
     this.audioAtmoTimer += dt;
     if (this.audioAtmoTimer >= 0.14) {
@@ -1762,7 +2093,13 @@ export class Game3DEngine {
         weatherSnap.rainIntensity,
         timeSnap.nightFactor,
         indoors,
-        Math.max(shopHum, relayHum)
+        Math.max(shopHum, relayHum),
+        {
+          dangerFactor: this.tensionLevel,
+          isSafeBase: this.insideShop,
+          windGust: weatherSnap.windGust,
+          silenceFactor: this.uncannySilenceTimer > 0 ? 1 : 0,
+        }
       );
     }
 
@@ -1773,7 +2110,26 @@ export class Game3DEngine {
       indoors,
       modalBlocked,
       px,
-      pz
+      pz,
+      activeRegion.id
+    );
+
+    this.stepDynamicWorldEvents(dt, timeSnap, weatherSnap, indoors, modalBlocked, px, pz);
+    this.worldEventManager.sync(
+      this.worldEvents.activeEvent,
+      this.world.colliders,
+      this.elapsedTime,
+      px,
+      pz,
+      dt,
+      this.controller.yaw,
+      () => {
+        if (this.worldEvents.dissolveActiveSilhouette()) {
+          this.sound.playApparitionSting();
+          this.flashlightFlickerTimer = Math.max(this.flashlightFlickerTimer, 0.45);
+          this.interactions.pushToast(t.worldEvents.toasts.silhouetteVanishedCue, 'world', 2.6);
+        }
+      }
     );
 
     this.interactions.update(dt, px, pz, this.controller.yaw);
@@ -1789,7 +2145,7 @@ export class Game3DEngine {
     this.emitHud(forceHudFromDiscovery);
   }
 
-  private updateAmbientAudioAndWorldEvents(
+  private stepDynamicWorldEvents(
     dt: number,
     timeSnap: ReturnType<TimeSystem['getSnapshot']>,
     weatherSnap: ReturnType<WeatherSystem['getSnapshot']>,
@@ -1799,6 +2155,155 @@ export class Game3DEngine {
     pz: number
   ): void {
     if (modalBlocked) return;
+
+    const loc = this.currentLocationId ? LOCATION_BY_ID[this.currentLocationId] : null;
+    const region = loc ? REGION_BY_ID[loc.regionId] : getRegionAtPosition(px, pz);
+    const dangerTier: LocationDangerLevel = this.insideShop
+      ? 'safe'
+      : loc?.dangerLevel ??
+        (region.id === 'military_checkpoint' ||
+        region.id === 'research_facility' ||
+        region.id === 'police_station'
+          ? 'high'
+          : region.id === 'main_street'
+            ? 'low'
+            : 'moderate');
+
+    let livingZombieCount = 0;
+    let nearbyLivingZombies = 0;
+    let nearbyAlertedZombies = 0;
+    let inActiveCombat = this.recentCombatTimer > 0;
+    for (const z of this.zombies.getAgents()) {
+      if (z.state === 'dead') continue;
+      livingZombieCount += 1;
+      const d = Math.hypot(z.x - px, z.z - pz);
+      if (d <= 22) nearbyLivingZombies += 1;
+      if (
+        d <= 14 &&
+        (z.state === 'investigating' ||
+          z.state === 'alert' ||
+          z.state === 'chasing' ||
+          z.state === 'searching' ||
+          z.state === 'attacking')
+      ) {
+        nearbyAlertedZombies += 1;
+      }
+      if (d <= 6.8 && (z.state === 'chasing' || z.state === 'attacking' || z.state === 'alert')) {
+        inActiveCombat = true;
+      }
+    }
+
+    const shopSnap = this.economy.getSnapshot();
+    const completedMainMissions = this.missions.getSnapshot(this.buildMissionContext(), false).mainCompletedCount;
+    const unrecruitedSurvivorCount = this.staff.system.worldSurvivors.filter((s) => !s.recruited).length;
+
+    const tickOut = this.worldEvents.step(dt, {
+      playerX: px,
+      playerZ: pz,
+      insideShop: this.insideShop,
+      isIndoors: indoors,
+      currentRegionId: region.id,
+      dangerTier,
+      day: timeSnap.day,
+      nightFactor: timeSnap.nightFactor,
+      weather: weatherSnap.weather,
+      health: this.survival.health,
+      money: shopSnap.money,
+      shopLevel: shopSnap.shopLevel,
+      totalStockItems: shopSnap.totalStockItems,
+      totalSalesCount: shopSnap.totalSalesCount,
+      employeeCount: this.staff.system.employees.length,
+      activeGuardCount: this.staff.system.getActiveGuardCount(),
+      unrecruitedSurvivorCount,
+      completedMainMissions,
+      inActiveCombat,
+      modalBlocking: modalBlocked,
+      livingZombieCount,
+      nearbyLivingZombies,
+      nearbyAlertedZombies,
+      noiseLevel: this.noiseLevel,
+      inventory: this.interactions.inventory,
+      packCapacity: getPackCapacity(shopSnap.shopLevel),
+    });
+
+    if (tickOut.sideEffects) {
+      this.executeWorldEventSideEffects(
+        tickOut.triggeredEvent?.id ?? null,
+        tickOut.sideEffects,
+        timeSnap.nightFactor,
+        px,
+        pz
+      );
+    }
+  }
+
+  private executeWorldEventSideEffects(
+    eventId: string | null,
+    fx: WorldEventTriggerSideEffects,
+    nightFactor: number,
+    px: number,
+    pz: number
+  ): void {
+    if (fx.spawnProwlers) {
+      this.zombies.spawnDynamicProwlers(
+        fx.spawnProwlers.count,
+        fx.spawnProwlers.targetX,
+        fx.spawnProwlers.targetZ,
+        fx.spawnProwlers.minDistanceFromPlayer,
+        px,
+        pz
+      );
+    }
+    if (fx.migrateZombies) {
+      this.zombies.redirectStreetZombies(
+        fx.migrateZombies.targetX,
+        fx.migrateZombies.targetZ,
+        fx.migrateZombies.maxCount,
+        fx.migrateZombies.maxSearchRadius
+      );
+    }
+    if (fx.emitNoise) {
+      this.zombies.emitNoise(
+        {
+          x: fx.emitNoise.x,
+          z: fx.emitNoise.z,
+          radius: fx.emitNoise.radius,
+          source: 'interact',
+        },
+        nightFactor
+      );
+      this.raiseNoiseLevel(64);
+    }
+    if (fx.flashStrength && fx.flashStrength > 0) {
+      this.atmosphere.triggerLightningFlash(fx.flashStrength);
+    }
+    if (fx.powerFlickerSeconds && fx.powerFlickerSeconds > 0) {
+      this.atmosphere.triggerLocalPowerFlicker(fx.powerFlickerSeconds);
+    }
+    if (fx.silenceSeconds && fx.silenceSeconds > 0) {
+      this.uncannySilenceTimer = Math.max(this.uncannySilenceTimer, fx.silenceSeconds);
+    }
+    this.playWorldEventSoundCue(fx.soundCue);
+
+    if (fx.toast && (!this.interactions.latestToast || fx.toast.tone === 'warning')) {
+      this.interactions.pushToast(fx.toast.text, fx.toast.tone, 2.8);
+    }
+    if (fx.openChoiceModal && eventId) {
+      this.callbacks.onWorldEventPromptRequested?.(eventId);
+    }
+  }
+
+  private updateAmbientAudioAndWorldEvents(
+    dt: number,
+    timeSnap: ReturnType<TimeSystem['getSnapshot']>,
+    weatherSnap: ReturnType<WeatherSystem['getSnapshot']>,
+    indoors: boolean,
+    modalBlocked: boolean,
+    px: number,
+    pz: number,
+    regionId: WorldRegionId
+  ): void {
+    if (modalBlocked || this.uncannySilenceTimer > 0) return;
 
     // 1. Daytime birds outdoors in calm weather
     this.birdTimer -= dt;
@@ -1815,6 +2320,33 @@ export class Game3DEngine {
       this.creakTimer = 11 + Math.random() * 11;
       if (indoors && !this.insideShop) {
         this.sound.playWoodCreak();
+      }
+    }
+
+    // 2b. Subtle indoor water drips inside abandoned ruins
+    this.waterDripTimer -= dt;
+    if (this.waterDripTimer <= 0) {
+      this.waterDripTimer = 6.5 + Math.random() * 8;
+      if (indoors && !this.insideShop) {
+        this.sound.playWaterDrip();
+      }
+    }
+
+    // 2c. Structural metal groans or muffled building knocks in tense districts
+    this.metalGroanTimer -= dt;
+    if (this.metalGroanTimer <= 0) {
+      this.metalGroanTimer = 14 + Math.random() * 14;
+      if (indoors && !this.insideShop && Math.random() > 0.55) {
+        this.sound.playBuildingKnock();
+      } else if (
+        !this.insideShop &&
+        (regionId === 'industrial_zone' ||
+          regionId === 'police_station' ||
+          regionId === 'research_facility' ||
+          regionId === 'military_checkpoint' ||
+          weatherSnap.windGust > 0.65)
+      ) {
+        this.sound.playMetalGroan();
       }
     }
 
@@ -1995,14 +2527,20 @@ export class Game3DEngine {
     }
   }
 
-  private updateAshParticles(dt: number): void {
+  private updateAshParticles(dt: number, windGust = 0.25, perfMode = false): void {
+    if (perfMode) {
+      this.ashPerfCounter = (this.ashPerfCounter + 1) & 1;
+      if (this.ashPerfCounter === 1) return;
+      dt *= 2;
+    }
     const pos = this.ashPositions;
     const len = pos.length / 3;
+    const driftMult = 0.7 + windGust * 1.35;
     for (let i = 0; i < len; i++) {
       const idx = i * 3;
-      pos[idx] += 0.55 * dt;
+      pos[idx] += 0.55 * driftMult * dt;
       pos[idx + 1] -= 0.25 * dt;
-      pos[idx + 2] += 0.25 * dt;
+      pos[idx + 2] += 0.25 * driftMult * dt;
 
       if (pos[idx] > 48) pos[idx] = -48;
       if (pos[idx + 2] > 48) pos[idx + 2] = -48;
@@ -2108,14 +2646,19 @@ export class Game3DEngine {
     for (const z of this.zombies.getAgents()) {
       if (z.state === 'dead') continue;
       const dist = Math.hypot(z.x - px, z.z - pz);
-      if (dist <= 6.8 && (z.state === 'chasing' || z.state === 'attacking')) {
+      if (dist <= 6.8 && (z.state === 'chasing' || z.state === 'attacking' || z.state === 'alert')) {
         inActiveCombat = true;
         nearbyZombieAlert = true;
         break;
       }
       if (
         dist <= 13.5 &&
-        (z.state === 'investigating' || z.state === 'chasing' || z.state === 'attacking')
+        (z.state === 'suspicious' ||
+          z.state === 'investigating' ||
+          z.state === 'alert' ||
+          z.state === 'chasing' ||
+          z.state === 'searching' ||
+          z.state === 'attacking')
       ) {
         nearbyZombieAlert = true;
       }
@@ -2178,7 +2721,17 @@ export class Game3DEngine {
     const quantX = Math.round(px * 2) * 0.5;
     const quantZ = Math.round(pz * 2) * 0.5;
     const quantYaw = Math.round(this.controller.yaw * 10) * 0.1;
+    const noiseDisplay = Math.round(this.noiseLevel / 5) * 5;
+    const activeWorldEvent = this.worldEvents.getHudBannerSummary({
+      playerX: px,
+      playerZ: pz,
+      money: shopSnap.money,
+      inventory: inv,
+      packCapacity,
+    });
+    const activeWorldEventPin = this.worldEvents.getMapPin();
 
+    const quantTension = Math.round(this.tensionLevel * 20) / 20;
     const effectiveCombat = inActiveCombat || this.recentCombatTimer > 0;
     const key = [
       getLanguage(),
@@ -2191,7 +2744,16 @@ export class Game3DEngine {
       this.controller.isExhausted,
       this.controller.isSprinting,
       effectiveCombat,
+      quantTension,
       this.attackPulseId,
+      noiseDisplay,
+      this.worldEvents.survivorGoodwill,
+      activeWorldEvent?.instanceId ?? '',
+      activeWorldEvent?.distanceMeters ?? -1,
+      activeWorldEvent?.bearingLabel ?? '',
+      activeWorldEvent?.secondsRemaining ?? -1,
+      activeWorldEvent?.playerInRange ?? false,
+      activeWorldEventPin?.id ?? '',
       timeSnap.day,
       timeSnap.formattedTime,
       timeSnap.phase,
@@ -2284,6 +2846,7 @@ export class Game3DEngine {
       damagePulseId: this.damagePulseId,
       attackPulseId: this.attackPulseId,
       inActiveCombat: effectiveCombat,
+      tensionLevel: quantTension,
       weaponLabel: tWeaponLabel(),
       zombiesDefeated: this.zombies.zombiesDefeated,
       deathReason: this.survival.deathReason,
@@ -2302,6 +2865,10 @@ export class Game3DEngine {
       discoveredRegionIds,
       collectedKeyIds,
       guidanceHint,
+      noiseLevel: Math.round(this.noiseLevel),
+      survivorGoodwill: this.worldEvents.survivorGoodwill,
+      activeWorldEvent,
+      activeWorldEventPin,
     });
   }
 
@@ -2321,6 +2888,7 @@ export class Game3DEngine {
       !this.recruitOpen &&
       !this.storyNoteOpen &&
       !this.workbenchOpen &&
+      !this.worldEventOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2336,6 +2904,7 @@ export class Game3DEngine {
       !this.recruitOpen &&
       !this.storyNoteOpen &&
       !this.workbenchOpen &&
+      !this.worldEventOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2351,6 +2920,7 @@ export class Game3DEngine {
       !this.recruitOpen &&
       !this.storyNoteOpen &&
       !this.workbenchOpen &&
+      !this.worldEventOpen &&
       !this.endingOpen
     ) {
       e.preventDefault();
@@ -2365,6 +2935,7 @@ export class Game3DEngine {
       !this.recruitOpen &&
       !this.storyNoteOpen &&
       !this.workbenchOpen &&
+      !this.worldEventOpen &&
       !this.endingOpen
     ) {
       if (e.code === 'Digit1') {
@@ -2553,6 +3124,7 @@ export class Game3DEngine {
     this.atmosphere.dispose();
     this.ashPoints.geometry.dispose();
     this.ashMat.dispose();
+    this.worldEventManager.dispose();
     this.staff.dispose();
     this.zombies.dispose();
     this.customers.dispose();

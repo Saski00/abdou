@@ -87,6 +87,24 @@ export interface SavedZombieState {
   }[];
 }
 
+export interface SavedWorldEventsState {
+  completedImportantIds: string[];
+  recentEventIds: string[];
+  cooldownRemainingById: Record<string, number>;
+  globalCooldownRemaining: number;
+  survivorGoodwill: number;
+  resolvedCount: number;
+  activeEvent?: {
+    instanceId: string;
+    eventId: string;
+    anchorId: string;
+    x: number;
+    z: number;
+    remainingSec: number | null;
+    discoveredInWorld: boolean;
+  } | null;
+}
+
 export interface SavedGameData {
   version: number;
   savedAtIso: string;
@@ -110,6 +128,7 @@ export interface SavedGameData {
     completedIds: string[];
     dismissedIds: string[];
   };
+  worldEvents?: SavedWorldEventsState;
 }
 
 export interface SavedGameSummary {

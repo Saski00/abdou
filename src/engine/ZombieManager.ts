@@ -9,14 +9,20 @@ import {
   createZombieSharedGeometries,
 } from '../assets/models/zombieModel';
 import {
+  BRUTE_ZOMBIE_CONFIG,
   DEFAULT_MELEE_CONFIG,
   INITIAL_ZOMBIE_SPAWNS,
   MeleeHitResult,
   NoiseEvent,
+  RUNNER_ZOMBIE_CONFIG,
+  STANDARD_ZOMBIE_CONFIG,
   ZombieAgent,
   ZombieSpawnConfig,
+  ZombieStepContext,
   createZombieAgent,
   dispatchNoiseToZombies,
+  hasLineOfSight2D,
+  isPointBlocked,
   performPlayerMelee,
   stepZombiesAI,
 } from '../game/zombieAI';
@@ -30,8 +36,15 @@ export const STORY_SURGE_SPAWNS: Record<'surge_roadblock' | 'surge_relay', Zombi
     { id: 'z_rb_2', surgeId: 'surge_roadblock', homeX: -4.8, homeZ: -27.5, yaw: 0.4 },
   ],
   surge_relay: [
-    { id: 'z_relay_1', surgeId: 'surge_relay', homeX: -1.6, homeZ: -20.5, yaw: -2.6 },
-    { id: 'z_relay_2', surgeId: 'surge_relay', homeX: 3.4, homeZ: -27.6, yaw: 2.2 },
+    { id: 'z_relay_1', surgeId: 'surge_relay', homeX: 1.6, homeZ: -20.5, yaw: -2.6 },
+    {
+      id: 'z_relay_2',
+      surgeId: 'surge_relay',
+      homeX: 3.4,
+      homeZ: -27.6,
+      yaw: 2.2,
+      archetype: RUNNER_ZOMBIE_CONFIG,
+    },
     { id: 'z_relay_3', surgeId: 'surge_relay', homeX: -10.8, homeZ: -25.4, yaw: 1.5 },
   ],
 };
@@ -41,6 +54,20 @@ interface ZombieEntityView {
   group: THREE.Group;
   rig: ZombieRig | null;
 }
+
+const DYNAMIC_PROWLER_SPOTS: { x: number; z: number; yaw: number }[] = [
+  { x: 10.5, z: -2.0, yaw: -1.6 },
+  { x: 22.8, z: -19.2, yaw: -2.2 },
+  { x: -13.0, z: 22.0, yaw: 3.1 },
+  { x: -27.5, z: -27.8, yaw: 0.7 },
+  { x: 5.6, z: -21.2, yaw: -2.5 },
+  { x: 24.5, z: 18.0, yaw: -1.2 },
+  { x: -28.0, z: 36.5, yaw: 1.1 },
+  { x: 14.5, z: 36.0, yaw: -2.0 },
+];
+
+const MAX_DYNAMIC_PROWLERS = 2;
+const MAX_LIVING_ZOMBIES = 16;
 
 export class ZombieManager {
   private root = new THREE.Group();
@@ -55,6 +82,7 @@ export class ZombieManager {
   private weaponBobTime = 0;
   private lastGroanTime = -99;
   private elapsedSec = 0;
+  private dynamicProwlerSeq = 1;
 
   constructor(
     scene: THREE.Scene,
@@ -81,7 +109,12 @@ export class ZombieManager {
     const group = this.assets.instantiateAsset(
       'enemy.zombie',
       () => {
-        const built = buildProceduralZombieModel(this.sharedGeos, index);
+        const built = buildProceduralZombieModel(
+          this.sharedGeos,
+          index,
+          agent.config.id,
+          agent.config.visualScale
+        );
         rig = built.rig;
         return built.group;
       },
@@ -132,7 +165,117 @@ export class ZombieManager {
     this.weaponBobTime = 0;
     this.lastGroanTime = -99;
     this.elapsedSec = 0;
+    this.dynamicProwlerSeq = 1;
     this.spawnInitialZombies();
+  }
+
+  public getLivingCount(): number {
+    let count = 0;
+    for (const ent of this.entities) {
+      if (ent.agent.state !== 'dead') count += 1;
+    }
+    return count;
+  }
+
+  public redirectStreetZombies(
+    targetX: number,
+    targetZ: number,
+    maxCount = 2,
+    maxSearchRadius = 28
+  ): number {
+    const candidates = this.entities
+      .filter((e) => {
+        const a = e.agent;
+        if (
+          a.state === 'dead' ||
+          a.state === 'chasing' ||
+          a.state === 'attacking' ||
+          a.state === 'stunned' ||
+          a.state === 'alert'
+        ) {
+          return false;
+        }
+        return Math.hypot(a.x - targetX, a.z - targetZ) <= maxSearchRadius;
+      })
+      .sort(
+        (a, b) =>
+          Math.hypot(a.agent.x - targetX, a.agent.z - targetZ) -
+          Math.hypot(b.agent.x - targetX, b.agent.z - targetZ)
+      );
+
+    let moved = 0;
+    for (const ent of candidates) {
+      if (moved >= maxCount) break;
+      ent.agent.state = 'investigating';
+      ent.agent.targetX = targetX;
+      ent.agent.targetZ = targetZ;
+      ent.agent.investigateTimer = Math.max(ent.agent.config.investigateTimeoutSec, 8.0);
+      ent.agent.stuckTimer = 0;
+      ent.agent.stuckRetries = 0;
+      moved += 1;
+    }
+    return moved;
+  }
+
+  public spawnDynamicProwlers(
+    count: number,
+    targetX: number,
+    targetZ: number,
+    minDistanceFromPlayer: number,
+    playerX: number,
+    playerZ: number
+  ): number {
+    const livingTotal = this.getLivingCount();
+    const livingProwlers = this.entities.filter(
+      (e) => e.agent.surgeId === 'dynamic_prowler' && e.agent.state !== 'dead'
+    ).length;
+
+    const allowedByTotal = Math.max(0, MAX_LIVING_ZOMBIES - livingTotal);
+    const allowedByProwlerCap = Math.max(0, MAX_DYNAMIC_PROWLERS - livingProwlers);
+    const toSpawn = Math.min(count, allowedByTotal, allowedByProwlerCap);
+    if (toSpawn <= 0) return 0;
+
+    // Sort spots nearest to target while staying safely occluded/away from player and clear of walls/safeZones
+    const validSpots = DYNAMIC_PROWLER_SPOTS.filter((spot) => {
+      const distPlayer = Math.hypot(spot.x - playerX, spot.z - playerZ);
+      if (distPlayer < minDistanceFromPlayer) return false;
+      if (distPlayer < 24 && hasLineOfSight2D(playerX, playerZ, spot.x, spot.z, this.colliders)) {
+        return false;
+      }
+      if (isPointBlocked(spot.x, spot.z, 0.55, this.colliders)) return false;
+      const crowded = this.entities.some(
+        (e) => e.agent.state !== 'dead' && Math.hypot(e.agent.x - spot.x, e.agent.z - spot.z) < 2.8
+      );
+      return !crowded;
+    }).sort(
+      (a, b) =>
+        Math.hypot(a.x - targetX, a.z - targetZ) - Math.hypot(b.x - targetX, b.z - targetZ)
+    );
+
+    let spawned = 0;
+    for (let i = 0; i < validSpots.length && spawned < toSpawn; i++) {
+      const spot = validSpots[i];
+      const seq = this.dynamicProwlerSeq++;
+      const archetype =
+        seq % 3 === 0 ? RUNNER_ZOMBIE_CONFIG : STANDARD_ZOMBIE_CONFIG;
+      const view = this.spawnZombieFromConfig(
+        {
+          id: `z_prowl_${seq}`,
+          surgeId: 'dynamic_prowler',
+          homeX: spot.x,
+          homeZ: spot.z,
+          yaw: spot.yaw,
+          archetype,
+        },
+        INITIAL_ZOMBIE_SPAWNS.length + seq
+      );
+      view.agent.state = 'investigating';
+      view.agent.targetX = targetX;
+      view.agent.targetZ = targetZ;
+      view.agent.investigateTimer = 9.5;
+      spawned += 1;
+    }
+    return spawned;
   }
 
   public exportState(): SavedZombieState {
@@ -146,7 +289,7 @@ export class ZombieManager {
     >();
     for (const ent of this.entities) {
       const sId = ent.agent.surgeId;
-      if (!sId) continue;
+      if (!sId || sId === 'dynamic_prowler') continue;
       const list = surgeGroups.get(sId) ?? [];
       list.push({
         id: ent.agent.id,
@@ -216,8 +359,8 @@ export class ZombieManager {
     this.meleeProp.group.visible = visible;
   }
 
-  public emitNoise(event: NoiseEvent, nightFactor = 0): void {
-    dispatchNoiseToZombies(this.agentsCache, event, this.colliders, nightFactor);
+  public emitNoise(event: NoiseEvent, nightFactor = 0, rainIntensity = 0): void {
+    dispatchNoiseToZombies(this.agentsCache, event, this.colliders, nightFactor, rainIntensity);
   }
 
   public getAgents(): ZombieAgent[] {
@@ -240,17 +383,28 @@ export class ZombieManager {
       if (revived >= needed) break;
       const a = ent.agent;
       if (a.surgeId || a.state !== 'dead') continue;
-      if (Math.hypot(playerX - a.homeX, playerZ - a.homeZ) < 20) continue;
+      const distHome = Math.hypot(playerX - a.homeX, playerZ - a.homeZ);
+      if (distHome < 22) continue;
+      if (distHome < 32 && hasLineOfSight2D(playerX, playerZ, a.homeX, a.homeZ, this.colliders)) {
+        continue;
+      }
 
       a.x = a.homeX;
       a.z = a.homeZ;
       a.health = a.maxHealth;
       a.state = 'idle';
+      a.awareness = 0;
       a.deathTimer = 0;
       a.hitFlashTimer = 0;
       a.attackCooldown = 0;
       a.attackWindup = 0;
       a.idleTimer = 1.2;
+      a.suspiciousTimer = 0;
+      a.alertTimer = 0;
+      a.searchTimer = 0;
+      a.stunTimer = 0;
+      a.stuckTimer = 0;
+      a.stuckRetries = 0;
       a.loseSightTimer = 0;
       ent.group.position.set(a.x, a.y, a.z);
       ent.group.visible = true;
@@ -317,7 +471,8 @@ export class ZombieManager {
     isMoving: boolean,
     isSprinting: boolean,
     nightFactor: number,
-    flashlightOn = false
+    flashlightOn = false,
+    extraContext?: Omit<ZombieStepContext, 'isMoving' | 'isSprinting'>
   ): { playerDamage: number } {
     this.elapsedSec += dt;
 
@@ -338,7 +493,12 @@ export class ZombieManager {
       playerDead,
       nightFactor,
       this.colliders,
-      flashlightOn
+      flashlightOn,
+      {
+        isMoving,
+        isSprinting,
+        ...extraContext,
+      }
     );
 
     if (tickRes.zombieGroans > 0 && this.elapsedSec - this.lastGroanTime > 2.4) {

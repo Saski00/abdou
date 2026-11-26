@@ -34,6 +34,8 @@ interface HudOverlayProps {
   onOpenMissions: () => void;
   onOpenMap: () => void;
   onDismissGuidance: (hintId: string) => void;
+  onOpenWorldEventPrompt: () => void;
+  onDismissWorldEventBanner: () => void;
   onToggleMute: () => void;
   onConsumeItem: (resourceId: ResourceId) => void;
   onToggleRest: () => void;
@@ -53,6 +55,8 @@ export function HudOverlay({
   onOpenMissions,
   onOpenMap,
   onDismissGuidance,
+  onOpenWorldEventPrompt,
+  onDismissWorldEventBanner,
   onToggleMute,
   onConsumeItem,
   onToggleRest,
@@ -159,6 +163,28 @@ export function HudOverlay({
         paddingRight: 'max(10px, env(safe-area-inset-right))',
       }}
     >
+      {/* Subtle Tension & Low-Health Peripheral Vignette (pure CSS opacity, zero backdrop-filter) */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none transition-opacity duration-500"
+        style={{
+          opacity:
+            isPlaying && !isInventoryOpen
+              ? Math.min(
+                  0.62,
+                  Math.max(
+                    0,
+                    (hud.tensionLevel - 0.14) * 0.56 + (hud.health <= 35 ? (35 - hud.health) / 70 : 0)
+                  )
+                )
+              : 0,
+          background:
+            hud.health <= 30
+              ? 'radial-gradient(circle at 50% 50%, rgba(10, 6, 10, 0) 50%, rgba(110, 14, 28, 0.55) 100%)'
+              : 'radial-gradient(circle at 50% 50%, rgba(6, 9, 14, 0) 54%, rgba(4, 7, 13, 0.72) 100%)',
+        }}
+      />
+
       {/* Subtle Damage Hit Edge Flash */}
       <div
         aria-hidden="true"
@@ -407,6 +433,22 @@ export function HudOverlay({
                 </span>
               </div>
             )}
+
+            {/* Subtle Noise Readout (shown when audible/loud) */}
+            {isPlaying && !isInventoryOpen && hud.noiseLevel >= 35 && (
+              <div
+                className={`bg-[#0e121a]/84 border rounded-lg px-2.5 py-1 flex items-center gap-1.5 text-[11px] font-medium shadow-md ${
+                  hud.noiseLevel >= 70
+                    ? 'border-rose-500/60 text-rose-200'
+                    : 'border-amber-500/45 text-amber-200'
+                }`}
+              >
+                <Volume2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="whitespace-nowrap">
+                  {hud.noiseLevel >= 70 ? t.worldEvents.ui.noiseLoud : t.worldEvents.ui.noiseAudible}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Top-End: Quiet Time + Clean Menu Buttons + Single-Line Active Objective */}
@@ -625,7 +667,88 @@ export function HudOverlay({
           </div>
         )}
 
-        {isPlaying && !isInventoryOpen && !hud.contextMessage && hud.guidanceHint && (
+        {isPlaying &&
+          !isInventoryOpen &&
+          !hud.contextMessage &&
+          hud.activeWorldEvent && (
+            <div
+              role="region"
+              aria-label={hud.activeWorldEvent.title}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={`pointer-events-auto bg-[#0e141f]/94 border border-amber-500/45 rounded-lg shadow-xl flex items-center gap-2.5 ${
+                isCompactLandscape
+                  ? 'max-w-[min(360px,calc(100vw-305px))] ps-2.5 pe-1.5 py-1.5'
+                  : 'max-w-sm sm:max-w-lg w-full sm:w-auto ps-3.5 pe-2 py-2'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-300/90 leading-tight truncate">
+                  <span>{t.worldEvents.categories[hud.activeWorldEvent.category]}</span>
+                  <span className="text-stone-600" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-stone-300 truncate">
+                    {hud.activeWorldEvent.locationLabel}
+                  </span>
+                  {hud.activeWorldEvent.secondsRemaining !== null &&
+                    hud.activeWorldEvent.secondsRemaining !== undefined && (
+                      <>
+                        <span className="text-stone-600" aria-hidden="true">
+                          ·
+                        </span>
+                        <bdi
+                          dir="ltr"
+                          className="font-mono-tabular text-sky-300 shrink-0"
+                        >
+                          {formatTpl(t.worldEvents.ui.secondsLeft, {
+                            sec: Math.ceil(hud.activeWorldEvent.secondsRemaining),
+                          })}
+                        </bdi>
+                      </>
+                    )}
+                </div>
+                <div className="text-xs font-semibold text-stone-100 leading-tight truncate mt-0.5">
+                  {hud.activeWorldEvent.title}
+                </div>
+                {!hud.activeWorldEvent.playerInRange &&
+                  hud.activeWorldEvent.hasWorldTarget &&
+                  hud.activeWorldEvent.bearingLabel &&
+                  hud.activeWorldEvent.distanceMeters !== undefined && (
+                    <div className="text-[11px] font-mono-tabular text-amber-300/90 mt-0.5 truncate">
+                      {formatTpl(t.worldEvents.ui.approachHint, {
+                        bearing: hud.activeWorldEvent.bearingLabel,
+                        dist: hud.activeWorldEvent.distanceMeters,
+                      })}
+                    </div>
+                  )}
+              </div>
+
+              {hud.activeWorldEvent.choices.length > 0 && hud.activeWorldEvent.playerInRange && (
+                <button
+                  type="button"
+                  onClick={onOpenWorldEventPrompt}
+                  className="min-h-[38px] px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-amber-300"
+                >
+                  {t.worldEvents.ui.respondBtn}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onDismissWorldEventBanner}
+                aria-label={t.worldEvents.ui.dismissBtn}
+                className="w-9 h-9 rounded-md flex items-center justify-center text-stone-400 hover:text-stone-100 hover:bg-stone-800 cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+        {isPlaying &&
+          !isInventoryOpen &&
+          !hud.contextMessage &&
+          !hud.activeWorldEvent &&
+          hud.guidanceHint && (
           <div
             role="note"
             onPointerDown={(e) => e.stopPropagation()}

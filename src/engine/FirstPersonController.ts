@@ -57,6 +57,9 @@ export class FirstPersonController {
   private touchSprint = false;
   private jumpCountSincePoll = 0;
   private restEyeOffset = 0;
+  private flinchRoll = 0;
+  private flinchPitch = 0;
+  private lowHpPhase = 0;
 
   private readonly _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -101,7 +104,18 @@ export class FirstPersonController {
     this.touchSprint = false;
     this.jumpCountSincePoll = 0;
     this.restEyeOffset = 0;
+    this.flinchRoll = 0;
+    this.flinchPitch = 0;
+    this.lowHpPhase = 0;
     this.syncCamera(0.016, true);
+  }
+
+  public triggerDamageFlinch(strength = 1.0): void {
+    if (this.prefersReducedMotion) return;
+    const s = clamp(strength, 0.3, 1.4);
+    const sign = Math.random() > 0.5 ? 1 : -1;
+    this.flinchRoll = sign * 0.042 * s;
+    this.flinchPitch = 0.022 * s;
   }
 
   public setSensitivity(sens: number): void {
@@ -394,6 +408,14 @@ export class FirstPersonController {
     const targetRestOffset = options.isResting && !hasInput ? -0.42 : 0;
     this.restEyeOffset = THREE.MathUtils.damp(this.restEyeOffset, targetRestOffset, 10, dt);
 
+    this.flinchRoll = THREE.MathUtils.damp(this.flinchRoll, 0, 14, dt);
+    this.flinchPitch = THREE.MathUtils.damp(this.flinchPitch, 0, 14, dt);
+    if (!this.prefersReducedMotion && this.health <= 32) {
+      this.lowHpPhase += dt * 3.4;
+    } else {
+      this.lowHpPhase = 0;
+    }
+
     this.syncCamera(dt, false);
   }
 
@@ -403,7 +425,16 @@ export class FirstPersonController {
       this.position.y + EYE_HEIGHT + this.bobOffset + this.restEyeOffset,
       this.position.z
     );
-    this._euler.set(this.pitch, this.yaw, 0, 'YXZ');
+    const lowHpSway =
+      !this.prefersReducedMotion && this.health <= 32
+        ? Math.sin(this.lowHpPhase) * 0.0065 * (1 - this.health / 36)
+        : 0;
+    this._euler.set(
+      clamp(this.pitch + this.flinchPitch, -Math.PI * 0.48, Math.PI * 0.48),
+      this.yaw,
+      this.flinchRoll + lowHpSway,
+      'YXZ'
+    );
     this.camera.quaternion.setFromEuler(this._euler);
   }
 

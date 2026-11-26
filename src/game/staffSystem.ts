@@ -543,6 +543,7 @@ export class StaffSystem {
   public employees: EmployeeAgent[] = [];
   public nextSalaryInSeconds: number;
   public lastSalaryNotice: string | null = null;
+  public goodwillLevel = 0;
 
   private nextEmployeeSeq = 1;
   private storageWarningCooldown = 0;
@@ -564,6 +565,7 @@ export class StaffSystem {
     this.lastSalaryNotice = null;
     this.lastSalaryNoticeMeta = null;
     this.storageWarningCooldown = 0;
+    this.goodwillLevel = 0;
 
     this.worldSurvivors = WORLD_SURVIVOR_SPAWNS.map((s, idx) => ({
       ...s,
@@ -572,6 +574,21 @@ export class StaffSystem {
       recruited: false,
       animPhase: idx * 1.35,
     }));
+  }
+
+  public setGoodwillLevel(level: number): void {
+    const clean = Math.max(0, Math.floor(level));
+    this.goodwillLevel = clean;
+    const discount = Math.min(10, clean * 5);
+    for (const s of this.worldSurvivors) {
+      const baseDef = WORLD_SURVIVOR_SPAWNS.find((b) => b.id === s.id);
+      if (!baseDef) continue;
+      if (baseDef.costMoney <= 0) {
+        s.costMoney = 0;
+      } else {
+        s.costMoney = Math.max(5, baseDef.costMoney - discount);
+      }
+    }
   }
 
   public getActiveGuardCount(): number {
@@ -1183,16 +1200,27 @@ export class StaffSystem {
               text: formatTemplate(tr.gameMessages.toasts.guardDefeatedInfected, { name: empName }),
               tone: 'resource',
             });
-          } else if (emp.health > 0) {
-            // Infected strikes back occasionally during close melee
-            emp.health = Math.max(0, emp.health - 5);
-            emp.hitFlashTimer = 0.15;
-            if (emp.health <= 0) {
-              emp.recovering = true;
-              result.toastNotices.push({
-                text: formatTemplate(tr.gameMessages.toasts.guardRetreated, { name: empName }),
-                tone: 'warning',
-              });
+          } else {
+            if (targetZombie.state !== 'chasing' && targetZombie.state !== 'attacking') {
+              targetZombie.lastKnownX = emp.x;
+              targetZombie.lastKnownZ = emp.z;
+            }
+            targetZombie.state = 'stunned';
+            targetZombie.stunTimer = Math.min(0.26, targetZombie.config.stunDurationSec);
+            targetZombie.attackWindup = 0;
+            targetZombie.targetX = emp.x;
+            targetZombie.targetZ = emp.z;
+            if (emp.health > 0) {
+              // Infected strikes back occasionally during close melee
+              emp.health = Math.max(0, emp.health - 5);
+              emp.hitFlashTimer = 0.15;
+              if (emp.health <= 0) {
+                emp.recovering = true;
+                result.toastNotices.push({
+                  text: formatTemplate(tr.gameMessages.toasts.guardRetreated, { name: empName }),
+                  tone: 'warning',
+                });
+              }
             }
           }
         }

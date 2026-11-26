@@ -24,14 +24,17 @@ export interface WeatherSnapshot {
   label: string;
   rainIntensity: number; // smooth 0..1
   fogIntensity: number;  // smooth 0..1
+  windGust: number;      // smooth 0..1 atmospheric wind intensity
 }
 
 export class WeatherSystem {
   public targetWeather: WeatherKind = 'clear';
   public rainIntensity = 0;
   public fogIntensity = 0;
+  public windGust = 0.22;
 
   private timerSec = 95;
+  private gustPhase = 0.8;
   private config: WeatherConfig;
 
   constructor(config: WeatherConfig = DEFAULT_WEATHER_CONFIG) {
@@ -43,6 +46,8 @@ export class WeatherSystem {
     this.targetWeather = initial;
     this.rainIntensity = initial === 'rain' ? 1 : 0;
     this.fogIntensity = initial === 'fog' ? 1 : 0;
+    this.windGust = initial === 'rain' ? 0.65 : initial === 'fog' ? 0.32 : 0.22;
+    this.gustPhase = 0.8;
     this.timerSec = this.pickDuration();
   }
 
@@ -52,6 +57,7 @@ export class WeatherSystem {
     if (immediate) {
       this.rainIntensity = next === 'rain' ? 1 : 0;
       this.fogIntensity = next === 'fog' ? 1 : 0;
+      this.windGust = next === 'rain' ? 0.65 : next === 'fog' ? 0.32 : 0.22;
     }
   }
 
@@ -77,6 +83,15 @@ export class WeatherSystem {
     if (Math.abs(this.fogIntensity - targetFog) < 0.002) {
       this.fogIntensity = targetFog;
     }
+
+    this.gustPhase += dt * (0.28 + this.rainIntensity * 0.22);
+    const wave =
+      0.5 +
+      0.34 * Math.sin(this.gustPhase) +
+      0.16 * Math.sin(this.gustPhase * 2.37 + 1.1);
+    const baseWind = 0.16 + this.rainIntensity * 0.44 + this.fogIntensity * 0.12;
+    const targetGust = Math.max(0.08, Math.min(1, baseWind + wave * (0.2 + this.rainIntensity * 0.28)));
+    this.windGust += (targetGust - this.windGust) * (1 - Math.exp(-0.55 * dt));
   }
 
   public getSnapshot(): WeatherSnapshot {
@@ -85,6 +100,7 @@ export class WeatherSystem {
       label: tWeather(this.targetWeather),
       rainIntensity: this.rainIntensity,
       fogIntensity: this.fogIntensity,
+      windGust: this.windGust,
     };
   }
 

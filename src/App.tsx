@@ -16,6 +16,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ShopModal } from './components/ShopModal';
 import { StoryNoteModal } from './components/StoryNoteModal';
 import { WorkbenchModal } from './components/WorkbenchModal';
+import { WorldEventCard } from './components/WorldEventCard';
 import { DEFAULT_ECONOMY_CONFIG, createInitialShopSnapshot } from './game/economy';
 import { createInitialMissionSnapshot } from './game/missionSystem';
 import { createInitialInventory } from './game/resources';
@@ -59,6 +60,7 @@ type ActiveModal =
   | 'MAP'
   | 'STORY_NOTE'
   | 'WORKBENCH'
+  | 'WORLD_EVENT'
   | 'ENDING';
 
 function createInitialHudSnapshot(): HudSnapshot {
@@ -99,6 +101,7 @@ function createInitialHudSnapshot(): HudSnapshot {
     damagePulseId: 0,
     attackPulseId: 0,
     inActiveCombat: false,
+    tensionLevel: 0,
     weaponLabel: tWeaponLabel(),
     zombiesDefeated: 0,
     deathReason: null,
@@ -119,6 +122,10 @@ function createInitialHudSnapshot(): HudSnapshot {
     discoveredRegionIds: ['main_street'],
     collectedKeyIds: [],
     guidanceHint: null,
+    noiseLevel: 0,
+    survivorGoodwill: 0,
+    activeWorldEvent: null,
+    activeWorldEventPin: null,
   };
 }
 
@@ -155,11 +162,27 @@ export default function App() {
   const isMapOpen = screenState === 'PLAYING' && activeModal === 'MAP';
   const isStoryNoteOpen = screenState === 'PLAYING' && activeModal === 'STORY_NOTE';
   const isWorkbenchOpen = screenState === 'PLAYING' && activeModal === 'WORKBENCH';
+  const isWorldEventOpen = screenState === 'PLAYING' && activeModal === 'WORLD_EVENT';
   const isEndingOpen = screenState === 'PLAYING' && activeModal === 'ENDING';
 
   useEffect(() => {
-    soundEngine.setSettings(settings.masterVolume, settings.muted);
-  }, [soundEngine, settings.masterVolume, settings.muted]);
+    soundEngine.setSettings(settings.masterVolume, settings.muted, {
+      ambientVolume: settings.ambientVolume,
+      sfxVolume: settings.sfxVolume,
+      musicVolume: settings.musicVolume,
+      dialogueVolume: settings.dialogueVolume,
+      horrorAudioLevel: settings.horrorAudioLevel,
+    });
+  }, [
+    soundEngine,
+    settings.masterVolume,
+    settings.muted,
+    settings.ambientVolume,
+    settings.sfxVolume,
+    settings.musicVolume,
+    settings.dialogueVolume,
+    settings.horrorAudioLevel,
+  ]);
 
   useEffect(() => {
     if (settings.screenOrientation !== 'auto') {
@@ -291,6 +314,34 @@ export default function App() {
     engineBridgeRef.current?.craftWorkbenchRecipe(recipeId);
   }, []);
 
+  const handleWorldEventPromptRequested = useCallback(() => {
+    if (screenState !== 'PLAYING') return;
+    soundEngine.playUiClick(540);
+    setActiveModal('WORLD_EVENT');
+  }, [screenState, soundEngine]);
+
+  const handleOpenWorldEventPrompt = useCallback(() => {
+    if (screenState !== 'PLAYING') return;
+    engineBridgeRef.current?.openActiveWorldEventPrompt();
+  }, [screenState]);
+
+  const handleResolveWorldEventChoice = useCallback(
+    (choiceId: string) => {
+      const ok = engineBridgeRef.current?.resolveWorldEventChoice(choiceId) ?? false;
+      if (ok) {
+        soundEngine.playUiClick(580);
+        setActiveModal((prev) => (prev === 'WORLD_EVENT' ? 'NONE' : prev));
+      }
+    },
+    [soundEngine]
+  );
+
+  const handleDismissWorldEventBanner = useCallback(() => {
+    soundEngine.playUiClick(440);
+    engineBridgeRef.current?.dismissWorldEventBanner();
+    setActiveModal((prev) => (prev === 'WORLD_EVENT' ? 'NONE' : prev));
+  }, [soundEngine]);
+
   const handleEndingTriggered = useCallback(() => {
     soundEngine.playUiClick(660);
     setStoryNoteData(null);
@@ -337,7 +388,13 @@ export default function App() {
     soundEngine.unlock();
     setSettings((prev) => {
       const next = { ...prev, muted: !prev.muted };
-      soundEngine.setSettings(next.masterVolume, next.muted);
+      soundEngine.setSettings(next.masterVolume, next.muted, {
+        ambientVolume: next.ambientVolume,
+        sfxVolume: next.sfxVolume,
+        musicVolume: next.musicVolume,
+        dialogueVolume: next.dialogueVolume,
+        horrorAudioLevel: next.horrorAudioLevel,
+      });
       saveSettingsToStorage(next);
       return next;
     });
@@ -346,7 +403,13 @@ export default function App() {
   const handleSettingsChange = useCallback(
     (next: GameSettings) => {
       setLanguage(next.language);
-      soundEngine.setSettings(next.masterVolume, next.muted);
+      soundEngine.setSettings(next.masterVolume, next.muted, {
+        ambientVolume: next.ambientVolume,
+        sfxVolume: next.sfxVolume,
+        musicVolume: next.musicVolume,
+        dialogueVolume: next.dialogueVolume,
+        horrorAudioLevel: next.horrorAudioLevel,
+      });
       saveSettingsToStorage(next);
       setSettings(next);
     },
@@ -500,6 +563,7 @@ export default function App() {
     isMapOpen ||
     isStoryNoteOpen ||
     isWorkbenchOpen ||
+    isWorldEventOpen ||
     isEndingOpen;
 
   const activeRecruitSurvivor =
@@ -523,6 +587,7 @@ export default function App() {
         storyNoteOpen={isStoryNoteOpen}
         workbenchOpen={isWorkbenchOpen}
         endingOpen={isEndingOpen}
+        worldEventOpen={isWorldEventOpen}
         engineBridgeRef={engineBridgeRef}
         onHudChange={setHud}
         onPauseRequested={handlePauseRequested}
@@ -533,6 +598,7 @@ export default function App() {
         onSurvivorInteractRequested={handleSurvivorInteractRequested}
         onStoryObjectInspectRequested={handleStoryObjectInspectRequested}
         onWorkbenchRequested={handleWorkbenchRequested}
+        onWorldEventPromptRequested={handleWorldEventPromptRequested}
         onEndingTriggered={handleEndingTriggered}
         onFlashlightToggled={handleFlashlightToggled}
         onGameOver={handleGameOver}
@@ -592,6 +658,8 @@ export default function App() {
           onOpenMissions={handleMissionsToggle}
           onOpenMap={handleMapToggle}
           onDismissGuidance={handleDismissGuidance}
+          onOpenWorldEventPrompt={handleOpenWorldEventPrompt}
+          onDismissWorldEventBanner={handleDismissWorldEventBanner}
           onToggleMute={handleToggleMute}
           onConsumeItem={handleConsumeItem}
           onToggleRest={handleToggleRest}
@@ -657,6 +725,20 @@ export default function App() {
           packCapacity={hud.packCapacity}
           isTouchMode={isTouchMode}
           onCraftRecipe={handleCraftRecipe}
+          onClose={() => {
+            soundEngine.playUiClick(460);
+            setActiveModal('NONE');
+          }}
+        />
+      )}
+
+      {isWorldEventOpen && hud.activeWorldEvent && (
+        <WorldEventCard
+          banner={hud.activeWorldEvent}
+          goodwill={hud.survivorGoodwill}
+          isTouchMode={isTouchMode}
+          onSelectChoice={handleResolveWorldEventChoice}
+          onDismiss={handleDismissWorldEventBanner}
           onClose={() => {
             soundEngine.playUiClick(460);
             setActiveModal('NONE');

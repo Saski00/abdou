@@ -64,11 +64,22 @@ export interface EmployeeInteractTarget {
   z: number;
 }
 
+export interface WorldEventInteractTarget {
+  kind: 'world_event';
+  id: string;
+  name: string;
+  actionLabel: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
 export type ActiveInteractTarget =
   | WorldInteractable
   | CustomerInteractTarget
   | SurvivorInteractTarget
-  | EmployeeInteractTarget;
+  | EmployeeInteractTarget
+  | WorldEventInteractTarget;
 
 function distanceToSegment2D(
   px: number,
@@ -103,6 +114,8 @@ export class InteractionManager {
   private onSurvivorInteract: ((survivorId: string) => void) | null = null;
   private employeeTargetsProvider: (() => EmployeeInteractTarget[]) | null = null;
   private onEmployeeInteract: ((employeeId: string) => void) | null = null;
+  private worldEventTargetsProvider: (() => WorldEventInteractTarget[]) | null = null;
+  private onWorldEventInteract: ((eventId: string) => void) | null = null;
   private onResourceCollected: ((resourceId: ResourceId, amount: number) => void) | null = null;
   private onContainerSearched: ((containerId: string) => void) | null = null;
   private onDoorOpened: ((doorId: string) => void) | null = null;
@@ -178,6 +191,14 @@ export class InteractionManager {
   ): void {
     this.employeeTargetsProvider = provider;
     this.onEmployeeInteract = onInteract;
+  }
+
+  public setWorldEventInteractionProvider(
+    provider: () => WorldEventInteractTarget[],
+    onInteract: (eventId: string) => void
+  ): void {
+    this.worldEventTargetsProvider = provider;
+    this.onWorldEventInteract = onInteract;
   }
 
   public setStoryEventCallbacks(callbacks: {
@@ -591,6 +612,27 @@ export class InteractionManager {
       }
     }
 
+    if (this.worldEventTargetsProvider) {
+      const events = this.worldEventTargetsProvider();
+      for (const ev of events) {
+        const dist = Math.hypot(ev.x - playerX, ev.z - playerZ);
+        if (dist > INTERACT_RANGE + 0.45) continue;
+
+        const dx = ev.x - playerX;
+        const dz = ev.z - playerZ;
+        const len = Math.hypot(dx, dz) || 1;
+        const dot = (dx / len) * fwdX + (dz / len) * fwdZ;
+
+        if (dist > CLOSE_PROXIMITY_OVERRIDE + 0.35 && dot < 0.16) continue;
+
+        const score = dist - Math.max(0, dot) * 0.9 - 0.25;
+        if (score < bestScore) {
+          bestScore = score;
+          bestItem = ev;
+        }
+      }
+    }
+
     this.targeted = bestItem;
 
     if (bestItem) {
@@ -613,7 +655,8 @@ export class InteractionManager {
                       ? 1.4
                       : bestItem.kind === 'customer' ||
                           bestItem.kind === 'survivor' ||
-                          bestItem.kind === 'employee'
+                          bestItem.kind === 'employee' ||
+                          bestItem.kind === 'world_event'
                         ? 1.35
                         : bestItem.kind === 'shop_station'
                           ? bestItem.stationKind === 'counter'
@@ -901,6 +944,12 @@ export class InteractionManager {
       return true;
     }
 
+    if (item.kind === 'world_event') {
+      this.sound.playUiClick(620);
+      this.onWorldEventInteract?.(item.id);
+      return true;
+    }
+
     // Container (with optional tool-pry requirement)
     const cName = tContainerName(item.id, item.name);
     let priedJustNow = false;
@@ -1163,6 +1212,15 @@ export class InteractionManager {
         }),
         actionLabel: t.gameMessages.actions.manage,
         kind: 'employee',
+      };
+    }
+
+    if (item.kind === 'world_event') {
+      return {
+        id: item.id,
+        name: item.name,
+        actionLabel: item.actionLabel,
+        kind: 'world_event',
       };
     }
 

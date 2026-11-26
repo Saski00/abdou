@@ -1,12 +1,17 @@
 import { clamp } from './collision';
 import { DEFAULT_DAY_LENGTH_SECONDS } from './timeSystem';
-import { GameSettings } from './types';
+import { HorrorAudioLevel, GameSettings } from './types';
 
 export const SETTINGS_STORAGE_KEY = 'last_shop_settings_v1';
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   language: 'en',
   masterVolume: 0.55,
+  ambientVolume: 0.85,
+  sfxVolume: 0.9,
+  musicVolume: 0.65,
+  dialogueVolume: 0.85,
+  horrorAudioLevel: 'full',
   muted: false,
   mouseSensitivity: 1.0,
   shadowsEnabled: true,
@@ -16,6 +21,10 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   screenOrientation: 'auto',
   dayLengthSeconds: DEFAULT_DAY_LENGTH_SECONDS,
 };
+
+function sanitizeVolume(val: unknown, fallback: number): number {
+  return typeof val === 'number' && Number.isFinite(val) ? clamp(val, 0, 1) : fallback;
+}
 
 export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefined): GameSettings {
   if (!raw || typeof raw !== 'object') {
@@ -36,6 +45,12 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
     raw.lightingQuality === 'atmospheric' || raw.lightingQuality === 'performance'
       ? raw.lightingQuality
       : DEFAULT_GAME_SETTINGS.lightingQuality;
+  const horrorAudioLevel: HorrorAudioLevel =
+    raw.horrorAudioLevel === 'full' ||
+    raw.horrorAudioLevel === 'reduced' ||
+    raw.horrorAudioLevel === 'off'
+      ? raw.horrorAudioLevel
+      : DEFAULT_GAME_SETTINGS.horrorAudioLevel;
   const dayLengthSeconds =
     raw.dayLengthSeconds === 120 || raw.dayLengthSeconds === 300 || raw.dayLengthSeconds === 900
       ? raw.dayLengthSeconds
@@ -43,10 +58,12 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
 
   return {
     language,
-    masterVolume:
-      typeof raw.masterVolume === 'number' && Number.isFinite(raw.masterVolume)
-        ? clamp(raw.masterVolume, 0, 1)
-        : DEFAULT_GAME_SETTINGS.masterVolume,
+    masterVolume: sanitizeVolume(raw.masterVolume, DEFAULT_GAME_SETTINGS.masterVolume),
+    ambientVolume: sanitizeVolume(raw.ambientVolume, DEFAULT_GAME_SETTINGS.ambientVolume),
+    sfxVolume: sanitizeVolume(raw.sfxVolume, DEFAULT_GAME_SETTINGS.sfxVolume),
+    musicVolume: sanitizeVolume(raw.musicVolume, DEFAULT_GAME_SETTINGS.musicVolume),
+    dialogueVolume: sanitizeVolume(raw.dialogueVolume, DEFAULT_GAME_SETTINGS.dialogueVolume),
+    horrorAudioLevel,
     muted: typeof raw.muted === 'boolean' ? raw.muted : DEFAULT_GAME_SETTINGS.muted,
     mouseSensitivity:
       typeof raw.mouseSensitivity === 'number' && Number.isFinite(raw.mouseSensitivity)

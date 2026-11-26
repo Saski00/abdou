@@ -49,7 +49,8 @@ export interface InteractionPrompt {
     | 'vehicle'
     | 'workbench'
     | 'examine'
-    | 'bed';
+    | 'bed'
+    | 'world_event';
   amount?: number;
 }
 
@@ -325,9 +326,16 @@ export interface FeedbackToast {
   tone: 'resource' | 'world' | 'warning';
 }
 
+export type HorrorAudioLevel = 'full' | 'reduced' | 'off';
+
 export interface GameSettings {
   language: GameLanguage;
   masterVolume: number;
+  ambientVolume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  dialogueVolume: number;
+  horrorAudioLevel: HorrorAudioLevel;
   muted: boolean;
   mouseSensitivity: number;
   shadowsEnabled: boolean;
@@ -336,6 +344,58 @@ export interface GameSettings {
   touchControls: TouchControlsMode;
   screenOrientation: ScreenOrientationMode;
   dayLengthSeconds: number;
+}
+
+export type WorldEventCategory =
+  | 'exploration'
+  | 'zombie_activity'
+  | 'survivor'
+  | 'shop'
+  | 'atmosphere';
+
+export type WorldEventVisualKind =
+  | 'crate'
+  | 'beacon'
+  | 'npc_survivor'
+  | 'npc_trader'
+  | 'silhouette'
+  | 'none';
+
+export interface WorldEventChoiceSummary {
+  id: string;
+  label: string;
+  hint?: string;
+  affordable: boolean;
+  disabledReason?: string;
+  tone?: 'primary' | 'risk' | 'neutral';
+}
+
+export interface WorldEventBannerSummary {
+  instanceId: string;
+  eventId: string;
+  category: WorldEventCategory;
+  title: string;
+  description: string;
+  locationLabel: string;
+  visualKind: WorldEventVisualKind;
+  hasWorldTarget: boolean;
+  targetX?: number;
+  targetZ?: number;
+  distanceMeters?: number;
+  bearingLabel?: string;
+  secondsRemaining?: number | null;
+  requiresProximityToDecide: boolean;
+  playerInRange: boolean;
+  choices: WorldEventChoiceSummary[];
+}
+
+export interface ActiveWorldEventPin {
+  id: string;
+  title: string;
+  category: WorldEventCategory;
+  x: number;
+  z: number;
+  secondsRemaining: number | null;
 }
 
 export interface HudSnapshot {
@@ -391,4 +451,9 @@ export interface HudSnapshot {
   weaponLabel: string;
   zombiesDefeated: number;
   deathReason: string | null;
+  noiseLevel: number;
+  tensionLevel: number;
+  survivorGoodwill: number;
+  activeWorldEvent: WorldEventBannerSummary | null;
+  activeWorldEventPin: ActiveWorldEventPin | null;
 }

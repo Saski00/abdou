@@ -6,6 +6,7 @@ import {
   MissionCategory,
   ResourceId,
   WeatherKind,
+  WorldEventCategory,
   WorldRegionId,
 } from '../game/types';
 
@@ -144,6 +145,20 @@ export interface GuidanceHintTranslation {
   touchMessage?: string;
 }
 
+export interface WorldEventChoiceTranslation {
+  label: string;
+  hint?: string;
+  outcomeToast: string;
+}
+
+export interface WorldEventItemTranslation {
+  title: string;
+  description: string;
+  interactName?: string;
+  interactAction?: string;
+  choices?: Record<string, WorldEventChoiceTranslation>;
+}
+
 export interface TranslationCatalog {
   lang: GameLanguage;
   dir: TextDirection;
@@ -228,6 +243,15 @@ export interface TranslationCatalog {
     languageEnglish: string;
     languageArabic: string;
     masterVolumeLabel: string;
+    ambientVolumeLabel: string;
+    sfxVolumeLabel: string;
+    musicVolumeLabel: string;
+    dialogueVolumeLabel: string;
+    horrorAudioLabel: string;
+    horrorAudioDesc: string;
+    horrorFull: string;
+    horrorReduced: string;
+    horrorOff: string;
     mutedLabel: string;
     lookSensLabel: string;
     screenOrientationLabel: string;
@@ -871,4 +895,37 @@ export interface TranslationCatalog {
   examineProps: Record<string, ExaminePropTranslation>;
   furniture: Record<string, FurnitureTranslation>;
   guidanceHints: Record<string, GuidanceHintTranslation>;
+  worldEvents: {
+    categories: Record<WorldEventCategory, string>;
+    ui: {
+      respondBtn: string;
+      approachHint: string; // "Approach ({bearing} {dist}m)"
+      secondsLeft: string; // "{sec}s"
+      cardHint: string;
+      dismissBtn: string;
+      closeAria: string;
+      needItemDisabled: string; // "Need {qty} {item}"
+      needMoneyDisabled: string; // "Need {amount}"
+      packFullDisabled: string;
+      noiseLoud: string;
+      noiseAudible: string;
+      goodwillBadge: string; // "Goodwill Lv {level}"
+      mapPinLabel: string; // "Event · {title}"
+      mapPinDist: string; // "{bearing} {dist}m"
+    };
+    anchors: Record<string, string>;
+    toasts: {
+      signalExpired: string;
+      traderDeparted: string;
+      encounterExpired: string;
+      cacheExpired: string;
+      prowlerNearbyCue: string;
+      noiseAttractsCue: string;
+      perimeterWarningCue: string;
+      goodwillDiscountNotice: string; // "Survivor goodwill increased (-${discount} recruit fees)"
+      packFullPartialEvent: string;
+      silhouetteVanishedCue: string;
+    };
+    events: Record<string, WorldEventItemTranslation>;
+  };
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Compass, KeyRound, MapPin, Navigation, Store, Target, X } from 'lucide-react';
+import { Compass, KeyRound, MapPin, Navigation, Radio, Store, Target, X } from 'lucide-react';
 import { ENTERABLE_BUILDINGS } from '../assets/maps/buildingLayouts';
 import { NEIGHBORHOOD_MAP } from '../assets/maps/neighborhoodMap';
 import { useViewportLayout } from '../game/responsiveLayout';
@@ -95,6 +95,12 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
   const trackedDz = trackedLoc ? trackedLoc.z - hud.playerZ : 0;
   const trackedDist = trackedLoc ? Math.round(Math.hypot(trackedDx, trackedDz)) : 0;
   const trackedBearing = trackedLoc ? getLocalizedBearingLabel(trackedDx, trackedDz) : '';
+
+  const eventPin = hud.activeWorldEventPin;
+  const eventDx = eventPin ? eventPin.x - hud.playerX : 0;
+  const eventDz = eventPin ? eventPin.z - hud.playerZ : 0;
+  const eventDist = eventPin ? Math.round(Math.hypot(eventDx, eventDz)) : 0;
+  const eventBearing = eventPin ? getLocalizedBearingLabel(eventDx, eventDz) : '';
 
   const legendShopLabel = mapCopy.compactShop.replace(/[:：]\s*$/, '');
   const legendChartedLabel = mapCopy.compactCharted.replace(/[:：]\s*$/, '');
@@ -408,6 +414,28 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
               </div>
             )}
 
+            {/* Active Dynamic World Event Marker */}
+            {eventPin && (
+              <div
+                aria-label={formatTpl(t.worldEvents.ui.mapPinLabel, { title: eventPin.title })}
+                style={{ left: `${toMapX(eventPin.x)}%`, top: `${toMapY(eventPin.z)}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none flex flex-col items-center"
+              >
+                <div className="w-7 h-7 rounded-full border-2 border-sky-400/90 bg-sky-500/18 flex items-center justify-center shadow-md">
+                  <Radio className="w-3.5 h-3.5 text-sky-300" aria-hidden="true" />
+                </div>
+                <span
+                  dir={dir}
+                  className="mt-0.5 text-[9px] font-mono-tabular font-semibold text-sky-300 bg-[#0b1018]/92 px-1 rounded whitespace-nowrap"
+                >
+                  {formatTpl(t.worldEvents.ui.mapPinDist, {
+                    bearing: eventBearing,
+                    dist: eventDist,
+                  })}
+                </span>
+              </div>
+            )}
+
             {/* Player Current Position & Heading */}
             <div
               aria-label={mapCopy.yourPosAria}
@@ -525,6 +553,35 @@ export function MapModal({ hud, isTouchMode, onClose }: MapModalProps) {
                     }
                     return trackedMissionLoc?.description ?? trackedMission.description;
                   })()}
+                </div>
+              </div>
+            )}
+
+            {eventPin && (
+              <div className="rounded-lg border border-sky-500/50 bg-[#0d1522] px-3.5 py-2.5">
+                <div className="flex items-center justify-between gap-2 text-[10px] font-mono-tabular uppercase tracking-wider text-sky-300">
+                  <span>{t.worldEvents.categories[eventPin.category]}</span>
+                  <span>
+                    <bdi dir="ltr">
+                      {formatTpl(t.worldEvents.ui.mapPinDist, {
+                        bearing: eventBearing,
+                        dist: eventDist,
+                      })}
+                    </bdi>
+                    {eventPin.secondsRemaining !== null && (
+                      <>
+                        {' · '}
+                        <bdi dir="ltr">
+                          {formatTpl(t.worldEvents.ui.secondsLeft, {
+                            sec: Math.ceil(eventPin.secondsRemaining),
+                          })}
+                        </bdi>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="text-xs font-semibold text-stone-100 mt-0.5">
+                  {formatTpl(t.worldEvents.ui.mapPinLabel, { title: eventPin.title })}
                 </div>
               </div>
             )}

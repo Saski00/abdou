@@ -585,6 +585,48 @@ export class ShopEconomySystem {
     });
   }
 
+  public applyWorldEventMoneyDelta(
+    delta: number,
+    message: string,
+    timeLabel = ''
+  ): { ok: boolean; balance: number; record: ShopTransactionRecord } {
+    const clean = Math.round(delta);
+    if (clean < 0) {
+      const spendRes = this.spendMoney(Math.abs(clean));
+      if (!spendRes.ok) {
+        return {
+          ok: false,
+          balance: this.money,
+          record: this.recordError(spendRes.error || message, timeLabel),
+        };
+      }
+      return {
+        ok: true,
+        balance: this.money,
+        record: this.recordTx({
+          kind: 'mission',
+          moneyDelta: clean,
+          message,
+          timestampLabel: timeLabel,
+        }),
+      };
+    }
+
+    if (clean > 0) {
+      this.addMoney(clean);
+    }
+    return {
+      ok: true,
+      balance: this.money,
+      record: this.recordTx({
+        kind: 'mission',
+        moneyDelta: clean,
+        message,
+        timestampLabel: timeLabel,
+      }),
+    };
+  }
+
   public upgradeShopLevel(timeLabel = ''): ShopUpgradeResult {
     const econMsg = getTranslations().gameMessages.economy;
     const nextCfg = getNextShopLevelConfig(this.shopLevel);

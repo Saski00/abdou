@@ -162,9 +162,21 @@ export class AtmosphereManager {
   private rainOffsetsY: Float32Array;
   private rainOffsetsZ: Float32Array;
   private lightningFlash = 0;
+  private powerFlickerTimer = 0;
+  private powerFlickerDuration = 4.0;
 
   public triggerLightningFlash(strength = 1.0): void {
     this.lightningFlash = Math.max(this.lightningFlash, Math.min(1.3, Math.max(0.2, strength)));
+  }
+
+  public triggerLocalPowerFlicker(durationSec = 4.2): void {
+    this.powerFlickerDuration = Math.max(1.5, durationSec);
+    this.powerFlickerTimer = Math.max(this.powerFlickerTimer, this.powerFlickerDuration);
+  }
+
+  public getPowerFlickerIntensity(): number {
+    if (this.powerFlickerTimer <= 0) return 0;
+    return Math.max(0, Math.min(1, this.powerFlickerTimer / this.powerFlickerDuration));
   }
 
   constructor(
@@ -402,11 +414,19 @@ export class AtmosphereManager {
     this.hemiLight.intensity = baseHemiInt * (1 - weather.rainIntensity * 0.12) + flashBoost * 0.72;
     this.scene.environmentIntensity = baseEnvInt * (1 - overcastStrength * 0.25);
 
-    // 4. Street Lamps (Automatic On/Off + Subtle Flicker)
+    if (this.powerFlickerTimer > 0) {
+      this.powerFlickerTimer = Math.max(0, this.powerFlickerTimer - dt);
+    }
+    const powerSurge = this.powerFlickerTimer > 0
+      ? Math.max(0, Math.min(1, 0.45 + 0.55 * Math.sin(elapsedTime * 31.0) * Math.sin(elapsedTime * 13.7)))
+      : 0;
+
+    // 4. Street Lamps (Automatic On/Off + Subtle Flicker + Grid Surge Dip)
     const lampFactor = time.lampFactor;
-    this.materials.streetLampBulb.color.copy(_lampOffColor).lerp(_lampOnColor, lampFactor);
-    this.materials.streetLampBulb.emissiveIntensity = lampFactor * 2.35;
-    this.world.streetLampPoolMat.opacity = lampFactor * 0.92;
+    const lampDip = this.powerFlickerTimer > 0 ? 1 - powerSurge * 0.62 : 1;
+    this.materials.streetLampBulb.color.copy(_lampOffColor).lerp(_lampOnColor, lampFactor * lampDip);
+    this.materials.streetLampBulb.emissiveIntensity = lampFactor * 2.35 * lampDip;
+    this.world.streetLampPoolMat.opacity = lampFactor * 0.92 * lampDip;
 
     for (const sl of this.world.streetLampLights) {
       const dx = sl.light.position.x - playerX;
@@ -420,7 +440,11 @@ export class AtmosphereManager {
           0.93 +
           Math.sin(elapsedTime * 3.8 + sl.seed) * 0.05 +
           Math.sin(elapsedTime * 13.0 + sl.seed) * 0.02;
-        sl.light.intensity = sl.baseIntensity * lampFactor * flicker;
+        const surgeFactor =
+          this.powerFlickerTimer > 0
+            ? Math.max(0.18, 1 - powerSurge * (0.45 + 0.35 * Math.abs(Math.sin(elapsedTime * 19 + sl.seed))))
+            : 1;
+        sl.light.intensity = sl.baseIntensity * lampFactor * flicker * surgeFactor;
       }
     }
 
@@ -436,7 +460,8 @@ export class AtmosphereManager {
         0.95 +
         Math.sin(elapsedTime * 3.4 + pl.seed) * 0.03 +
         Math.sin(elapsedTime * 11.2 + pl.seed) * 0.02;
-      pl.light.intensity = pl.baseIntensity * (0.22 + 0.85 * lampFactor) * flicker;
+      const surgeDip = this.powerFlickerTimer > 0 ? 1 - powerSurge * 0.25 : 1;
+      pl.light.intensity = pl.baseIntensity * (0.22 + 0.85 * lampFactor) * flicker * surgeDip;
     }
 
     for (const il of this.world.interiorLights) {
@@ -450,18 +475,22 @@ export class AtmosphereManager {
       }
 
       if (il.isSafeBase) {
-        // Warm, reliable backup generator lighting inside The Last Shop
+        // Warm, reliable backup generator lighting inside The Last Shop (only tiny sag on grid surge)
         const baseScale = 0.84 + nightGlow * 0.42;
         const steadyWarm = 0.97 + Math.sin(elapsedTime * 2.8 + il.seed) * 0.025;
-        il.light.intensity = il.baseIntensity * baseScale * steadyWarm;
+        const genSag = this.powerFlickerTimer > 0 ? 1 - powerSurge * 0.12 : 1;
+        il.light.intensity = il.baseIntensity * baseScale * steadyWarm * genSag;
       } else {
         // Abandoned buildings stay dim & eerie with intermittent failing emergency-bulb flicker
-        const baseScale = 0.25 + nightGlow * 0.14;
+        const baseScale = 0.24 + nightGlow * 0.14;
         const sputterCycle = (elapsedTime * 0.85 + il.seed) % 9.5;
-        const sputter =
-          sputterCycle > 8.6
-            ? 0.18 + Math.abs(Math.sin(elapsedTime * 29 + il.seed)) * 0.72
+        let sputter =
+          sputterCycle > 8.55
+            ? 0.16 + Math.abs(Math.sin(elapsedTime * 29 + il.seed)) * 0.72
             : 0.84 + Math.sin(elapsedTime * 5.7 + il.seed) * 0.12;
+        if (this.powerFlickerTimer > 0) {
+          sputter *= Math.max(0.14, 1 - powerSurge * 0.68);
+        }
         il.light.intensity = il.baseIntensity * baseScale * sputter;
       }
     }
@@ -479,14 +508,23 @@ export class AtmosphereManager {
       (0.028 + time.daylightFactor * 0.095) * (1 - overcastStrength * 0.55);
 
     // 6. Lightweight Outdoor Rain Particles (hidden completely when dry; skips indoor roof footprints)
-    this.updateRain(dt, weather.rainIntensity, playerX, playerZ);
+    this.updateRain(
+      dt,
+      weather.rainIntensity,
+      weather.windGust ?? 0.25,
+      playerX,
+      playerZ,
+      lightingQuality
+    );
   }
 
   private updateRain(
     dt: number,
     rainIntensity: number,
+    windGust: number,
     playerX: number,
-    playerZ: number
+    playerZ: number,
+    lightingQuality: 'atmospheric' | 'performance'
   ): void {
     if (rainIntensity <= 0.015) {
       this.rainLines.visible = false;
@@ -496,14 +534,21 @@ export class AtmosphereManager {
     this.rainLines.visible = true;
     this.rainMat.opacity = Math.min(0.45, rainIntensity * 0.44);
 
+    const activeCount = lightingQuality === 'performance' ? Math.floor(RAIN_COUNT * 0.5) : RAIN_COUNT;
+    this.rainLines.geometry.setDrawRange(0, activeCount * 2);
+
     const pos = this.rainPositions;
     const floors = this.world.colliders.floors;
     const halfW = RAIN_BOX_W * 0.5;
+    const windDriftX = 1.1 + windGust * 3.4;
+    const windDriftZ = 0.45 + windGust * 1.4;
+    const tiltX = 0.07 + windGust * 0.14;
+    const tiltZ = 0.03 + windGust * 0.06;
 
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      let ox = this.rainOffsetsX[i] + dt * 1.4;
+    for (let i = 0; i < activeCount; i++) {
+      let ox = this.rainOffsetsX[i] + dt * windDriftX;
       let oy = this.rainOffsetsY[i] - this.rainSpeeds[i] * dt;
-      let oz = this.rainOffsetsZ[i] + dt * 0.6;
+      let oz = this.rainOffsetsZ[i] + dt * windDriftZ;
 
       if (ox > halfW) ox -= RAIN_BOX_W;
       if (ox < -halfW) ox += RAIN_BOX_W;
@@ -540,9 +585,9 @@ export class AtmosphereManager {
         pos[idx] = wx;
         pos[idx + 1] = oy;
         pos[idx + 2] = wz;
-        pos[idx + 3] = wx - 0.09;
+        pos[idx + 3] = wx - tiltX;
         pos[idx + 4] = oy + 0.46;
-        pos[idx + 5] = wz - 0.04;
+        pos[idx + 5] = wz - tiltZ;
       }
     }
 

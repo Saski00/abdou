@@ -68,12 +68,29 @@ export function createZombieSharedGeometries(): ZombieSharedGeometries {
  */
 export function buildProceduralZombieModel(
   geos: ZombieSharedGeometries,
-  tintVariant = 0
+  tintVariant = 0,
+  archetypeId: 'walker' | 'runner' | 'brute' = 'walker',
+  visualScale = 1.0
 ): { group: THREE.Group; rig: ZombieRig } {
   const root = new THREE.Group();
+  root.scale.setScalar(visualScale);
 
-  const skinColors = [0x6e7b6a, 0x626f61, 0x77806c, 0x5c665b];
-  const coatColors = [0x2a2f36, 0x352b26, 0x26312d, 0x33303a];
+  const skinColors =
+    archetypeId === 'runner'
+      ? [0x757d62, 0x6b745d]
+      : archetypeId === 'brute'
+        ? [0x525d54, 0x4b544d]
+        : [0x6e7b6a, 0x626f61, 0x77806c, 0x5c665b];
+  const coatColors =
+    archetypeId === 'runner'
+      ? [0x3c2d26, 0x2f3528]
+      : archetypeId === 'brute'
+        ? [0x1c2028, 0x262124]
+        : [0x2a2f36, 0x352b26, 0x26312d, 0x33303a];
+  const eyeColorHex =
+    archetypeId === 'runner' ? 0xd96b43 : archetypeId === 'brute' ? 0xe09f3e : 0x9ca87a;
+  const eyeEmissiveHex =
+    archetypeId === 'runner' ? 0xa4381a : archetypeId === 'brute' ? 0xb45309 : 0x6d7c3f;
 
   const skinMat = new THREE.MeshStandardMaterial({
     color: skinColors[tintVariant % skinColors.length],
@@ -96,8 +113,8 @@ export function buildProceduralZombieModel(
     metalness: 0.1,
   });
   const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0x9ca87a,
-    emissive: 0x6d7c3f,
+    color: eyeColorHex,
+    emissive: eyeEmissiveHex,
     emissiveIntensity: 0.45,
     roughness: 0.35,
   });
@@ -251,18 +268,39 @@ export function animateZombieRig(
   }
 
   rig.bodyPivot.position.y = 0.68;
-  rig.eyeMat.emissiveIntensity = state === 'chasing' || state === 'attacking' ? 0.85 : 0.42;
+  rig.eyeMat.emissiveIntensity =
+    state === 'chasing' || state === 'attacking' || state === 'alert'
+      ? 0.9
+      : state === 'searching' || state === 'investigating'
+        ? 0.65
+        : 0.4;
 
-  if (state === 'idle') {
-    const sway = Math.sin(walkCycle) * 0.04;
-    rig.bodyPivot.rotation.x = 0.08;
+  if (state === 'stunned') {
+    rig.bodyPivot.rotation.x = -0.18;
+    rig.bodyPivot.rotation.z = Math.sin(walkCycle * 3.0) * 0.08;
+    rig.headPivot.rotation.z = 0.18;
+    rig.headPivot.rotation.y = 0.12;
+    rig.leftLegPivot.rotation.x = -0.12;
+    rig.rightLegPivot.rotation.x = 0.12;
+    rig.leftArmPivot.rotation.x = 0.35;
+    rig.rightArmPivot.rotation.x = 0.25;
+    return;
+  }
+
+  if (state === 'idle' || state === 'suspicious' || state === 'alert') {
+    const isSuspicious = state === 'suspicious';
+    const isAlert = state === 'alert';
+    const sway = Math.sin(walkCycle) * (isAlert ? 0.02 : 0.04);
+    rig.bodyPivot.rotation.x = isAlert ? 0.18 : isSuspicious ? 0.12 : 0.08;
     rig.bodyPivot.rotation.z = sway;
-    rig.headPivot.rotation.z = -sway * 1.4;
-    rig.headPivot.rotation.y = Math.sin(walkCycle * 0.6) * 0.14;
+    rig.headPivot.rotation.z = isSuspicious ? 0.16 : -sway * 1.4;
+    rig.headPivot.rotation.y = isAlert
+      ? 0
+      : Math.sin(walkCycle * (isSuspicious ? 1.5 : 0.6)) * (isSuspicious ? 0.36 : 0.14);
     rig.leftLegPivot.rotation.x = 0;
     rig.rightLegPivot.rotation.x = 0;
-    rig.leftArmPivot.rotation.x = 0.68 + Math.sin(walkCycle) * 0.06;
-    rig.rightArmPivot.rotation.x = 0.62 - Math.sin(walkCycle) * 0.06;
+    rig.leftArmPivot.rotation.x = (isAlert ? 1.15 : 0.68) + Math.sin(walkCycle) * 0.06;
+    rig.rightArmPivot.rotation.x = (isAlert ? 1.1 : 0.62) - Math.sin(walkCycle) * 0.06;
     return;
   }
 
@@ -272,7 +310,7 @@ export function animateZombieRig(
         ? 1 - attackWindup / attackWindupMax
         : 0;
     const armRaise = swingRatio > 0 ? 1.85 - swingRatio * 1.35 : 0.95 + Math.sin(walkCycle * 2) * 0.12;
-    rig.bodyPivot.rotation.x = 0.18 + (swingRatio > 0 ? Math.sin(swingRatio * Math.PI) * 0.22 : 0);
+    rig.bodyPivot.rotation.x = 0.18 + (swingRatio > 0 ? Math.sin(swingRatio * Math.PI) * 0.24 : 0);
     rig.bodyPivot.rotation.z = 0;
     rig.headPivot.rotation.z = 0.08;
     rig.headPivot.rotation.y = 0;
@@ -283,18 +321,21 @@ export function animateZombieRig(
     return;
   }
 
-  // Walking / Investigating / Chasing / Returning
+  // Roaming / Investigating / Searching / Chasing / Returning
   const isFast = state === 'chasing';
-  const strideAmp = isFast ? 0.62 : 0.36;
+  const isSearching = state === 'searching';
+  const strideAmp = isFast ? 0.62 : isSearching ? 0.42 : 0.36;
   const stride = Math.sin(walkCycle) * strideAmp;
   rig.leftLegPivot.rotation.x = stride;
   rig.rightLegPivot.rotation.x = -stride;
-  rig.bodyPivot.rotation.x = isFast ? 0.22 : 0.12;
+  rig.bodyPivot.rotation.x = isFast ? 0.24 : isSearching ? 0.16 : 0.12;
   rig.bodyPivot.rotation.z = Math.cos(walkCycle) * (isFast ? 0.07 : 0.05);
   rig.headPivot.rotation.z = isFast ? -0.09 : 0.08;
-  rig.headPivot.rotation.y = Math.sin(walkCycle * 0.5) * 0.12;
-  rig.leftArmPivot.rotation.x = (isFast ? 1.28 : 0.92) + Math.sin(walkCycle * 0.8) * 0.14;
-  rig.rightArmPivot.rotation.x = (isFast ? 1.22 : 0.86) - Math.sin(walkCycle * 0.8) * 0.14;
+  rig.headPivot.rotation.y = isSearching
+    ? Math.sin(walkCycle * 0.9) * 0.42
+    : Math.sin(walkCycle * 0.5) * 0.12;
+  rig.leftArmPivot.rotation.x = (isFast ? 1.32 : isSearching ? 1.05 : 0.92) + Math.sin(walkCycle * 0.8) * 0.14;
+  rig.rightArmPivot.rotation.x = (isFast ? 1.26 : isSearching ? 0.98 : 0.86) - Math.sin(walkCycle * 0.8) * 0.14;
 }
 
 /**

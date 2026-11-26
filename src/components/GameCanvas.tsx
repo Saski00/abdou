@@ -41,6 +41,9 @@ export interface TouchEngineBridge {
   performStoryObjectAction: (objectId: string) => StoryObjectInspectionData | null;
   craftWorkbenchRecipe: (recipeId: string) => boolean;
   dismissGuidanceHint: (hintId: string) => void;
+  resolveWorldEventChoice: (choiceId: string) => boolean;
+  openActiveWorldEventPrompt: () => void;
+  dismissWorldEventBanner: () => void;
   saveCurrentGame: (showToast?: boolean) => boolean;
 }
 
@@ -58,6 +61,7 @@ interface GameCanvasProps {
   storyNoteOpen: boolean;
   workbenchOpen: boolean;
   endingOpen: boolean;
+  worldEventOpen: boolean;
   engineBridgeRef: MutableRefObject<TouchEngineBridge | null>;
   onHudChange: (hud: HudSnapshot) => void;
   onPauseRequested: () => void;
@@ -68,6 +72,7 @@ interface GameCanvasProps {
   onSurvivorInteractRequested: (survivorId: string) => void;
   onStoryObjectInspectRequested: (data: StoryObjectInspectionData) => void;
   onWorkbenchRequested: (workbenchName: string) => void;
+  onWorldEventPromptRequested: (eventId: string) => void;
   onEndingTriggered: () => void;
   onFlashlightToggled: (on: boolean) => void;
   onGameOver: (reason: string) => void;
@@ -88,6 +93,7 @@ export function GameCanvas({
   storyNoteOpen,
   workbenchOpen,
   endingOpen,
+  worldEventOpen,
   engineBridgeRef,
   onHudChange,
   onPauseRequested,
@@ -98,6 +104,7 @@ export function GameCanvas({
   onSurvivorInteractRequested,
   onStoryObjectInspectRequested,
   onWorkbenchRequested,
+  onWorldEventPromptRequested,
   onEndingTriggered,
   onFlashlightToggled,
   onGameOver,
@@ -118,6 +125,7 @@ export function GameCanvas({
     onSurvivorInteractRequested,
     onStoryObjectInspectRequested,
     onWorkbenchRequested,
+    onWorldEventPromptRequested,
     onEndingTriggered,
     onFlashlightToggled,
     onGameOver,
@@ -133,6 +141,7 @@ export function GameCanvas({
     onSurvivorInteractRequested,
     onStoryObjectInspectRequested,
     onWorkbenchRequested,
+    onWorldEventPromptRequested,
     onEndingTriggered,
     onFlashlightToggled,
     onGameOver,
@@ -156,6 +165,8 @@ export function GameCanvas({
         callbacksRef.current.onStoryObjectInspectRequested(data),
       onWorkbenchRequested: (workbenchName) =>
         callbacksRef.current.onWorkbenchRequested(workbenchName),
+      onWorldEventPromptRequested: (eventId) =>
+        callbacksRef.current.onWorldEventPromptRequested(eventId),
       onEndingTriggered: () => callbacksRef.current.onEndingTriggered(),
       onFlashlightToggled: (on) => callbacksRef.current.onFlashlightToggled(on),
       onGameOver: (reason) => callbacksRef.current.onGameOver(reason),
@@ -195,6 +206,9 @@ export function GameCanvas({
       performStoryObjectAction: (objectId) => engine.performStoryObjectAction(objectId),
       craftWorkbenchRecipe: (recipeId) => engine.craftWorkbenchRecipe(recipeId),
       dismissGuidanceHint: (hintId) => engine.dismissGuidanceHint(hintId),
+      resolveWorldEventChoice: (choiceId) => engine.resolveWorldEventChoice(choiceId),
+      openActiveWorldEventPrompt: () => engine.openActiveWorldEventPrompt(),
+      dismissWorldEventBanner: () => engine.dismissWorldEventBanner(),
       saveCurrentGame: (showToast = true) => engine.saveCurrentGame(showToast),
     };
 
@@ -244,6 +258,10 @@ export function GameCanvas({
   useEffect(() => {
     engineRef.current?.setEndingOpen(endingOpen);
   }, [endingOpen]);
+
+  useEffect(() => {
+    engineRef.current?.setWorldEventOpen(worldEventOpen);
+  }, [worldEventOpen]);
 
   useEffect(() => {
     if (screenState === 'MENU') {

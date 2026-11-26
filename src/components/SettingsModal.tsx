@@ -5,7 +5,13 @@ import {
   applyScreenOrientationPreference,
   useViewportLayout,
 } from '../game/responsiveLayout';
-import { GameLanguage, GameSettings, ScreenOrientationMode, TouchControlsMode } from '../game/types';
+import {
+  GameLanguage,
+  GameSettings,
+  HorrorAudioLevel,
+  ScreenOrientationMode,
+  TouchControlsMode,
+} from '../game/types';
 import { formatTpl, useI18n } from '../i18n';
 
 interface SettingsModalProps {
@@ -44,6 +50,12 @@ export function SettingsModal({
     { id: 'auto', label: t.settingsModal.orientationAuto },
     { id: 'portrait', label: t.settingsModal.orientationPortrait },
     { id: 'landscape', label: t.settingsModal.orientationLandscape },
+  ];
+
+  const horrorAudioModes: { id: HorrorAudioLevel; label: string }[] = [
+    { id: 'full', label: t.settingsModal.horrorFull },
+    { id: 'reduced', label: t.settingsModal.horrorReduced },
+    { id: 'off', label: t.settingsModal.horrorOff },
   ];
 
   const dayLengthOptions = [
@@ -207,6 +219,127 @@ export function SettingsModal({
               }
               className="w-full accent-amber-500 cursor-pointer"
             />
+          </div>
+
+          {/* Per-channel Audio Sliders */}
+          <div
+            className={`grid grid-cols-2 gap-x-4 gap-y-2.5 p-3 rounded-lg bg-[#141b27]/80 border border-stone-800/80 ${
+              isCompactLandscape ? 'col-span-2' : ''
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <label htmlFor="ambient-volume" className="text-stone-300">
+                  {t.settingsModal.ambientVolumeLabel}
+                </label>
+                <bdi dir="ltr" className="font-mono-tabular text-[11px] text-stone-400">
+                  {Math.round(settings.ambientVolume * 100)}%
+                </bdi>
+              </div>
+              <input
+                id="ambient-volume"
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(settings.ambientVolume * 100)}
+                onChange={(e) =>
+                  onChange({ ...settings, ambientVolume: Number(e.target.value) / 100 })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <label htmlFor="sfx-volume" className="text-stone-300">
+                  {t.settingsModal.sfxVolumeLabel}
+                </label>
+                <bdi dir="ltr" className="font-mono-tabular text-[11px] text-stone-400">
+                  {Math.round(settings.sfxVolume * 100)}%
+                </bdi>
+              </div>
+              <input
+                id="sfx-volume"
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(settings.sfxVolume * 100)}
+                onChange={(e) =>
+                  onChange({ ...settings, sfxVolume: Number(e.target.value) / 100 })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <label htmlFor="music-volume" className="text-stone-300">
+                  {t.settingsModal.musicVolumeLabel}
+                </label>
+                <bdi dir="ltr" className="font-mono-tabular text-[11px] text-stone-400">
+                  {Math.round(settings.musicVolume * 100)}%
+                </bdi>
+              </div>
+              <input
+                id="music-volume"
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(settings.musicVolume * 100)}
+                onChange={(e) =>
+                  onChange({ ...settings, musicVolume: Number(e.target.value) / 100 })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <label htmlFor="dialogue-volume" className="text-stone-300">
+                  {t.settingsModal.dialogueVolumeLabel}
+                </label>
+                <bdi dir="ltr" className="font-mono-tabular text-[11px] text-stone-400">
+                  {Math.round(settings.dialogueVolume * 100)}%
+                </bdi>
+              </div>
+              <input
+                id="dialogue-volume"
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(settings.dialogueVolume * 100)}
+                onChange={(e) =>
+                  onChange({ ...settings, dialogueVolume: Number(e.target.value) / 100 })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Horror & Tension Audio Intensity */}
+          <div className={`flex flex-wrap items-center justify-between gap-2 ${isCompactLandscape ? 'col-span-2' : ''}`}>
+            <div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.horrorAudioLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.horrorAudioDesc}</div>
+            </div>
+            <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
+              {horrorAudioModes.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onChange({ ...settings, horrorAudioLevel: m.id })}
+                  className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                    settings.horrorAudioLevel === m.id
+                      ? 'bg-amber-500 text-stone-950 font-semibold'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Look Sensitivity */}
