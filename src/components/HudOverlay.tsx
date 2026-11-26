@@ -3,12 +3,14 @@ import {
   Backpack,
   BedDouble,
   Compass,
+  Crosshair,
   Droplet,
   Flashlight,
   HeartPulse,
   Lightbulb,
   Map as MapIcon,
   Pause,
+  RefreshCw,
   Sword,
   Utensils,
   Volume2,
@@ -17,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { ViewportLayout } from '../game/responsiveLayout';
-import { HudSnapshot, ResourceId } from '../game/types';
+import { HitMarkerKind, HudSnapshot, ResourceId } from '../game/types';
 import { formatTpl, useI18n } from '../i18n';
 
 interface HudOverlayProps {
@@ -39,6 +41,8 @@ interface HudOverlayProps {
   onToggleMute: () => void;
   onConsumeItem: (resourceId: ResourceId) => void;
   onToggleRest: () => void;
+  onCycleWeapon: () => void;
+  onReload: () => void;
 }
 
 export function HudOverlay({
@@ -60,6 +64,8 @@ export function HudOverlay({
   onToggleMute,
   onConsumeItem,
   onToggleRest,
+  onCycleWeapon,
+  onReload,
 }: HudOverlayProps) {
   const { dir, t } = useI18n();
 
@@ -76,11 +82,14 @@ export function HudOverlay({
   const foodQty = hud.inventory.canned_food ?? 0;
   const waterQty = hud.inventory.water_bottle ?? 0;
   const medQty = hud.inventory.medical_supplies ?? 0;
+  const healPromptVisible = hud.health <= 38 && medQty > 0;
 
   const [damageFlash, setDamageFlash] = useState(false);
   const [staminaHoldVisible, setStaminaHoldVisible] = useState(false);
   const [gearPeekVisible, setGearPeekVisible] = useState(false);
+  const [activeHitMarker, setActiveHitMarker] = useState<HitMarkerKind | null>(null);
   const prevFlashlightRef = useRef(hud.flashlightOn);
+  const prevWeaponIdRef = useRef(hud.weaponId);
   const trackedMission = hud.missions.trackedMission;
   const nextObjective =
     trackedMission?.objectives.find((o) => !o.completed) ??
@@ -127,8 +136,30 @@ export function HudOverlay({
     return () => window.clearTimeout(timer);
   }, [hud.flashlightOn]);
 
+  useEffect(() => {
+    if (prevWeaponIdRef.current === hud.weaponId) return;
+    prevWeaponIdRef.current = hud.weaponId;
+    setGearPeekVisible(true);
+    const timer = window.setTimeout(() => setGearPeekVisible(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [hud.weaponId]);
+
+  useEffect(() => {
+    if (hud.hitMarkerId <= 0 || !hud.hitMarkerKind) return;
+    setActiveHitMarker(hud.hitMarkerKind);
+    const timer = window.setTimeout(() => setActiveHitMarker(null), 220);
+    return () => window.clearTimeout(timer);
+  }, [hud.hitMarkerId, hud.hitMarkerKind]);
+
   const showStaminaBar = staminaUsedNow || staminaHoldVisible;
-  const showGearBadge = isPlaying && !isInventoryOpen && (hud.inActiveCombat || gearPeekVisible);
+  const showGearBadge =
+    isPlaying &&
+    !isInventoryOpen &&
+    (hud.inActiveCombat ||
+      gearPeekVisible ||
+      hud.weaponKind === 'ranged' ||
+      hud.isReloading ||
+      hud.unlockedWeaponIds.length > 1);
   const packNearFull = hud.totalInventoryItems >= Math.max(1, hud.packCapacity - 2);
   const packFull = hud.totalInventoryItems >= hud.packCapacity;
 
@@ -196,16 +227,45 @@ export function HudOverlay({
         }}
       />
 
-      {/* Minimal Center Reticle */}
+      {/* Minimal Center Reticle + Hit Marker + Reload Progress */}
       {isPlaying && !isInventoryOpen && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-          <div
-            className={`rounded-full transition-transform duration-100 ${
-              hud.interactionPrompt
-                ? 'w-2 h-2 bg-amber-400 ring-2 ring-amber-400/40 scale-110'
-                : 'w-1.5 h-1.5 bg-stone-100/75 ring-1 ring-black/60'
-            }`}
-          />
+          <div className="relative flex items-center justify-center">
+            {activeHitMarker && (
+              <div
+                aria-hidden="true"
+                className={`absolute inset-0 flex items-center justify-center ${
+                  activeHitMarker === 'kill'
+                    ? 'text-rose-400'
+                    : activeHitMarker === 'crit'
+                      ? 'text-amber-300'
+                      : 'text-white'
+                }`}
+              >
+                <span className="absolute w-2 h-0.5 bg-current rounded-full -translate-x-2 -translate-y-2 rotate-45 shadow-[0_0_4px_rgba(0,0,0,0.85)]" />
+                <span className="absolute w-2 h-0.5 bg-current rounded-full translate-x-2 -translate-y-2 -rotate-45 shadow-[0_0_4px_rgba(0,0,0,0.85)]" />
+                <span className="absolute w-2 h-0.5 bg-current rounded-full -translate-x-2 translate-y-2 -rotate-45 shadow-[0_0_4px_rgba(0,0,0,0.85)]" />
+                <span className="absolute w-2 h-0.5 bg-current rounded-full translate-x-2 translate-y-2 rotate-45 shadow-[0_0_4px_rgba(0,0,0,0.85)]" />
+              </div>
+            )}
+            <div
+              className={`rounded-full transition-transform duration-100 ${
+                hud.interactionPrompt
+                  ? 'w-2 h-2 bg-amber-400 ring-2 ring-amber-400/40 scale-110'
+                  : hud.weaponKind === 'ranged'
+                    ? 'w-1.5 h-1.5 bg-amber-100/90 ring-1 ring-black/70'
+                    : 'w-1.5 h-1.5 bg-stone-100/75 ring-1 ring-black/60'
+              }`}
+            />
+            {hud.isReloading && (
+              <div className="absolute top-5 w-16 h-1 bg-stone-900/90 rounded-full overflow-hidden border border-stone-700/75 shadow">
+                <div
+                  className="h-full bg-amber-400 transition-[width] duration-75 ease-linear"
+                  style={{ width: `${Math.round(hud.reloadProgress * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -298,16 +358,20 @@ export function HudOverlay({
             {/* Conditional Need Alerts & Resting State (hidden when healthy/idle) */}
             {isPlaying &&
               !isInventoryOpen &&
-              (healthCritical || hungerLow || thirstLow || energyLow || hud.isResting) && (
+              (healPromptVisible || hungerLow || thirstLow || energyLow || hud.isResting) && (
                 <div
                   className="flex flex-wrap items-center gap-1.5 pointer-events-auto max-w-[230px]"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  {healthCritical && medQty > 0 && (
+                  {healPromptVisible && (
                     <button
                       type="button"
                       onClick={() => handleUrgentNeedTap('medical_supplies', medQty)}
-                      className="min-h-[36px] px-2.5 py-1 rounded-lg bg-rose-500/92 hover:bg-rose-400 border border-rose-200/80 text-white text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform"
+                      className={`min-h-[36px] px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer active:scale-95 transition-transform ${
+                        healthCritical
+                          ? 'bg-rose-500/92 hover:bg-rose-400 border-rose-200/80 text-white'
+                          : 'bg-[#260e12]/92 hover:bg-rose-900/90 border-rose-400/70 text-rose-100'
+                      }`}
                     >
                       <HeartPulse className="w-3.5 h-3.5 shrink-0" />
                       <span>{formatTpl(t.hud.healBtn, { qty: medQty })}</span>
@@ -409,16 +473,84 @@ export function HudOverlay({
                 </div>
               )}
 
-            {/* Contextual Combat & Gear Indicator (only during combat, melee swing, or light toggle) */}
+            {/* Contextual Combat & Weapon Badge */}
             {showGearBadge && (
-              <div className="bg-[#0e121a]/82 backdrop-blur-sm border border-stone-700/55 rounded-lg px-2.5 py-1 flex items-center gap-2 text-[11px] text-stone-200 shadow-md">
-                <Sword
-                  className={`w-3.5 h-3.5 shrink-0 ${
-                    hud.inActiveCombat ? 'text-rose-400' : 'text-amber-400'
-                  }`}
-                  aria-hidden="true"
-                />
-                <span className="font-medium whitespace-nowrap">{hud.weaponLabel}</span>
+              <div
+                onPointerDown={(e) => e.stopPropagation()}
+                className="pointer-events-auto bg-[#0e121a]/86 backdrop-blur-sm border border-stone-700/60 rounded-lg px-2 py-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-200 shadow-md max-w-[260px]"
+              >
+                {hud.weaponKind === 'ranged' ? (
+                  <Crosshair
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      hud.inActiveCombat ? 'text-rose-400' : 'text-amber-300'
+                    }`}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Sword
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      hud.inActiveCombat ? 'text-rose-400' : 'text-amber-400'
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="font-medium whitespace-nowrap truncate max-w-[110px]">
+                  {hud.weaponLabel}
+                </span>
+
+                {hud.weaponKind === 'ranged' && (
+                  <>
+                    <span className="text-stone-600" aria-hidden="true">
+                      ·
+                    </span>
+                    <bdi
+                      dir="ltr"
+                      className={`font-mono-tabular font-bold whitespace-nowrap ${
+                        hud.isReloading
+                          ? 'text-amber-300'
+                          : hud.magAmmo === 0 && hud.reserveAmmo === 0
+                            ? 'text-rose-400'
+                            : hud.magAmmo === 0
+                              ? 'text-amber-300'
+                              : 'text-emerald-300'
+                      }`}
+                    >
+                      {hud.isReloading
+                        ? formatTpl(t.combat.reloadingLabel, {
+                            pct: Math.round(hud.reloadProgress * 100),
+                          })
+                        : formatTpl(t.combat.ammoBadge, {
+                            mag: hud.magAmmo,
+                            reserve: hud.reserveAmmo,
+                          })}
+                    </bdi>
+
+                    {!hud.isReloading && hud.magAmmo < hud.magSize && hud.reserveAmmo > 0 && (
+                      <button
+                        type="button"
+                        onClick={onReload}
+                        aria-label={t.combat.reloadAria}
+                        title={t.combat.reloadBtn}
+                        className="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {hud.unlockedWeaponIds.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={onCycleWeapon}
+                    aria-label={t.combat.switchWeaponAria}
+                    title={t.combat.switchBtn}
+                    className="px-1.5 py-0.5 rounded bg-stone-800/90 hover:bg-stone-700 border border-stone-600/70 text-[10px] font-semibold text-stone-200 cursor-pointer"
+                  >
+                    {t.combat.switchBtn}
+                  </button>
+                )}
+
                 <span className="text-stone-600" aria-hidden="true">
                   ·
                 </span>

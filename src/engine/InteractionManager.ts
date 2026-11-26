@@ -128,6 +128,8 @@ export class InteractionManager {
   private collectedKeyIds = new Set<string>();
   private unlockedDoorIds = new Set<string>();
   private unlockedContainerIds = new Set<string>();
+  private claimedSpecialLootIds = new Set<string>();
+  private onCustomLootCheck: ((itemId: string) => void) | null = null;
   private animatingSet = new Set<WorldDoorInteractable | WorldContainerInteractable>();
 
   // Lightweight pooled 3D visual cue meshes (only 2 meshes total, zero per-frame allocations)
@@ -225,6 +227,16 @@ export class InteractionManager {
     this.isRestingProvider = callbacks.isRestingProvider;
   }
 
+  public setCustomLootCallback(callback: (itemId: string) => void): void {
+    this.onCustomLootCheck = callback;
+  }
+
+  private claimSpecialLootOnce(itemId: string): void {
+    if (this.claimedSpecialLootIds.has(itemId)) return;
+    this.claimedSpecialLootIds.add(itemId);
+    this.onCustomLootCheck?.(itemId);
+  }
+
   public getOpenDoorIds(): string[] {
     return this.interactables
       .filter((item) => item.kind === 'door' && item.isOpen)
@@ -271,6 +283,7 @@ export class InteractionManager {
       examinedObjectIds: this.interactables
         .filter((i) => i.kind === 'examine' && i.examined)
         .map((i) => i.id),
+      claimedSpecialLootIds: Array.from(this.claimedSpecialLootIds).sort(),
     };
   }
 
@@ -301,6 +314,7 @@ export class InteractionManager {
     this.collectedKeyIds = new Set(collectedKeys);
     this.unlockedDoorIds = new Set(unlockedDoors);
     this.unlockedContainerIds = new Set(unlockedContainers);
+    this.claimedSpecialLootIds = new Set(worldState.claimedSpecialLootIds ?? []);
 
     for (const item of this.interactables) {
       if (item.kind === 'resource' && collectedSet.has(item.id)) {
@@ -363,6 +377,7 @@ export class InteractionManager {
     this.collectedKeyIds.clear();
     this.unlockedDoorIds.clear();
     this.unlockedContainerIds.clear();
+    this.claimedSpecialLootIds.clear();
     this.animatingSet.clear();
 
     for (const item of this.interactables) {
@@ -837,6 +852,7 @@ export class InteractionManager {
     }
 
     if (item.kind === 'vehicle' || item.kind === 'searchable_prop') {
+      this.claimSpecialLootOnce(item.id);
       const vLoc = item.kind === 'vehicle' ? tVehicle(item.id) : null;
       const spLoc = item.kind === 'searchable_prop' ? tSearchProp(item.id) : null;
       const itemName = vLoc?.name ?? spLoc?.name ?? item.name;
@@ -974,6 +990,7 @@ export class InteractionManager {
     }
 
     this.sound.playContainerOpen();
+    this.claimSpecialLootOnce(item.id);
 
     if (item.loot && !item.lootTaken) {
       const cap = this.packCapacityProvider();

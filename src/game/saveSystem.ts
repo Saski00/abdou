@@ -4,6 +4,7 @@ import type {
   EmployeeProfession,
   EmployeeStatus,
   InventoryState,
+  WeaponId,
   WeatherKind,
   WorldRegionId,
 } from './types';
@@ -76,6 +77,7 @@ export interface SavedWorldInteractablesState {
   unlockedContainerIds?: string[];
   searchedExtraIds?: string[];
   examinedObjectIds?: string[];
+  claimedSpecialLootIds?: string[];
 }
 
 export interface SavedZombieState {
@@ -105,6 +107,13 @@ export interface SavedWorldEventsState {
   } | null;
 }
 
+export interface SavedCombatState {
+  equippedWeaponId: WeaponId;
+  unlockedWeaponIds: WeaponId[];
+  pistolMagAmmo: number;
+  pistolReserveAmmo: number;
+}
+
 export interface SavedGameData {
   version: number;
   savedAtIso: string;
@@ -129,6 +138,7 @@ export interface SavedGameData {
     dismissedIds: string[];
   };
   worldEvents?: SavedWorldEventsState;
+  combat?: SavedCombatState;
 }
 
 export interface SavedGameSummary {

@@ -34,7 +34,9 @@ import {
   HudSnapshot,
   ResourceId,
   ShopModalTab,
+  StoryEndingId,
   StoryObjectInspectionData,
+  WeaponId,
 } from './game/types';
 import { getLocalizedRegion } from './game/worldLocations';
 import { useTouchDevice } from './game/useTouchDevice';
@@ -100,9 +102,21 @@ function createInitialHudSnapshot(): HudSnapshot {
     latestToast: null,
     damagePulseId: 0,
     attackPulseId: 0,
+    hitMarkerId: 0,
+    hitMarkerKind: null,
     inActiveCombat: false,
     tensionLevel: 0,
-    weaponLabel: tWeaponLabel(),
+    weaponId: 'steel_pipe',
+    weaponKind: 'melee',
+    weaponLabel: tWeaponLabel('steel_pipe'),
+    unlockedWeaponIds: ['steel_pipe'],
+    magAmmo: 0,
+    magSize: 0,
+    reserveAmmo: 0,
+    maxReserveAmmo: 42,
+    isReloading: false,
+    reloadProgress: 0,
+    attackCooldownRatio: 0,
     zombiesDefeated: 0,
     deathReason: null,
     playerX: -11.5,
@@ -449,6 +463,18 @@ export default function App() {
     engineBridgeRef.current?.triggerAttack();
   }, []);
 
+  const handleSelectWeapon = useCallback((weaponId: WeaponId) => {
+    engineBridgeRef.current?.selectWeapon(weaponId);
+  }, []);
+
+  const handleCycleWeapon = useCallback(() => {
+    engineBridgeRef.current?.cycleWeapon(1);
+  }, []);
+
+  const handleReload = useCallback(() => {
+    engineBridgeRef.current?.triggerReload();
+  }, []);
+
   const handleConsumeItem = useCallback((resourceId: ResourceId) => {
     engineBridgeRef.current?.consumeItem(resourceId);
   }, []);
@@ -545,15 +571,42 @@ export default function App() {
     engineBridgeRef.current?.trackMission(missionId);
   }, []);
 
-  const handlePerformStoryAction = useCallback((objectId: string) => {
-    const nextData = engineBridgeRef.current?.performStoryObjectAction(objectId) ?? null;
-    if (nextData) {
-      setStoryNoteData(nextData);
-    } else {
-      setStoryNoteData(null);
-      setActiveModal((prev) => (prev === 'STORY_NOTE' ? 'NONE' : prev));
-    }
-  }, []);
+  const handlePerformStoryAction = useCallback(
+    (objectId: string, endingChoiceId?: StoryEndingId) => {
+      const nextData =
+        engineBridgeRef.current?.performStoryObjectAction(objectId, endingChoiceId) ?? null;
+      if (nextData) {
+        setStoryNoteData(nextData);
+      } else {
+        setStoryNoteData(null);
+        setActiveModal((prev) => (prev === 'STORY_NOTE' ? 'NONE' : prev));
+      }
+    },
+    []
+  );
+
+  const handleResolveSurvivorDialogueChoice = useCallback(
+    (survivorId: string, topicId: string, optionId: string) => {
+      engineBridgeRef.current?.resolveSurvivorDialogueChoice(survivorId, topicId, optionId);
+    },
+    []
+  );
+
+  const handleOpenStaffManagement = useCallback(() => {
+    soundEngine.playUiClick(520);
+    setRecruitSurvivorId(null);
+    setShopInitialTab('staff');
+    setActiveModal('SHOP');
+  }, [soundEngine]);
+
+  const handleTalkToSurvivor = useCallback(
+    (survivorId: string) => {
+      soundEngine.playUiClick(580);
+      setRecruitSurvivorId(survivorId);
+      setActiveModal('RECRUIT');
+    },
+    [soundEngine]
+  );
 
   const anyGameplayModalOpen =
     isInventoryOpen ||
@@ -566,10 +619,15 @@ export default function App() {
     isWorldEventOpen ||
     isEndingOpen;
 
-  const activeRecruitSurvivor =
-    recruitSurvivorId
-      ? hud.staff.worldSurvivors.find((s) => s.id === recruitSurvivorId && !s.recruited) ?? null
-      : null;
+  const activeRecruitSurvivor = recruitSurvivorId
+    ? hud.staff.worldSurvivors.find((s) => s.id === recruitSurvivorId) ?? null
+    : null;
+  const activeRecruitEmployee = recruitSurvivorId
+    ? hud.staff.employees.find((e) => e.survivorId === recruitSurvivorId) ?? null
+    : null;
+  const activeCharacterDossier = recruitSurvivorId
+    ? hud.missions.characters?.find((c) => c.id === recruitSurvivorId) ?? null
+    : null;
 
   return (
     <main dir={dir} className="relative w-full h-dvh overflow-hidden bg-[#121822]">
@@ -630,11 +688,22 @@ export default function App() {
           flashlightOn={hud.flashlightOn}
           interactionPrompt={hud.interactionPrompt}
           viewport={viewport}
+          weaponId={hud.weaponId}
+          weaponKind={hud.weaponKind}
+          unlockedWeaponCount={hud.unlockedWeaponIds.length}
+          magAmmo={hud.magAmmo}
+          magSize={hud.magSize}
+          reserveAmmo={hud.reserveAmmo}
+          isReloading={hud.isReloading}
+          reloadProgress={hud.reloadProgress}
+          attackCooldownRatio={hud.attackCooldownRatio}
           onMove={handleTouchMove}
           onLookDelta={handleTouchLookDelta}
           onJump={handleTouchJump}
           onInteract={handleTouchInteract}
           onAttack={handleTouchAttack}
+          onCycleWeapon={handleCycleWeapon}
+          onReload={handleReload}
           onToggleFlashlight={handleTouchFlashlight}
         />
       )}
@@ -663,6 +732,8 @@ export default function App() {
           onToggleMute={handleToggleMute}
           onConsumeItem={handleConsumeItem}
           onToggleRest={handleToggleRest}
+          onCycleWeapon={handleCycleWeapon}
+          onReload={handleReload}
         />
       )}
 
@@ -673,6 +744,8 @@ export default function App() {
           onConsumeItem={handleConsumeItem}
           onToggleRest={handleToggleRest}
           onToggleFlashlight={handleTouchFlashlight}
+          onSelectWeapon={handleSelectWeapon}
+          onReload={handleReload}
           onClose={() => {
             soundEngine.playUiClick(460);
             setActiveModal('NONE');
@@ -685,6 +758,7 @@ export default function App() {
           hud={hud}
           isTouchMode={isTouchMode}
           onTrackMission={handleTrackMission}
+          onTalkToSurvivor={handleTalkToSurvivor}
           onClose={() => {
             soundEngine.playUiClick(460);
             setActiveModal('NONE');
@@ -723,6 +797,9 @@ export default function App() {
           inventory={hud.inventory}
           totalInventoryItems={hud.totalInventoryItems}
           packCapacity={hud.packCapacity}
+          unlockedWeaponIds={hud.unlockedWeaponIds}
+          reserveAmmo={hud.reserveAmmo}
+          maxReserveAmmo={hud.maxReserveAmmo}
           isTouchMode={isTouchMode}
           onCraftRecipe={handleCraftRecipe}
           onClose={() => {
@@ -777,6 +854,7 @@ export default function App() {
           onSetEmployeeProfession={handleSetEmployeeProfession}
           onDismissEmployee={handleDismissEmployee}
           onPayUnpaidWages={handlePayUnpaidWages}
+          onTalkToEmployee={handleTalkToSurvivor}
           onClose={() => {
             soundEngine.playUiClick(460);
             setActiveModal('NONE');
@@ -788,7 +866,11 @@ export default function App() {
         <RecruitmentModal
           hud={hud}
           survivor={activeRecruitSurvivor}
+          employee={activeRecruitEmployee}
+          dossier={activeCharacterDossier}
           isTouchMode={isTouchMode}
+          onDialogueChoice={handleResolveSurvivorDialogueChoice}
+          onOpenStaffManagement={handleOpenStaffManagement}
           onRecruit={handleRecruitSurvivor}
           onClose={() => {
             soundEngine.playUiClick(460);

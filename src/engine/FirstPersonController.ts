@@ -118,6 +118,27 @@ export class FirstPersonController {
     this.flinchPitch = 0.022 * s;
   }
 
+  public addRecoilKick(pitchKick = 0.035): void {
+    if (this.prefersReducedMotion) return;
+    this.flinchPitch = clamp(this.flinchPitch + pitchKick, -0.08, 0.09);
+  }
+
+  public spendStamina(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.stamina = Math.max(0, this.stamina - amount);
+    if (this.stamina <= 0.5) {
+      this.isExhausted = true;
+    }
+  }
+
+  public restoreStamina(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.stamina = Math.min(this.maxStamina, this.stamina + amount);
+    if (this.isExhausted && this.stamina >= 25) {
+      this.isExhausted = false;
+    }
+  }
+
   public setSensitivity(sens: number): void {
     this.sensitivity = clamp(sens, 0.3, 2.5);
   }

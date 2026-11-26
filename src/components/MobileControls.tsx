@@ -1,18 +1,29 @@
-import { ArrowUp, Flashlight, Hand, Sword } from 'lucide-react';
+import { ArrowUp, Crosshair, Flashlight, Hand, RefreshCw, Sword } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewportLayout } from '../game/responsiveLayout';
-import { InteractionPrompt } from '../game/types';
+import { InteractionPrompt, WeaponId, WeaponKind } from '../game/types';
 import { useI18n } from '../i18n';
 
 interface MobileControlsProps {
   flashlightOn: boolean;
   interactionPrompt: InteractionPrompt | null;
   viewport: ViewportLayout;
+  weaponId: WeaponId;
+  weaponKind: WeaponKind;
+  unlockedWeaponCount: number;
+  magAmmo: number;
+  magSize: number;
+  reserveAmmo: number;
+  isReloading: boolean;
+  reloadProgress: number;
+  attackCooldownRatio: number;
   onMove: (x: number, y: number, sprint: boolean) => void;
   onLookDelta: (dx: number, dy: number) => void;
   onJump: () => void;
   onInteract: () => void;
   onAttack: () => void;
+  onCycleWeapon: () => void;
+  onReload: () => void;
   onToggleFlashlight: () => void;
 }
 
@@ -20,11 +31,22 @@ export function MobileControls({
   flashlightOn,
   interactionPrompt,
   viewport,
+  weaponId,
+  weaponKind,
+  unlockedWeaponCount,
+  magAmmo,
+  magSize,
+  reserveAmmo,
+  isReloading,
+  reloadProgress,
+  attackCooldownRatio,
   onMove,
   onLookDelta,
   onJump,
   onInteract,
   onAttack,
+  onCycleWeapon,
+  onReload,
   onToggleFlashlight,
 }: MobileControlsProps) {
   const { t } = useI18n();
@@ -284,6 +306,53 @@ export function MobileControls({
             </button>
           )}
 
+          {weaponKind === 'ranged' &&
+            (isReloading || (magAmmo < magSize && reserveAmmo > 0)) && (
+              <button
+                type="button"
+                aria-label={t.mobileControls.reloadAria}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onReload();
+                }}
+                onClick={(e) => {
+                  if (e.detail === 0) onReload();
+                }}
+                className={`${
+                  isCompactLandscape ? 'w-11 h-11' : 'w-12 h-12'
+                } rounded-full border-2 flex items-center justify-center shadow-lg active:scale-95 transition-transform pointer-events-auto touch-none ${
+                  isReloading
+                    ? 'bg-amber-500/85 border-amber-200 text-stone-950'
+                    : 'bg-[#0e121a]/86 border-amber-400/75 text-amber-200'
+                }`}
+              >
+                <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+
+          {unlockedWeaponCount > 1 && (
+            <button
+              type="button"
+              aria-label={t.mobileControls.switchWeaponAria}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onCycleWeapon();
+              }}
+              onClick={(e) => {
+                if (e.detail === 0) onCycleWeapon();
+              }}
+              className={`${
+                isCompactLandscape ? 'h-11 min-w-[44px] px-2.5' : 'h-12 min-w-[48px] px-3'
+              } rounded-full border-2 bg-[#0e121a]/86 border-stone-500/80 active:border-amber-300 text-stone-100 flex items-center justify-center shadow-lg active:scale-95 transition-transform pointer-events-auto touch-none`}
+            >
+              <span className="text-[11px] font-bold whitespace-nowrap">
+                {t.combat.weapons[weaponId].shortTag}
+              </span>
+            </button>
+          )}
+
           <button
             type="button"
             aria-label={
@@ -312,7 +381,11 @@ export function MobileControls({
         <div className={`flex items-end pointer-events-auto ${isCompactLandscape ? 'gap-2.5' : 'gap-3'}`}>
           <button
             type="button"
-            aria-label={t.mobileControls.meleeAttackAria}
+            aria-label={
+              weaponKind === 'ranged'
+                ? t.mobileControls.rangedAttackAria
+                : t.mobileControls.meleeAttackAria
+            }
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -323,12 +396,25 @@ export function MobileControls({
             }}
             className={`${
               isCompactLandscape ? 'w-14 h-14' : 'w-16 h-16'
-            } rounded-full bg-[#2a1216]/90 active:bg-rose-600 border-2 border-rose-400/80 active:border-rose-200 text-rose-100 active:text-white flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none`}
+            } rounded-full border-2 flex flex-col items-center justify-center shadow-xl active:scale-95 transition-transform touch-none ${
+              weaponKind === 'ranged'
+                ? 'bg-[#1a1510]/92 active:bg-amber-500 border-amber-400/85 active:border-amber-200 text-amber-100 active:text-stone-950'
+                : 'bg-[#2a1216]/90 active:bg-rose-600 border-rose-400/80 active:border-rose-200 text-rose-100 active:text-white'
+            } ${isReloading || attackCooldownRatio > 0.12 ? 'opacity-75' : 'opacity-100'}`}
           >
-            <Sword className="w-5 h-5 stroke-[2.2]" />
+            {weaponKind === 'ranged' ? (
+              <Crosshair className="w-5 h-5 stroke-[2.2]" />
+            ) : (
+              <Sword className="w-5 h-5 stroke-[2.2]" />
+            )}
             <span className="text-[10px] font-semibold tracking-wide leading-none mt-0.5">
-              {t.mobileControls.attackLabel}
+              {weaponKind === 'ranged' ? t.mobileControls.fireLabel : t.mobileControls.attackLabel}
             </span>
+            {weaponKind === 'ranged' && (
+              <bdi dir="ltr" className="text-[9px] font-mono-tabular leading-none mt-0.5 opacity-90">
+                {isReloading ? `${Math.round(reloadProgress * 100)}%` : `${magAmmo}/${reserveAmmo}`}
+              </bdi>
+            )}
           </button>
 
           <button

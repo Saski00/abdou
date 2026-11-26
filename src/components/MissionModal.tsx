@@ -4,36 +4,49 @@ import {
   CheckCircle2,
   Circle,
   Compass,
+  GitBranch,
+  HeartHandshake,
   Lock,
+  MessageSquare,
   ScrollText,
   Sparkles,
   Target,
+  Users,
   X,
 } from 'lucide-react';
 import { formatMoney } from '../game/economy';
 import { useViewportLayout } from '../game/responsiveLayout';
 import { RESOURCE_ORDER } from '../game/resources';
-import { HudSnapshot, MissionSummary } from '../game/types';
+import { HudSnapshot, MissionSummary, StoryActId } from '../game/types';
 import { LOCATION_BY_ID, getLocalizedBearingLabel, getLocalizedLocation } from '../game/worldLocations';
-import { formatTpl, tClue, tMission, tResourceName, useI18n } from '../i18n';
+import { formatTpl, tClue, tMission, tResourceName, tStoryAct, useI18n } from '../i18n';
 
 interface MissionModalProps {
   hud: HudSnapshot;
   isTouchMode: boolean;
   onTrackMission: (missionId: string | null) => void;
+  onTalkToSurvivor?: (survivorId: string) => void;
   onClose: () => void;
 }
 
-type MissionTab = 'main' | 'side' | 'clues';
+type MissionTab = 'main' | 'side' | 'clues' | 'crew';
+
+const STORY_ACT_ORDER: StoryActId[] = [
+  'act1_shelter',
+  'act2_investigation',
+  'act3_convergence',
+];
 
 export function MissionModal({
   hud,
   isTouchMode,
   onTrackMission,
+  onTalkToSurvivor,
   onClose,
 }: MissionModalProps) {
   const { dir, t } = useI18n();
   const misCopy = t.missionModal;
+  const narCopy = t.narrative;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const [tab, setTab] = useState<MissionTab>('main');
@@ -85,6 +98,23 @@ export function MissionModal({
     [missions.missions]
   );
 
+  const actStats = useMemo(() => {
+    return STORY_ACT_ORDER.map((actId) => {
+      const items = mainMissions.filter((m) => m.actId === actId);
+      const done = items.filter((m) => m.status === 'completed').length;
+      const active = items.some((m) => m.status === 'active' || m.status === 'available');
+      return {
+        actId,
+        done,
+        total: items.length,
+        completed: items.length > 0 && done >= items.length,
+        active,
+      };
+    });
+  }, [mainMissions]);
+
+  const characters = missions.characters ?? [];
+  const recordedChoices = missions.recordedChoices ?? [];
   const visibleMissions = tab === 'main' ? mainMissions : sideMissions;
 
   return (
@@ -198,11 +228,208 @@ export function MissionModal({
               {missions.clues.length}
             </bdi>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setTab('crew')}
+            className={`h-11 px-3.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+              tab === 'crew'
+                ? 'bg-amber-500 text-stone-950 font-bold'
+                : 'bg-[#141b27] text-stone-300 hover:text-stone-100 border border-stone-700/70'
+            }`}
+          >
+            <Users className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>{narCopy.tabJournalCrew}</span>
+            <bdi dir="ltr" className="font-mono-tabular text-[11px] opacity-80">
+              {recordedChoices.length}
+            </bdi>
+          </button>
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto touch-pan-y px-4 py-4 sm:px-6 space-y-3">
-          {tab === 'clues' ? (
+          {tab === 'crew' ? (
+            <div className="space-y-4">
+              {/* Story Acts Summary */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-300">
+                  {narCopy.actsHeading}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {actStats.map((act) => {
+                    const actLoc = tStoryAct(act.actId);
+                    return (
+                      <div
+                        key={act.actId}
+                        className={`rounded-lg border p-3 ${
+                          act.completed
+                            ? 'bg-[#0e1915] border-emerald-600/50'
+                            : act.active
+                              ? 'bg-[#161e2c] border-amber-500/60'
+                              : 'bg-[#0b0e15] border-stone-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-stone-100 truncate">
+                            {actLoc.title}
+                          </span>
+                          <bdi
+                            dir="ltr"
+                            className={`font-mono-tabular text-[11px] font-bold shrink-0 ${
+                              act.completed
+                                ? 'text-emerald-300'
+                                : act.active
+                                  ? 'text-amber-300'
+                                  : 'text-stone-500'
+                            }`}
+                          >
+                            {act.done}/{act.total}
+                          </bdi>
+                        </div>
+                        <p className="text-[11px] text-stone-400 mt-1 leading-snug">
+                          {actLoc.subtitle}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ending Summary if completed */}
+              {missions.endingSummary && (
+                <div className="rounded-lg border border-amber-500/55 bg-[#191610] p-3.5 space-y-1">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-amber-300">
+                    {narCopy.endingStatusHeading} · {missions.endingSummary.badge}
+                  </div>
+                  <div className="text-sm font-bold text-stone-100">
+                    {missions.endingSummary.title}
+                  </div>
+                  <p className="text-xs text-stone-300 leading-relaxed">
+                    {missions.endingSummary.epilogueLines[0]}
+                  </p>
+                </div>
+              )}
+
+              {/* District Survivors & Crew Dossiers */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-300">
+                  {narCopy.crewDossiersHeading}
+                </h3>
+                <div className="space-y-2.5">
+                  {characters.map((char) => (
+                    <div
+                      key={char.id}
+                      className={`rounded-lg border p-3.5 space-y-2 ${
+                        char.recruited
+                          ? 'bg-[#111c24] border-emerald-500/40'
+                          : 'bg-[#141b27] border-stone-700/75'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-stone-100">{char.name}</span>
+                            <span
+                              className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                                char.recruited
+                                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                                  : 'bg-stone-800 border-stone-700 text-stone-300'
+                              }`}
+                            >
+                              {char.recruited
+                                ? formatTpl(narCopy.recruitedAsBadge, {
+                                    role: char.professionLabel ?? '',
+                                  })
+                                  : formatTpl(narCopy.inDistrictBadge, {
+                                      loc: char.locationLabel,
+                                    })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-[11px] font-mono-tabular text-sky-300">
+                            <span className="inline-flex items-center gap-1">
+                              <HeartHandshake className="w-3 h-3 shrink-0" aria-hidden="true" />
+                              <span>{char.trustTierLabel}</span>
+                              <bdi dir="ltr">({char.trust}/3)</bdi>
+                            </span>
+                            <span className="text-stone-400">
+                              {formatTpl(narCopy.topicsProgress, {
+                                done: char.topicsCompleted,
+                                total: char.totalTopics,
+                              })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {char.recruited && onTalkToSurvivor && (
+                          <button
+                            type="button"
+                            onClick={() => onTalkToSurvivor(char.id)}
+                            className={`h-11 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors ${
+                              char.activeTopic
+                                ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold'
+                                : 'bg-[#0b0e15] border border-stone-600 text-stone-200 hover:border-amber-400'
+                            }`}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>{narCopy.talkBtn}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {char.bio && (
+                        <p className="text-xs text-stone-300 leading-relaxed">{char.bio}</p>
+                      )}
+                      {char.currentStatusNote && (
+                        <p className="text-[11px] text-sky-200/90 border-t border-stone-800/80 pt-1.5 leading-snug">
+                          {char.currentStatusNote}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recorded Decisions & Consequences */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-300 flex items-center gap-1.5">
+                  <GitBranch className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                  <span>{narCopy.recordedChoicesHeading}</span>
+                </h3>
+                {recordedChoices.length === 0 ? (
+                  <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-4 text-center">
+                    <p className="text-xs sm:text-sm text-stone-300 font-medium">
+                      {narCopy.noChoicesYetTitle}
+                    </p>
+                    <p className="text-xs text-stone-400 mt-1">{narCopy.noChoicesYetDesc}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {recordedChoices.map((ch) => (
+                      <div
+                        key={ch.choiceId}
+                        className="rounded-lg border border-stone-700/70 bg-[#141b27] p-3 space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-amber-300">{ch.title}</span>
+                          <span className="font-mono-tabular text-[11px] text-stone-400 shrink-0">
+                            {formatTpl(narCopy.dayBadge, { day: ch.day })}
+                          </span>
+                        </div>
+                        <div className="text-xs sm:text-sm font-semibold text-stone-100">
+                          {ch.optionLabel}
+                        </div>
+                        {ch.consequenceSummary && (
+                          <p className="text-xs text-stone-400 leading-snug">
+                            {ch.consequenceSummary}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : tab === 'clues' ? (
             missions.clues.length === 0 ? (
               <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-6 text-center">
                 <p className="text-sm text-stone-300 font-medium">{misCopy.noCluesTitle}</p>
@@ -242,6 +469,7 @@ export function MissionModal({
               const canTrack = mission.status === 'active' || mission.status === 'available';
               const rewardLines = formatRewardLine(mission);
               const mLoc = tMission(mission.id);
+              const actLoc = mission.actId ? tStoryAct(mission.actId) : null;
 
               return (
                 <div
@@ -259,6 +487,12 @@ export function MissionModal({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 text-[11px] font-mono-tabular text-stone-400 flex-wrap">
+                        {actLoc && (
+                          <>
+                            <span className="text-stone-400">{actLoc.title}</span>
+                            <span aria-hidden="true">·</span>
+                          </>
+                        )}
                         <span className="text-amber-300/90 font-semibold">
                           {mLoc?.chapterLabel ?? mission.chapterLabel}
                         </span>

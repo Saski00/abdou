@@ -392,3 +392,162 @@ export function buildFirstPersonMeleePipe(): {
     },
   };
 }
+
+/**
+ * First-person salvaged combat knife mounted to the player camera.
+ */
+export function buildFirstPersonCombatBlade(): {
+  group: THREE.Group;
+  dispose: () => void;
+} {
+  const group = new THREE.Group();
+
+  const bladeMat = new THREE.MeshStandardMaterial({
+    color: 0x94a3b8,
+    roughness: 0.24,
+    metalness: 0.88,
+  });
+  const spineMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    roughness: 0.48,
+    metalness: 0.65,
+  });
+  const gripMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    roughness: 0.9,
+    metalness: 0.08,
+  });
+  const guardMat = new THREE.MeshStandardMaterial({
+    color: 0x475569,
+    roughness: 0.45,
+    metalness: 0.72,
+  });
+
+  const handleGeo = new THREE.CylinderGeometry(0.015, 0.017, 0.13, 8);
+  const guardGeo = new THREE.BoxGeometry(0.022, 0.014, 0.048);
+  const bladeGeo = new THREE.BoxGeometry(0.006, 0.2, 0.03);
+  const tipGeo = new THREE.ConeGeometry(0.015, 0.055, 4);
+
+  const handle = new THREE.Mesh(handleGeo, gripMat);
+  handle.position.y = 0.03;
+  group.add(handle);
+
+  const guard = new THREE.Mesh(guardGeo, guardMat);
+  guard.position.y = 0.098;
+  group.add(guard);
+
+  const blade = new THREE.Mesh(bladeGeo, bladeMat);
+  blade.position.set(0, 0.205, -0.003);
+  group.add(blade);
+
+  const spine = new THREE.Mesh(bladeGeo, spineMat);
+  spine.scale.set(1.2, 0.92, 0.32);
+  spine.position.set(0, 0.195, 0.011);
+  group.add(spine);
+
+  const tip = new THREE.Mesh(tipGeo, bladeMat);
+  tip.scale.set(0.28, 1, 1);
+  tip.position.set(0, 0.33, -0.003);
+  group.add(tip);
+
+  return {
+    group,
+    dispose: () => {
+      handleGeo.dispose();
+      guardGeo.dispose();
+      bladeGeo.dispose();
+      tipGeo.dispose();
+      bladeMat.dispose();
+      spineMat.dispose();
+      gripMat.dispose();
+      guardMat.dispose();
+    },
+  };
+}
+
+/**
+ * First-person salvaged 9mm service pistol mounted to the player camera,
+ * including a pooled muzzle flash mesh with zero dynamic point-light allocation.
+ */
+export function buildFirstPersonServicePistol(): {
+  group: THREE.Group;
+  muzzleFlash: THREE.Mesh;
+  dispose: () => void;
+} {
+  const group = new THREE.Group();
+
+  const slideMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    roughness: 0.38,
+    metalness: 0.82,
+  });
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    roughness: 0.78,
+    metalness: 0.16,
+  });
+  const sightMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.55,
+    roughness: 0.3,
+  });
+  const flashMat = new THREE.MeshBasicMaterial({
+    color: 0xfde68a,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+  });
+
+  const slideGeo = new THREE.BoxGeometry(0.036, 0.042, 0.22);
+  const barrelGeo = new THREE.CylinderGeometry(0.009, 0.009, 0.04, 8);
+  barrelGeo.rotateX(Math.PI * 0.5);
+  const frameGeo = new THREE.BoxGeometry(0.032, 0.026, 0.18);
+  const gripGeo = new THREE.BoxGeometry(0.031, 0.11, 0.048);
+  const sightGeo = new THREE.BoxGeometry(0.006, 0.008, 0.008);
+  const flashGeo = new THREE.OctahedronGeometry(0.038, 0);
+
+  const slide = new THREE.Mesh(slideGeo, slideMat);
+  slide.position.set(0, 0.036, -0.055);
+  group.add(slide);
+
+  const barrel = new THREE.Mesh(barrelGeo, slideMat);
+  barrel.position.set(0, 0.034, -0.17);
+  group.add(barrel);
+
+  const frame = new THREE.Mesh(frameGeo, frameMat);
+  frame.position.set(0, 0.008, -0.042);
+  group.add(frame);
+
+  const grip = new THREE.Mesh(gripGeo, frameMat);
+  grip.position.set(0, -0.048, 0.02);
+  grip.rotation.x = 0.24;
+  group.add(grip);
+
+  const frontSight = new THREE.Mesh(sightGeo, sightMat);
+  frontSight.position.set(0, 0.06, -0.15);
+  group.add(frontSight);
+
+  const muzzleFlash = new THREE.Mesh(flashGeo, flashMat);
+  muzzleFlash.position.set(0, 0.034, -0.21);
+  muzzleFlash.scale.set(1.0, 1.0, 1.7);
+  muzzleFlash.visible = false;
+  group.add(muzzleFlash);
+
+  return {
+    group,
+    muzzleFlash,
+    dispose: () => {
+      slideGeo.dispose();
+      barrelGeo.dispose();
+      frameGeo.dispose();
+      gripGeo.dispose();
+      sightGeo.dispose();
+      flashGeo.dispose();
+      slideMat.dispose();
+      frameMat.dispose();
+      sightMat.dispose();
+      flashMat.dispose();
+    },
+  };
+}

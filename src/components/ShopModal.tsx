@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   Coins,
+  MessageSquare,
   Minus,
   Plus,
   Sparkles,
@@ -64,6 +65,7 @@ interface ShopModalProps {
   onSetEmployeeProfession: (employeeId: string, profession: EmployeeProfession) => void;
   onDismissEmployee: (employeeId: string) => void;
   onPayUnpaidWages: () => void;
+  onTalkToEmployee?: (survivorId: string) => void;
   onClose: () => void;
 }
 
@@ -94,6 +96,7 @@ export function ShopModal({
   onSetEmployeeProfession,
   onDismissEmployee,
   onPayUnpaidWages,
+  onTalkToEmployee,
   onClose,
 }: ShopModalProps) {
   const { dir, t } = useI18n();
@@ -889,15 +892,27 @@ export function ShopModal({
                                 })}
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => onDismissEmployee(emp.id)}
-                              aria-label={formatTpl(shopCopy.dismissAria, { name: emp.name })}
-                              className="h-9 px-2.5 rounded-lg border border-stone-700 bg-stone-800 hover:bg-rose-950 hover:border-rose-500/60 hover:text-rose-200 text-stone-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span>{shopCopy.dismissBtn}</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              {onTalkToEmployee && (
+                                <button
+                                  type="button"
+                                  onClick={() => onTalkToEmployee(emp.survivorId)}
+                                  className="h-9 px-2.5 rounded-lg border border-sky-500/45 bg-sky-500/15 hover:bg-sky-500/25 text-sky-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                                  <span>{t.narrative.talkBtn}</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => onDismissEmployee(emp.id)}
+                                aria-label={formatTpl(shopCopy.dismissAria, { name: emp.name })}
+                                className="h-9 px-2.5 rounded-lg border border-stone-700 bg-stone-800 hover:bg-rose-950 hover:border-rose-500/60 hover:text-rose-200 text-stone-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>{shopCopy.dismissBtn}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
 

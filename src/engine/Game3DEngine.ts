@@ -34,15 +34,19 @@ import {
   EmployeeProfession,
   GameScreenState,
   GameSettings,
+  HitMarkerKind,
   HudSnapshot,
   LocationDangerLevel,
   ResourceId,
   ShopModalTab,
+  StoryEndingId,
   StoryObjectInspectionData,
+  WeaponId,
   WorldRegionId,
 } from '../game/types';
 import { WeatherSystem } from '../game/weatherSystem';
 import { GuidanceSystem } from '../game/guidanceSystem';
+import { WEAPON_DEFINITIONS, WEAPON_ORDER } from '../game/combatSystem';
 import { craftWorkbenchRecipe as runWorkbenchRecipe } from '../game/craftingSystem';
 import { computeResponsiveCameraFov } from '../game/responsiveLayout';
 import {
@@ -64,9 +68,11 @@ import {
   getLanguage,
   getTranslations,
   setLanguage,
+  tClue,
   tContextZone,
   tDayPhase,
   tMission,
+  tProfession,
   tResource,
   tWeaponLabel,
 } from '../i18n';
@@ -188,10 +194,13 @@ export class Game3DEngine {
   private lastHudKey = '';
   private damagePulseId = 0;
   private attackPulseId = 0;
+  private hitMarkerId = 0;
+  private hitMarkerKind: HitMarkerKind = 'hit';
   private recentCombatTimer = 0;
   private moveNoiseCooldown = 0;
   private noiseLevel = 0;
   private lastInteractAtMs = 0;
+  private lastWheelSwitchAtMs = 0;
   private lastSalesSnapshotCount = 0;
   private lastReplenishDay = 1;
 
@@ -381,6 +390,7 @@ export class Game3DEngine {
       }
     );
     this.interactions.setPackCapacityProvider(() => getPackCapacity(this.economy.getShopLevel()));
+    this.interactions.setCustomLootCallback((itemId) => this.handleSpecialCombatLoot(itemId));
     this.customers = new CustomerManager(
       this.scene,
       this.assets,
@@ -433,8 +443,10 @@ export class Game3DEngine {
         const emp = this.staff.system.employees.find((e) => e.id === employeeId);
         if (emp) {
           this.processMissionEvent({ type: 'talk_survivor', survivorId: emp.survivorId });
+          this.callbacks.onSurvivorInteractRequested(emp.survivorId);
+        } else {
+          this.callbacks.onShopRequested('staff');
         }
-        this.callbacks.onShopRequested('staff');
         this.emitHud(true);
       }
     );
@@ -576,6 +588,8 @@ export class Game3DEngine {
     this.autosaveTimer = 0;
     this.damagePulseId = 0;
     this.attackPulseId = 0;
+    this.hitMarkerId = 0;
+    this.hitMarkerKind = 'hit';
     this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
     this.noiseLevel = 0;
@@ -689,6 +703,7 @@ export class Game3DEngine {
       claimedDiscoveryRewardIds: Array.from(this.claimedDiscoveryRewardIds),
       guidance: this.guidance.exportState(),
       worldEvents: this.worldEvents.exportState(),
+      combat: this.zombies.combat.exportState(),
     };
 
     const ok = saveGameToStorage(payload);
@@ -730,6 +745,8 @@ export class Game3DEngine {
     this.autosaveTimer = 0;
     this.damagePulseId = 0;
     this.attackPulseId = 0;
+    this.hitMarkerId = 0;
+    this.hitMarkerKind = 'hit';
     this.recentCombatTimer = 0;
     this.moveNoiseCooldown = 0;
     this.noiseLevel = 0;
@@ -747,6 +764,7 @@ export class Game3DEngine {
     this.customers.reset();
     this.syncWorldShopProgression();
     this.zombies.importState(saved.zombies);
+    this.zombies.combat.importState(saved.combat);
     this.staff.system.importState(saved.staff, this.world.colliders);
     this.worldEvents.importState(saved.worldEvents);
     this.staff.system.setGoodwillLevel(this.worldEvents.survivorGoodwill);
@@ -1094,9 +1112,20 @@ export class Game3DEngine {
     this.sound.unlock();
     this.sound.startAmbience();
     const cap = getPackCapacity(this.economy.getShopLevel());
-    const res = runWorkbenchRecipe(recipeId, this.interactions.inventory, cap);
+    const combatSnap = this.zombies.combat.getSnapshot();
+    const res = runWorkbenchRecipe(recipeId, this.interactions.inventory, cap, {
+      unlockedWeaponIds: combatSnap.unlockedWeaponIds,
+      reserveAmmo: combatSnap.reserveAmmo,
+      maxReserveAmmo: combatSnap.maxReserveAmmo,
+    });
     if (res.ok) {
       this.interactions.inventory = res.nextInventory;
+      if (res.unlockedWeaponId) {
+        this.zombies.unlockAndMaybeEquipWeapon(res.unlockedWeaponId, true);
+      }
+      if (res.ammoGranted && res.ammoGranted > 0) {
+        this.zombies.combat.addPistolAmmo(res.ammoGranted, true);
+      }
       this.sound.playStockTransfer();
       this.zombies.emitNoise({
         x: this.controller.position.x,
@@ -1111,6 +1140,63 @@ export class Game3DEngine {
     this.interactions.pushToast(res.message, res.tone, 2.5);
     this.emitHud(true);
     return res.ok;
+  }
+
+  private handleSpecialCombatLoot(itemId: string): void {
+    const t = getTranslations();
+    if (
+      itemId === 'cnt_police_patrol' ||
+      itemId === 'cnt_int_police_locker' ||
+      itemId === 'cnt_mil_footlocker'
+    ) {
+      if (!this.zombies.combat.hasWeapon('service_pistol')) {
+        this.zombies.unlockAndMaybeEquipWeapon('service_pistol', true);
+        this.zombies.combat.addPistolAmmo(14, true);
+        this.interactions.pushToast(
+          formatTpl(t.gameMessages.toasts.weaponUnlocked, {
+            name: tWeaponLabel('service_pistol'),
+          }),
+          'resource',
+          3.6
+        );
+      } else {
+        const added = this.zombies.combat.addPistolAmmo(7, true);
+        const total = added.addedToMag + added.addedToReserve;
+        if (total > 0) {
+          this.interactions.pushToast(
+            formatTpl(t.gameMessages.toasts.ammoFound, {
+              qty: total,
+              unit: t.combat.ammoUnit,
+            }),
+            'resource',
+            2.8
+          );
+        }
+      }
+      return;
+    }
+
+    const ammoMap: Record<string, number> = {
+      cnt_int_police_drawer: 5,
+      v_police_car: 5,
+      v_mil_truck: 6,
+      cnt_garage_chest: 4,
+    };
+    const bonus = ammoMap[itemId];
+    if (bonus) {
+      const added = this.zombies.combat.addPistolAmmo(bonus, true);
+      const total = added.addedToMag + added.addedToReserve;
+      if (total > 0) {
+        this.interactions.pushToast(
+          formatTpl(t.gameMessages.toasts.ammoFound, {
+            qty: total,
+            unit: t.combat.ammoUnit,
+          }),
+          'resource',
+          2.6
+        );
+      }
+    }
   }
 
   public setEndingOpen(open: boolean): void {
@@ -1134,7 +1220,10 @@ export class Game3DEngine {
     this.emitHud(true);
   }
 
-  public performStoryObjectAction(objectId: string): StoryObjectInspectionData | null {
+  public performStoryObjectAction(
+    objectId: string,
+    endingChoiceId?: StoryEndingId
+  ): StoryObjectInspectionData | null {
     if (objectId !== 'story_final_relay') return null;
 
     const alreadyCalibrated = this.missions.isStoryObjectActivated('story_final_relay');
@@ -1143,7 +1232,11 @@ export class Game3DEngine {
       if (!this.missions.canDeliverRelayMaterials('story_final_relay', this.interactions.inventory)) {
         this.sound.playUiClick(360);
         this.interactions.pushToast(t.gameMessages.toasts.needRelayMaterials, 'warning', 2.4);
-        return this.missions.buildStoryInspectionData('story_final_relay', this.interactions.inventory);
+        return this.missions.buildStoryInspectionData(
+          'story_final_relay',
+          this.interactions.inventory,
+          this.buildMissionContext()
+        );
       }
       this.interactions.inventory = this.missions.consumeRelayMaterials(
         'story_final_relay',
@@ -1160,27 +1253,34 @@ export class Game3DEngine {
       return null; // close note so player can immediately fight the Signal Surge!
     }
 
-    // Calibrated & surge cleared -> Transmit
+    // Calibrated & surge cleared -> Transmit chosen ending protocol
     const surgeKills = this.missions.getSurgeKills().surge_relay ?? 0;
     if (surgeKills < 3) {
       this.sound.playUiClick(360);
-      return this.missions.buildStoryInspectionData('story_final_relay', this.interactions.inventory);
+      return this.missions.buildStoryInspectionData(
+        'story_final_relay',
+        this.interactions.inventory,
+        this.buildMissionContext()
+      );
     }
 
     this.sound.playCashRegister();
-    this.processMissionEvent({
-      type: 'interact_story_object',
-      objectId: 'story_final_relay',
-      mode: 'transmit',
-    });
+    const chosenEnding: StoryEndingId = endingChoiceId ?? 'dawn_beacon';
+    const outcome = this.missions.resolveFinalBroadcast(
+      chosenEnding,
+      this.buildMissionContext()
+    );
+    this.applyMissionOutcome(outcome);
     this.emitHud(true);
     return null;
   }
 
   private handleStoryObjectInteract(objectId: string): void {
+    const preCtx = this.buildMissionContext();
     const data = this.missions.buildStoryInspectionData(
       objectId,
-      this.interactions.inventory
+      this.interactions.inventory,
+      preCtx
     );
     if (!data) return;
 
@@ -1193,9 +1293,66 @@ export class Game3DEngine {
     }
 
     const refreshed =
-      this.missions.buildStoryInspectionData(objectId, this.interactions.inventory) ?? data;
+      this.missions.buildStoryInspectionData(
+        objectId,
+        this.interactions.inventory,
+        this.buildMissionContext()
+      ) ?? data;
     this.callbacks.onStoryObjectInspectRequested(refreshed);
     this.emitHud(true);
+  }
+
+  public resolveSurvivorDialogueChoice(
+    survivorId: string,
+    topicId: string,
+    optionId: string
+  ): boolean {
+    if (this.screenState !== 'PLAYING') return false;
+    const timeSnap = this.timeSystem.getSnapshot();
+    const res = this.missions.resolveDialogueChoice(
+      survivorId,
+      topicId,
+      optionId,
+      timeSnap.day,
+      this.interactions.inventory
+    );
+    if (!res.ok) {
+      this.sound.playUiClick(340);
+      if (res.toast) {
+        this.interactions.pushToast(res.toast, 'warning', 2.4);
+      }
+      this.emitHud(true);
+      return false;
+    }
+
+    this.interactions.inventory = res.nextInventory;
+    if (res.moneyDelta > 0) {
+      this.economy.grantMissionReward(
+        res.moneyDelta,
+        res.toast || survivorId,
+        timeSnap.formattedTime
+      );
+    }
+    if (res.healDelta > 0) {
+      this.survival.health = Math.min(100, this.survival.health + res.healDelta);
+      this.controller.health = this.survival.health;
+    }
+    if (res.goodwillDelta > 0) {
+      this.worldEvents.survivorGoodwill += res.goodwillDelta;
+      this.staff.system.setGoodwillLevel(this.worldEvents.survivorGoodwill);
+    }
+    if (res.ammoDelta > 0) {
+      this.zombies.combat.addPistolAmmo(res.ammoDelta, true);
+    }
+
+    this.sound.playUiClick(620);
+    if (res.toast) {
+      this.interactions.pushToast(res.toast, 'resource', 3.4);
+    }
+    this.processMissionEvent({ type: 'talk_survivor', survivorId });
+    this.saveCurrentGame(false);
+    this.emitHud(true);
+    return true;
   }
 
   public recruitSurvivor(survivorId: string, profession: EmployeeProfession): boolean {
@@ -1519,34 +1676,151 @@ export class Game3DEngine {
     }
   }
 
+  public selectWeapon(id: WeaponId): void {
+    const allowedInModal = !this.isModalBlockingInput() || this.inventoryOpen;
+    if (this.screenState !== 'PLAYING' || !allowedInModal) return;
+    this.sound.unlock();
+    this.sound.startAmbience();
+    if (this.zombies.selectWeapon(id)) {
+      const t = getTranslations();
+      this.interactions.pushToast(
+        formatTpl(t.gameMessages.toasts.weaponSwitched, {
+          name: tWeaponLabel(id),
+        }),
+        'world',
+        1.5
+      );
+      this.emitHud(true);
+    }
+  }
+
+  public cycleWeapon(direction: 1 | -1 = 1): void {
+    if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
+    this.sound.unlock();
+    this.sound.startAmbience();
+    const next = this.zombies.cycleWeapon(direction);
+    if (next) {
+      const t = getTranslations();
+      this.interactions.pushToast(
+        formatTpl(t.gameMessages.toasts.weaponSwitched, {
+          name: tWeaponLabel(next),
+        }),
+        'world',
+        1.5
+      );
+      this.emitHud(true);
+    }
+  }
+
+  public triggerReload(): void {
+    const allowedInModal = !this.isModalBlockingInput() || this.inventoryOpen;
+    if (this.screenState !== 'PLAYING' || !allowedInModal) return;
+    this.sound.unlock();
+    this.sound.startAmbience();
+    const t = getTranslations();
+    const res = this.zombies.triggerReload();
+    if (res.started) {
+      this.interactions.pushToast(
+        formatTpl(t.gameMessages.toasts.pistolReloading, {
+          name: tWeaponLabel('service_pistol'),
+        }),
+        'world',
+        1.4
+      );
+      this.emitHud(true);
+    } else if (res.reason === 'no_reserve') {
+      this.sound.playDryFire();
+      this.interactions.pushToast(
+        formatTpl(t.gameMessages.toasts.pistolEmptyNoAmmo, {
+          name: tWeaponLabel('service_pistol'),
+        }),
+        'warning',
+        1.8
+      );
+      this.emitHud(true);
+    } else if (res.reason === 'mag_full') {
+      this.sound.playUiClick(440);
+      this.interactions.pushToast(t.gameMessages.toasts.pistolMagFull, 'world', 1.4);
+      this.emitHud(true);
+    }
+  }
+
   public triggerAttack(): void {
     if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
     this.sound.unlock();
     this.sound.startAmbience();
-    const { triggered, result, killedSurgeId } = this.zombies.triggerPlayerAttack(
+    const attackRes = this.zombies.triggerPlayerAttack(
       this.controller.position.x,
+      this.controller.position.y + 1.68,
       this.controller.position.z,
       this.controller.yaw,
-      this.timeSystem.getSnapshot().nightFactor
+      this.controller.pitch,
+      this.timeSystem.getSnapshot().nightFactor,
+      {
+        isMoving: this.controller.isActivelyMoving(),
+        isSprinting: this.controller.isSprinting,
+        exhausted: this.controller.isExhausted,
+      }
     );
-    if (!triggered || !result) return;
+
+    const t = getTranslations();
+    if (attackRes.dryFire) {
+      if (attackRes.autoReloadStarted) {
+        this.interactions.pushToast(
+          formatTpl(t.gameMessages.toasts.pistolReloading, {
+            name: tWeaponLabel('service_pistol'),
+          }),
+          'world',
+          1.4
+        );
+      } else {
+        this.interactions.pushToast(
+          formatTpl(t.gameMessages.toasts.pistolEmptyNoAmmo, {
+            name: tWeaponLabel('service_pistol'),
+          }),
+          'warning',
+          1.8
+        );
+      }
+      this.emitHud(true);
+      return;
+    }
+
+    if (!attackRes.triggered || !attackRes.result) return;
+    const { result, killedSurgeId, staminaSpent, recoilKick, weaponId } = attackRes;
+
+    if (staminaSpent > 0) {
+      this.controller.spendStamina(staminaSpent);
+    }
+    if (recoilKick > 0) {
+      this.controller.addRecoilKick(recoilKick);
+    }
 
     this.hasAttacked = true;
     this.attackPulseId += 1;
     this.recentCombatTimer = 2.8;
-    this.raiseNoiseLevel(82);
-    const t = getTranslations();
+    this.raiseNoiseLevel(
+      weaponId === 'service_pistol' ? 98 : weaponId === 'scrap_blade' ? 54 : 74
+    );
+
     if (result.killed) {
+      this.hitMarkerId += 1;
+      this.hitMarkerKind = 'kill';
       this.interactions.pushToast(t.gameMessages.toasts.infectedDefeated, 'resource', 2.2);
       this.processMissionEvent({ type: 'kill_zombie', surgeId: killedSurgeId });
     } else if (result.hit) {
+      this.hitMarkerId += 1;
+      this.hitMarkerKind = result.crit ? 'crit' : 'hit';
       this.interactions.pushToast(
-        formatTpl(t.gameMessages.toasts.hitInfected, { dmg: result.damageDealt }),
+        formatTpl(
+          result.crit
+            ? t.gameMessages.toasts.hitCriticalInfected
+            : t.gameMessages.toasts.hitInfected,
+          { dmg: result.damageDealt }
+        ),
         'resource',
-        1.8
+        1.7
       );
-    } else {
-      this.interactions.pushToast(t.gameMessages.toasts.swingMissed, 'world', 1.4);
     }
     this.emitHud(true);
   }
@@ -1592,6 +1866,9 @@ export class Game3DEngine {
       this.hasConsumed = true;
       this.interactions.inventory = res.nextInventory;
       this.controller.health = this.survival.health;
+      if (res.staminaDelta && res.staminaDelta > 0) {
+        this.controller.restoreStamina(res.staminaDelta);
+      }
       if (res.soundKind) {
         this.sound.playConsume(res.soundKind);
       }
@@ -1848,6 +2125,20 @@ export class Game3DEngine {
         day: timeSnap.day,
       }
     );
+
+    if (zombieTick.reloadCompleted) {
+      const t = getTranslations();
+      const cSnap = this.zombies.combat.getSnapshot();
+      this.interactions.pushToast(
+        formatTpl(t.gameMessages.toasts.pistolReloaded, {
+          name: tWeaponLabel('service_pistol'),
+          mag: cSnap.magAmmo,
+          reserve: cSnap.reserveAmmo,
+        }),
+        'resource',
+        1.8
+      );
+    }
 
     if (this.recentCombatTimer > 0) {
       this.recentCombatTimer = Math.max(0, this.recentCombatTimer - dt);
@@ -2217,7 +2508,7 @@ export class Game3DEngine {
       unrecruitedSurvivorCount,
       completedMainMissions,
       inActiveCombat,
-      modalBlocking: modalBlocked,
+      modalBlocking: modalBlocked || this.missions.isStorySurgeActive(),
       livingZombieCount,
       nearbyLivingZombies,
       nearbyAlertedZombies,
@@ -2410,30 +2701,46 @@ export class Game3DEngine {
       inspectedStoryObjects: this.missions.getInspectedStoryObjects(),
       activatedStoryObjects: this.missions.getActivatedStoryObjects(),
       surgeKills: this.missions.getSurgeKills(),
+      staffMembers: this.staff.system.employees.map((e) => ({
+        id: e.id,
+        survivorId: e.survivorId,
+        professionLabel: tProfession(e.profession).label,
+      })),
     };
   }
 
   private processMissionEvent(event: MissionEvent): void {
     const preCtx = this.buildMissionContext();
     const preSnap = this.missions.getSnapshot(preCtx, false);
-    const prevCompletedObjIds = new Set(
-      (preSnap.trackedMission?.objectives ?? []).filter((o) => o.completed).map((o) => o.id)
-    );
-    const prevTrackedId = preSnap.trackedMissionId;
+    const prevCompletedByMission = new Map<string, Set<string>>();
+    for (const m of preSnap.missions) {
+      if (m.status === 'active' || m.status === 'available') {
+        prevCompletedByMission.set(
+          m.id,
+          new Set(m.objectives.filter((o) => o.completed).map((o) => o.id))
+        );
+      }
+    }
 
     const outcome = this.missions.recordEvent(event, preCtx);
     this.applyMissionOutcome(outcome);
 
-    if (
-      outcome.newlyCompletedMissions.length === 0 &&
-      !outcome.triggerSurgeId &&
-      prevTrackedId
-    ) {
+    if (outcome.newlyCompletedMissions.length === 0 && !outcome.triggerSurgeId) {
       const postSnap = this.missions.getSnapshot(this.buildMissionContext(), false);
-      if (postSnap.trackedMissionId === prevTrackedId && postSnap.trackedMission) {
-        const newlyDoneObj = postSnap.trackedMission.objectives.find(
-          (o) => o.completed && !prevCompletedObjIds.has(o.id)
-        );
+      const completedMissionIds = new Set(outcome.newlyCompletedMissions.map((m) => m.id));
+      const candidates = postSnap.trackedMission
+        ? [
+            postSnap.trackedMission,
+            ...postSnap.missions.filter((m) => m.id !== postSnap.trackedMission?.id),
+          ]
+        : postSnap.missions;
+      for (const m of candidates) {
+        if ((m.status !== 'active' && m.status !== 'available') || completedMissionIds.has(m.id)) {
+          continue;
+        }
+        const prevObjSet = prevCompletedByMission.get(m.id);
+        if (!prevObjSet) continue;
+        const newlyDoneObj = m.objectives.find((o) => o.completed && !prevObjSet.has(o.id));
         if (newlyDoneObj) {
           this.interactions.pushToast(
             formatTpl(getTranslations().gameMessages.toasts.objectiveComplete, {
@@ -2442,6 +2749,7 @@ export class Game3DEngine {
             'world',
             2.8
           );
+          break;
         }
       }
     }
@@ -2490,6 +2798,7 @@ export class Game3DEngine {
     if (outcome.newlyCompletedMissions.length > 0) {
       this.sound.playCashRegister();
       const first = outcome.newlyCompletedMissions[0];
+      const firstTitle = tMission(first.id)?.title ?? first.title;
       const rewardParts: string[] = [];
       if (first.rewards.money) rewardParts.push(`+${formatMoney(first.rewards.money)}`);
       if (first.rewards.resources) {
@@ -2500,7 +2809,7 @@ export class Game3DEngine {
       }
       this.interactions.pushToast(
         formatTpl(t.gameMessages.toasts.missionCompletedToast, {
-          title: first.title,
+          title: firstTitle,
           rewards: rewardParts.length ? ` (${rewardParts.join(', ')})` : '',
         }),
         'resource',
@@ -2510,15 +2819,23 @@ export class Game3DEngine {
       if (outcome.newlyUnlockedMissions.length > 0) {
         const nextMain = outcome.newlyUnlockedMissions.find((m) => m.category === 'main');
         if (nextMain) {
-          this.showContextMessage(
-            `${nextMain.chapterLabel}: ${nextMain.title}`,
-            nextMain.description,
-            6.5
-          );
+          const nextLoc = tMission(nextMain.id);
+          const nextChapter = nextLoc?.chapterLabel ?? nextMain.chapterLabel;
+          const nextTitle = nextLoc?.title ?? nextMain.title;
+          const nextDesc = nextLoc?.description ?? nextMain.description;
+          this.showContextMessage(`${nextChapter}: ${nextTitle}`, nextDesc, 6.5);
         }
       }
       // Save milestone cleanly after mission completion & reward application
       this.saveCurrentGame(false);
+    } else if (outcome.newlyDiscoveredClues.length > 0 && !outcome.triggerSurgeId) {
+      const firstClue = outcome.newlyDiscoveredClues[0];
+      const clueTitle = tClue(firstClue.id)?.title ?? firstClue.title;
+      this.interactions.pushToast(
+        formatTpl(t.narrative.clueLoggedToast, { title: clueTitle }),
+        'resource',
+        3.2
+      );
     }
 
     if (outcome.endingJustCompleted) {
@@ -2631,6 +2948,9 @@ export class Game3DEngine {
       missionSnap.clues.length,
       missionSnap.endingCompleted,
       missionSnap.endingSeen,
+      missionSnap.selectedEndingId ?? '',
+      missionSnap.recordedChoices?.length ?? 0,
+      missionSnap.characters?.map((c) => `${c.trust}:${c.topicsCompleted}`).join(',') ?? '',
       missionSnap.hasSaveData,
       missionSnap.trackedMission?.objectives.map((o) => `${o.id}:${o.current}`).join(',') ?? '',
     ].join(';');
@@ -2731,6 +3051,13 @@ export class Game3DEngine {
     });
     const activeWorldEventPin = this.worldEvents.getMapPin();
 
+    const combatSnap = this.zombies.combat.getSnapshot();
+    const weaponDef = WEAPON_DEFINITIONS[combatSnap.equippedWeaponId];
+    const quantReload = combatSnap.isReloading
+      ? Math.round(combatSnap.reloadProgress * 20) / 20
+      : 0;
+    const cooldownRatio = Math.round(this.zombies.getAttackCooldownRatio() * 10) / 10;
+
     const quantTension = Math.round(this.tensionLevel * 20) / 20;
     const effectiveCombat = inActiveCombat || this.recentCombatTimer > 0;
     const key = [
@@ -2746,6 +3073,15 @@ export class Game3DEngine {
       effectiveCombat,
       quantTension,
       this.attackPulseId,
+      this.hitMarkerId,
+      this.hitMarkerKind,
+      combatSnap.equippedWeaponId,
+      combatSnap.unlockedWeaponIds.join(','),
+      combatSnap.magAmmo,
+      combatSnap.reserveAmmo,
+      combatSnap.isReloading,
+      quantReload,
+      cooldownRatio,
       noiseDisplay,
       this.worldEvents.survivorGoodwill,
       activeWorldEvent?.instanceId ?? '',
@@ -2845,9 +3181,21 @@ export class Game3DEngine {
       latestToast: toast,
       damagePulseId: this.damagePulseId,
       attackPulseId: this.attackPulseId,
+      hitMarkerId: this.hitMarkerId,
+      hitMarkerKind: this.hitMarkerKind,
       inActiveCombat: effectiveCombat,
       tensionLevel: quantTension,
-      weaponLabel: tWeaponLabel(),
+      weaponId: combatSnap.equippedWeaponId,
+      weaponKind: weaponDef.kind,
+      weaponLabel: tWeaponLabel(combatSnap.equippedWeaponId),
+      unlockedWeaponIds: combatSnap.unlockedWeaponIds,
+      magAmmo: combatSnap.magAmmo,
+      magSize: combatSnap.magSize,
+      reserveAmmo: combatSnap.reserveAmmo,
+      maxReserveAmmo: combatSnap.maxReserveAmmo,
+      isReloading: combatSnap.isReloading,
+      reloadProgress: combatSnap.reloadProgress,
+      attackCooldownRatio: cooldownRatio,
       zombiesDefeated: this.zombies.zombiesDefeated,
       deathReason: this.survival.deathReason,
       playerX: px,
@@ -2958,6 +3306,28 @@ export class Game3DEngine {
         this.toggleRest();
         return;
       }
+      if ((e.code === 'KeyX' || e.code === 'Tab') && !this.isModalBlockingInput()) {
+        e.preventDefault();
+        this.cycleWeapon(1);
+        return;
+      }
+      if (e.code === 'KeyV' && !this.isModalBlockingInput()) {
+        e.preventDefault();
+        this.triggerReload();
+        return;
+      }
+      if (
+        (e.code === 'Digit4' || e.code === 'Digit5' || e.code === 'Digit6') &&
+        !this.isModalBlockingInput()
+      ) {
+        const slotIndex = e.code === 'Digit4' ? 0 : e.code === 'Digit5' ? 1 : 2;
+        const targetId = WEAPON_ORDER[slotIndex];
+        if (targetId && this.zombies.combat.hasWeapon(targetId)) {
+          e.preventDefault();
+          this.selectWeapon(targetId);
+        }
+        return;
+      }
     }
 
     if (
@@ -3014,6 +3384,15 @@ export class Game3DEngine {
       return;
     }
     this.controller.handleMouseDown(e, isPlayingActive);
+  };
+
+  private handleWheel = (e: WheelEvent): void => {
+    if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
+    if (Math.abs(e.deltaY) < 4) return;
+    const now = performance.now();
+    if (now - this.lastWheelSwitchAtMs < 130) return;
+    this.lastWheelSwitchAtMs = now;
+    this.cycleWeapon(e.deltaY > 0 ? 1 : -1);
   };
 
   private handleMouseUp = (): void => {
@@ -3080,6 +3459,7 @@ export class Game3DEngine {
     window.addEventListener('mouseup', this.handleMouseUp);
     window.addEventListener('mousemove', this.handleMouseMove);
     dom.addEventListener('mousedown', this.handleMouseDown);
+    dom.addEventListener('wheel', this.handleWheel, { passive: true });
     document.addEventListener('pointerlockchange', this.controller.handlePointerLockEvent);
     dom.addEventListener('webglcontextlost', this.handleContextLost);
     dom.addEventListener('webglcontextrestored', this.handleContextRestored);
@@ -3103,6 +3483,7 @@ export class Game3DEngine {
     window.removeEventListener('mouseup', this.handleMouseUp);
     window.removeEventListener('mousemove', this.handleMouseMove);
     dom.removeEventListener('mousedown', this.handleMouseDown);
+    dom.removeEventListener('wheel', this.handleWheel);
     document.removeEventListener('pointerlockchange', this.controller.handlePointerLockEvent);
     dom.removeEventListener('webglcontextlost', this.handleContextLost);
     dom.removeEventListener('webglcontextrestored', this.handleContextRestored);

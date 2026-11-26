@@ -1,4 +1,4 @@
-import { Award, RadioTower } from 'lucide-react';
+import { Award, CheckCircle2, RadioTower } from 'lucide-react';
 import { formatMoney } from '../game/economy';
 import { useViewportLayout } from '../game/responsiveLayout';
 import { HudSnapshot } from '../game/types';
@@ -18,6 +18,12 @@ export function EndingModal({
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
   const { dir, t } = useI18n();
+  const endingSummary = hud.missions.endingSummary;
+
+  const badgeText = endingSummary?.badge ?? t.endingModal.badge;
+  const titleText = endingSummary?.title ?? t.endingModal.title;
+  const bodyText = endingSummary?.body ?? t.endingModal.body;
+  const epilogueLines = endingSummary?.epilogueLines ?? [];
 
   return (
     <div
@@ -45,18 +51,40 @@ export function EndingModal({
         >
           <div className="flex items-center gap-2.5 text-amber-400 text-xs font-mono-tabular uppercase tracking-widest mb-1.5">
             <RadioTower className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>{t.endingModal.badge}</span>
+            <span>{badgeText}</span>
           </div>
           <h2
             id="ending-modal-title"
             className="font-display text-3xl sm:text-4xl font-bold tracking-wider text-stone-100 leading-none"
           >
-            {t.endingModal.title}
+            {titleText}
           </h2>
-          <p className="text-sm text-stone-300 mt-2.5 leading-relaxed">{t.endingModal.body}</p>
+          <p className="text-sm text-stone-300 mt-2.5 leading-relaxed">{bodyText}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto touch-pan-y px-5 py-4 sm:px-7 space-y-4">
+          {epilogueLines.length > 0 && (
+            <div className="rounded-lg border border-stone-700/80 bg-[#0b0e15] p-3.5 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-amber-300">
+                {t.narrative.epilogueHeading}
+              </div>
+              <ul className="space-y-1.5">
+                {epilogueLines.map((line) => (
+                  <li
+                    key={line}
+                    className="flex items-start gap-2 text-xs sm:text-sm text-stone-200 leading-relaxed"
+                  >
+                    <CheckCircle2
+                      className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             <div className="rounded-lg border border-stone-800 bg-[#0b0e15] p-3">
               <div className="text-[11px] text-stone-400">{t.endingModal.statDaysSurvived}</div>

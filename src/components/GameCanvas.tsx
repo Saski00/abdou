@@ -8,7 +8,9 @@ import {
   HudSnapshot,
   ResourceId,
   ShopModalTab,
+  StoryEndingId,
   StoryObjectInspectionData,
+  WeaponId,
 } from '../game/types';
 import { useI18n } from '../i18n';
 
@@ -18,6 +20,9 @@ export interface TouchEngineBridge {
   triggerJump: () => void;
   triggerInteract: () => void;
   triggerAttack: () => void;
+  selectWeapon: (weaponId: WeaponId) => void;
+  cycleWeapon: (direction?: 1 | -1) => void;
+  triggerReload: () => void;
   toggleFlashlight: () => void;
   consumeItem: (resourceId: ResourceId) => void;
   toggleRest: () => void;
@@ -38,7 +43,15 @@ export interface TouchEngineBridge {
   dismissEmployee: (employeeId: string) => void;
   payUnpaidWages: () => void;
   trackMission: (missionId: string | null) => void;
-  performStoryObjectAction: (objectId: string) => StoryObjectInspectionData | null;
+  performStoryObjectAction: (
+    objectId: string,
+    endingChoiceId?: StoryEndingId
+  ) => StoryObjectInspectionData | null;
+  resolveSurvivorDialogueChoice: (
+    survivorId: string,
+    topicId: string,
+    optionId: string
+  ) => boolean;
   craftWorkbenchRecipe: (recipeId: string) => boolean;
   dismissGuidanceHint: (hintId: string) => void;
   resolveWorldEventChoice: (choiceId: string) => boolean;
@@ -180,6 +193,9 @@ export function GameCanvas({
       triggerJump: () => engine.triggerTouchJump(),
       triggerInteract: () => engine.triggerInteract(),
       triggerAttack: () => engine.triggerAttack(),
+      selectWeapon: (weaponId) => engine.selectWeapon(weaponId),
+      cycleWeapon: (direction = 1) => engine.cycleWeapon(direction),
+      triggerReload: () => engine.triggerReload(),
       toggleFlashlight: () => engine.toggleFlashlight(),
       consumeItem: (resourceId) => engine.consumeItem(resourceId),
       toggleRest: () => engine.toggleRest(),
@@ -203,7 +219,10 @@ export function GameCanvas({
       dismissEmployee: (employeeId) => engine.dismissEmployee(employeeId),
       payUnpaidWages: () => engine.payUnpaidWagesNow(),
       trackMission: (missionId) => engine.trackMission(missionId),
-      performStoryObjectAction: (objectId) => engine.performStoryObjectAction(objectId),
+      performStoryObjectAction: (objectId, endingChoiceId) =>
+        engine.performStoryObjectAction(objectId, endingChoiceId),
+      resolveSurvivorDialogueChoice: (survivorId, topicId, optionId) =>
+        engine.resolveSurvivorDialogueChoice(survivorId, topicId, optionId),
       craftWorkbenchRecipe: (recipeId) => engine.craftWorkbenchRecipe(recipeId),
       dismissGuidanceHint: (hintId) => engine.dismissGuidanceHint(hintId),
       resolveWorldEventChoice: (choiceId) => engine.resolveWorldEventChoice(choiceId),

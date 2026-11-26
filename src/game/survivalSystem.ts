@@ -112,7 +112,14 @@ export interface ConsumeResult {
   message: string;
   tone: 'resource' | 'world' | 'warning';
   soundKind?: 'food' | 'water' | 'med';
+  staminaDelta?: number;
 }
+
+const HEAL_COOLDOWN_SEC = 1.4;
+const FOOD_BONUS_HEALTH = 5;
+const WATER_BONUS_STAMINA = 16;
+const MEDKIT_STABILIZE_HEALTH = 10;
+const MEDKIT_STABILIZE_RATE_PER_SEC = 2.5;
 
 export class SurvivalSystem {
   public health: number;
@@ -125,6 +132,8 @@ export class SurvivalSystem {
   private readonly cfg: SurvivalConfig;
   private elapsedSec = 0;
   private idleCalmTimer = 0;
+  private healCooldown = 0;
+  private healRegenRemaining = 0;
 
   private warnedHungerCrit = false;
   private warnedThirstCrit = false;
@@ -150,6 +159,8 @@ export class SurvivalSystem {
     this.deathReason = null;
     this.elapsedSec = 0;
     this.idleCalmTimer = 0;
+    this.healCooldown = 0;
+    this.healRegenRemaining = 0;
     this.warnedHungerCrit = false;
     this.warnedThirstCrit = false;
     this.warnedEnergyLow = false;
@@ -227,9 +238,24 @@ export class SurvivalSystem {
     this.isResting = false;
   }
 
+  public getHealCooldownRemaining(): number {
+    return this.healCooldown;
+  }
+
   public update(dt: number, input: SurvivalUpdateInput): SurvivalNotification | null {
     if (!Number.isFinite(dt) || dt <= 0) return null;
     this.elapsedSec += dt;
+    if (this.healCooldown > 0) {
+      this.healCooldown = Math.max(0, this.healCooldown - dt);
+    }
+    if (this.healRegenRemaining > 0 && this.health > 0) {
+      const tickHeal = Math.min(this.healRegenRemaining, MEDKIT_STABILIZE_RATE_PER_SEC * dt);
+      this.health = clamp(this.health + tickHeal, 0, this.cfg.maxHealth);
+      this.healRegenRemaining = Math.max(0, this.healRegenRemaining - tickHeal);
+      if (this.health >= this.cfg.maxHealth) {
+        this.healRegenRemaining = 0;
+      }
+    }
 
     let notification: SurvivalNotification | null = null;
 
@@ -354,8 +380,9 @@ export class SurvivalSystem {
     }
 
     let message = '';
+    let staminaDelta = 0;
     if (def.targetStat === 'hunger') {
-      if (this.hunger >= this.cfg.maxHunger - 0.5) {
+      if (this.hunger >= this.cfg.maxHunger - 0.5 && this.health >= this.cfg.maxHealth - 0.5) {
         return {
           consumed: false,
           nextInventory: inventory,
@@ -364,12 +391,15 @@ export class SurvivalSystem {
         };
       }
       this.hunger = clamp(this.hunger + def.restoreAmount, 0, this.cfg.maxHunger);
+      const prevHp = this.health;
+      this.health = clamp(this.health + FOOD_BONUS_HEALTH, 0, this.cfg.maxHealth);
+      const hpGained = Math.round(this.health - prevHp);
       if (this.hunger > 0) this.warnedStarving = false;
       if (this.hunger > this.cfg.criticalThreshold + 5) this.warnedHungerCrit = false;
       message = formatTpl(t.gameMessages.toasts.consumeAteFood, {
         name: itemName,
         hunger: def.restoreAmount,
-        hp: 0,
+        hp: hpGained,
       });
     } else if (def.targetStat === 'thirst') {
       if (this.thirst >= this.cfg.maxThirst - 0.5) {
@@ -381,12 +411,14 @@ export class SurvivalSystem {
         };
       }
       this.thirst = clamp(this.thirst + def.restoreAmount, 0, this.cfg.maxThirst);
+      this.energy = clamp(this.energy + 6, 0, this.cfg.maxEnergy);
+      staminaDelta = WATER_BONUS_STAMINA;
       if (this.thirst > 0) this.warnedDehydrated = false;
       if (this.thirst > this.cfg.criticalThreshold + 5) this.warnedThirstCrit = false;
       message = formatTpl(t.gameMessages.toasts.consumeDrankWater, {
         name: itemName,
         thirst: def.restoreAmount,
-        stam: 0,
+        stam: WATER_BONUS_STAMINA,
       });
     } else {
       if (this.health >= this.cfg.maxHealth - 0.5) {
@@ -397,10 +429,27 @@ export class SurvivalSystem {
           tone: 'world',
         };
       }
+      if (this.healCooldown > 0) {
+        return {
+          consumed: false,
+          nextInventory: inventory,
+          message: formatTpl(t.gameMessages.toasts.healOnCooldown, {
+            sec: this.healCooldown.toFixed(1),
+          }),
+          tone: 'world',
+        };
+      }
+      const prevHp = this.health;
       this.health = clamp(this.health + def.restoreAmount, 0, this.cfg.maxHealth);
+      this.healRegenRemaining = Math.min(
+        MEDKIT_STABILIZE_HEALTH,
+        this.healRegenRemaining + MEDKIT_STABILIZE_HEALTH
+      );
+      this.healCooldown = HEAL_COOLDOWN_SEC;
+      const gainedNow = Math.max(1, Math.round(this.health - prevHp));
       message = formatTpl(t.gameMessages.toasts.consumeUsedMed, {
         name: itemName,
-        hp: def.restoreAmount,
+        hp: gainedNow,
       });
     }
 
@@ -411,6 +460,7 @@ export class SurvivalSystem {
       message,
       tone: 'resource',
       soundKind: def.soundKind,
+      staminaDelta,
     };
   }
 

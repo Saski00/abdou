@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import {
   BedDouble,
+  Crosshair,
   Droplet,
   Flashlight,
   HeartPulse,
   KeyRound,
   MapPin,
+  RefreshCw,
   Sword,
   Utensils,
   X,
   Zap,
 } from 'lucide-react';
+import { WEAPON_DEFINITIONS } from '../game/combatSystem';
 import { useViewportLayout } from '../game/responsiveLayout';
 import {
   RESOURCE_DEFINITIONS,
@@ -19,7 +22,7 @@ import {
   getTotalInventoryItems,
 } from '../game/resources';
 import { CONSUMABLE_DEFINITIONS } from '../game/survivalSystem';
-import { HudSnapshot, ResourceId } from '../game/types';
+import { HudSnapshot, ResourceId, WeaponId } from '../game/types';
 import { TranslationCatalog, formatTpl, tResource, useI18n } from '../i18n';
 
 interface InventoryModalProps {
@@ -28,6 +31,8 @@ interface InventoryModalProps {
   onConsumeItem: (resourceId: ResourceId) => void;
   onToggleRest: () => void;
   onToggleFlashlight: () => void;
+  onSelectWeapon: (weaponId: WeaponId) => void;
+  onReload: () => void;
   onClose: () => void;
 }
 
@@ -127,6 +132,8 @@ export function InventoryModal({
   onConsumeItem,
   onToggleRest,
   onToggleFlashlight,
+  onSelectWeapon,
+  onReload,
   onClose,
 }: InventoryModalProps) {
   const { dir, t } = useI18n();
@@ -488,6 +495,119 @@ export function InventoryModal({
           {/* Equipped Gear & Keys Section */}
           {showGearSection && (
             <div className="space-y-2.5">
+              {/* Weapon Arsenal Cards */}
+              <div className="space-y-2">
+                {hud.unlockedWeaponIds.map((wid) => {
+                  const def = WEAPON_DEFINITIONS[wid];
+                  const copy = t.combat.weapons[wid];
+                  const isEquipped = hud.weaponId === wid;
+                  const critDmg = Math.round(def.damage * def.critMultiplier);
+                  const noiseLabel =
+                    def.hitNoiseRadius >= 18
+                      ? t.combat.noiseLoud
+                      : def.hitNoiseRadius >= 7
+                        ? t.combat.noiseMedium
+                        : t.combat.noiseQuiet;
+
+                  return (
+                    <div
+                      key={wid}
+                      className={`rounded-lg border px-3.5 py-2.5 flex items-center justify-between gap-3 ${
+                        isEquipped
+                          ? 'border-amber-500/65 bg-[#151a24]'
+                          : 'border-stone-800 bg-[#0b0e15]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-[#141b27] border border-stone-700/70 flex items-center justify-center shrink-0 mt-0.5">
+                          {def.kind === 'ranged' ? (
+                            <Crosshair
+                              className={`w-4 h-4 ${isEquipped ? 'text-amber-300' : 'text-stone-400'}`}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Sword
+                              className={`w-4 h-4 ${isEquipped ? 'text-amber-400' : 'text-stone-400'}`}
+                              aria-hidden="true"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-semibold text-stone-100 truncate">
+                              {copy.name}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-stone-800 border border-stone-700/70 text-[10px] font-medium text-stone-300">
+                              {def.kind === 'ranged'
+                                ? t.combat.rangedRoleLabel
+                                : t.combat.meleeRoleLabel}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-stone-400 leading-snug">
+                            {copy.description}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono-tabular text-stone-300">
+                            <bdi dir="ltr" className="text-amber-300 font-semibold">
+                              {formatTpl(t.combat.damageStat, { dmg: def.damage })}
+                            </bdi>
+                            <span className="text-stone-600" aria-hidden="true">
+                              ·
+                            </span>
+                            <bdi dir="ltr" className="text-rose-300 font-semibold">
+                              {formatTpl(t.combat.critStat, { dmg: critDmg })}
+                            </bdi>
+                            <span className="text-stone-600" aria-hidden="true">
+                              ·
+                            </span>
+                            <span className="text-stone-400">{noiseLabel}</span>
+                          </div>
+                          {wid === 'service_pistol' && (
+                            <div className="text-[11px] font-mono-tabular text-emerald-300">
+                              {formatTpl(t.combat.pistolReserveSummary, {
+                                mag: hud.magAmmo,
+                                magSize: def.magSize,
+                                reserve: hud.reserveAmmo,
+                                maxReserve: def.maxReserveAmmo,
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        {isEquipped ? (
+                          <span className="min-h-[34px] px-3 rounded-md bg-amber-500/20 border border-amber-400/60 text-amber-200 text-xs font-semibold flex items-center">
+                            {t.combat.equippedBadge}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onSelectWeapon(wid)}
+                            className="min-h-[36px] px-3 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold cursor-pointer transition-colors"
+                          >
+                            {t.combat.equipBtn}
+                          </button>
+                        )}
+                        {wid === 'service_pistol' &&
+                          isEquipped &&
+                          !hud.isReloading &&
+                          hud.magAmmo < def.magSize &&
+                          hud.reserveAmmo > 0 && (
+                            <button
+                              type="button"
+                              onClick={onReload}
+                              className="min-h-[32px] px-2.5 rounded-md bg-[#161c29] hover:bg-stone-800 border border-stone-600 text-amber-200 text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>{t.combat.reloadBtn}</span>
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="rounded-lg border border-stone-800 bg-[#0b0e15] px-3.5 py-2.5 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">

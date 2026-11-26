@@ -1,14 +1,17 @@
 import { Hammer, Package, X } from 'lucide-react';
 import { WORKBENCH_RECIPES, canCraftRecipe } from '../game/craftingSystem';
 import { useViewportLayout } from '../game/responsiveLayout';
-import { InventoryState } from '../game/types';
-import { formatTpl, tRecipe, tResource, tResourceName, useI18n } from '../i18n';
+import { InventoryState, WeaponId } from '../game/types';
+import { formatTpl, tRecipe, tResource, tResourceName, tWeaponLabel, useI18n } from '../i18n';
 
 interface WorkbenchModalProps {
   workbenchName: string;
   inventory: InventoryState;
   totalInventoryItems: number;
   packCapacity: number;
+  unlockedWeaponIds: WeaponId[];
+  reserveAmmo: number;
+  maxReserveAmmo: number;
   isTouchMode: boolean;
   onCraftRecipe: (recipeId: string) => void;
   onClose: () => void;
@@ -19,6 +22,9 @@ export function WorkbenchModal({
   inventory,
   totalInventoryItems,
   packCapacity,
+  unlockedWeaponIds,
+  reserveAmmo,
+  maxReserveAmmo,
   isTouchMode,
   onCraftRecipe,
   onClose,
@@ -27,6 +33,7 @@ export function WorkbenchModal({
   const wbCopy = t.workbenchModal;
   const viewport = useViewportLayout();
   const isCompactLandscape = viewport.isCompactLandscape;
+  const combatCtx = { unlockedWeaponIds, reserveAmmo, maxReserveAmmo };
 
   return (
     <div
@@ -88,10 +95,30 @@ export function WorkbenchModal({
         {/* Recipes List */}
         <div className="flex-1 overflow-y-auto touch-pan-y px-4 py-4 sm:px-6 space-y-3">
           {WORKBENCH_RECIPES.map((recipe) => {
-            const check = canCraftRecipe(recipe, inventory, packCapacity);
+            const check = canCraftRecipe(recipe, inventory, packCapacity, combatCtx);
             const recText = tRecipe(recipe.id, recipe);
-            const outRes = tResource(recipe.outputResourceId);
-            const ownedOut = inventory[recipe.outputResourceId] ?? 0;
+            const kind = recipe.outputKind ?? 'resource';
+            let outputBadgeText = '';
+            if (kind === 'weapon') {
+              outputBadgeText = formatTpl(wbCopy.weaponOutputBadge, {
+                weapon: recipe.outputWeaponId ? tWeaponLabel(recipe.outputWeaponId) : recText.name,
+              });
+            } else if (kind === 'ammo') {
+              outputBadgeText = formatTpl(wbCopy.ammoOutputBadge, {
+                qty: recipe.outputAmount,
+                unit: t.combat.ammoUnit,
+                reserve: reserveAmmo,
+                max: maxReserveAmmo,
+              });
+            } else if (recipe.outputResourceId) {
+              const outRes = tResource(recipe.outputResourceId);
+              const ownedOut = inventory[recipe.outputResourceId] ?? 0;
+              outputBadgeText = formatTpl(wbCopy.outputBadge, {
+                qty: recipe.outputAmount,
+                item: outRes.name,
+                owned: ownedOut,
+              });
+            }
 
             return (
               <div
@@ -102,11 +129,7 @@ export function WorkbenchModal({
                   <div className="flex items-baseline justify-between sm:justify-start gap-2">
                     <h3 className="text-sm font-semibold text-stone-100">{recText.name}</h3>
                     <span className="font-mono-tabular text-[11px] font-semibold text-emerald-300 whitespace-nowrap">
-                      {formatTpl(wbCopy.outputBadge, {
-                        qty: recipe.outputAmount,
-                        item: outRes.name,
-                        owned: ownedOut,
-                      })}
+                      {outputBadgeText}
                     </span>
                   </div>
                   <p className="text-xs text-stone-400 leading-snug">{recText.description}</p>

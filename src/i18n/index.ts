@@ -4,6 +4,9 @@ import {
   EmployeeProfession,
   LocationDangerLevel,
   ResourceId,
+  StoryActId,
+  StoryEndingId,
+  WeaponId,
   WeatherKind,
   WorldRegionId,
 } from '../game/types';
@@ -366,8 +369,18 @@ export function tWeaponLabel(
   raw?: string,
   lang: GameLanguage = currentLanguage
 ): string {
-  if (!raw || raw === 'Steel Pipe') {
-    return CATALOGS[lang].gameMessages.locationsFallback.weaponSteelPipe;
+  const cat = CATALOGS[lang];
+  if (!raw || raw === 'Steel Pipe' || raw === 'steel_pipe') {
+    return cat.combat.weapons.steel_pipe.name;
+  }
+  if (raw === 'scrap_blade' || raw === 'Combat Knife') {
+    return cat.combat.weapons.scrap_blade.name;
+  }
+  if (raw === 'service_pistol' || raw === '9mm Service Pistol') {
+    return cat.combat.weapons.service_pistol.name;
+  }
+  if ((raw as WeaponId) in cat.combat.weapons) {
+    return cat.combat.weapons[raw as WeaponId].name;
   }
   return raw;
 }
@@ -384,4 +397,20 @@ export function tCustomerName(
     return CATALOGS[lang].gameMessages.locationsFallback.defaultCustomerName;
   }
   return fallback;
+}
+
+export function tTrustTierLabel(trust: number, lang: GameLanguage = currentLanguage): string {
+  const tiers = CATALOGS[lang].narrative.trustTiers;
+  if (trust >= 3) return tiers.tier3;
+  if (trust >= 2) return tiers.tier2;
+  if (trust >= 1) return tiers.tier1;
+  return tiers.tier0;
+}
+
+export function tStoryAct(actId: StoryActId, lang: GameLanguage = currentLanguage) {
+  return CATALOGS[lang].narrative.acts[actId];
+}
+
+export function tEnding(endingId: StoryEndingId, lang: GameLanguage = currentLanguage) {
+  return CATALOGS[lang].narrative.endings[endingId];
 }

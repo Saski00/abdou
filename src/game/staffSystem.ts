@@ -1631,6 +1631,7 @@ export class StaffSystem {
       const profLoc = tProfession(e.profession);
       return {
         id: e.id,
+        survivorId: e.survivorId,
         name: survLoc?.name || e.name,
         profession: e.profession,
         professionLabel: profLoc.label,

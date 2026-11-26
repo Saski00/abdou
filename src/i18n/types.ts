@@ -5,6 +5,9 @@ import {
   LocationDangerLevel,
   MissionCategory,
   ResourceId,
+  StoryActId,
+  StoryEndingId,
+  WeaponId,
   WeatherKind,
   WorldEventCategory,
   WorldRegionId,
@@ -157,6 +160,39 @@ export interface WorldEventItemTranslation {
   interactName?: string;
   interactAction?: string;
   choices?: Record<string, WorldEventChoiceTranslation>;
+}
+
+export interface StoryDialogueChoiceTranslation {
+  label: string;
+  hint?: string;
+  outcomeToast: string;
+  consequenceSummary: string;
+}
+
+export interface StoryDialogueTopicTranslation {
+  stageTitle: string;
+  speakerLine: string;
+  choices: Record<string, StoryDialogueChoiceTranslation>;
+}
+
+export interface StoryActTranslation {
+  title: string;
+  subtitle: string;
+}
+
+export interface StoryEndingTranslation {
+  badge: string;
+  title: string;
+  body: string;
+  epilogueBase: string;
+}
+
+export interface StoryBroadcastOptionTranslation {
+  title: string;
+  subtitle: string;
+  description: string;
+  lockedReason?: string;
+  consequenceSummary: string;
 }
 
 export interface TranslationCatalog {
@@ -378,9 +414,39 @@ export interface TranslationCatalog {
     flashlightOnAria: string;
     flashlightOffAria: string;
     meleeAttackAria: string;
+    rangedAttackAria: string;
     attackLabel: string;
+    fireLabel: string;
+    switchWeaponAria: string;
+    switchLabel: string;
+    reloadAria: string;
+    reloadLabel: string;
     jumpAria: string;
     jumpLabel: string;
+  };
+  combat: {
+    weapons: Record<WeaponId, { name: string; shortTag: string; description: string }>;
+    ammoUnit: string;
+    ammoBadge: string; // "{mag}/{reserve}"
+    reloadingLabel: string;
+    emptyMagLabel: string;
+    switchWeaponAria: string;
+    reloadAria: string;
+    reloadBtn: string;
+    switchBtn: string;
+    equipBtn: string;
+    equippedBadge: string;
+    unlockWeaponToast: string;
+    foundAmmoToast: string;
+    critHitLabel: string;
+    meleeRoleLabel: string;
+    rangedRoleLabel: string;
+    damageStat: string; // "DMG {dmg}"
+    critStat: string; // "CRIT {dmg}"
+    noiseQuiet: string;
+    noiseMedium: string;
+    noiseLoud: string;
+    pistolReserveSummary: string; // "Mag {mag}/{magSize} · Reserve {reserve}/{maxReserve}"
   };
   inventoryModal: {
     title: string;
@@ -437,6 +503,10 @@ export interface TranslationCatalog {
     closeAria: string;
     headerStats: string; // "Pack {used}/{cap} · Wood {wood} · Scrap {scrap}"
     outputBadge: string; // "+{qty} {item} (Pack {owned})"
+    weaponOutputBadge: string; // "{weapon}"
+    ammoOutputBadge: string; // "+{qty} {unit} (Reserve {reserve}/{max})"
+    ownedWeaponBtn: string;
+    ammoFullBtn: string;
     craftBtn: string;
     footerTouch: string;
     footerDesktop: string;
@@ -722,7 +792,16 @@ export interface TranslationCatalog {
       shopClosedToast: string;
       infectedDefeated: string;
       hitInfected: string;
+      hitCriticalInfected: string;
       swingMissed: string;
+      healOnCooldown: string;
+      weaponSwitched: string;
+      weaponUnlocked: string;
+      ammoFound: string;
+      pistolReloading: string;
+      pistolReloaded: string;
+      pistolEmptyNoAmmo: string;
+      pistolMagFull: string;
       attackedByInfected: string;
       noSaveFound: string;
       freshInfectedNewDay: string;
@@ -927,5 +1006,44 @@ export interface TranslationCatalog {
       silhouetteVanishedCue: string;
     };
     events: Record<string, WorldEventItemTranslation>;
+  };
+  narrative: {
+    talkBtn: string;
+    manageStaffBtn: string;
+    dialogueHeading: string;
+    allTopicsCaughtUp: string;
+    trustLabel: string; // "Trust {val}/3"
+    trustTiers: {
+      tier0: string;
+      tier1: string;
+      tier2: string;
+      tier3: string;
+    };
+    needItemShort: string; // "Need {qty} {item}"
+    clueLoggedBadge: string; // "Journal Clue Logged: {title}"
+    clueLoggedToast: string; // "Journal Clue Logged: {title}"
+    relayChoiceHeading: string;
+    tabJournalCrew: string;
+    actsHeading: string;
+    crewDossiersHeading: string;
+    recordedChoicesHeading: string;
+    noChoicesYetTitle: string;
+    noChoicesYetDesc: string;
+    recruitedAsBadge: string; // "Crew · {role}"
+    inDistrictBadge: string; // "In District · {loc}"
+    topicsProgress: string; // "Conversations {done}/{total}"
+    dayBadge: string; // "Day {day}"
+    endingStatusHeading: string;
+    epilogueHeading: string;
+    epilogueTruthUncovered: string;
+    epilogueTruthPartial: string;
+    epilogueCrewStrong: string;
+    epilogueShopThriving: string;
+    acts: Record<StoryActId, StoryActTranslation>;
+    broadcastChoices: Record<StoryEndingId, StoryBroadcastOptionTranslation>;
+    choiceTitles: Record<string, string>;
+    survivorBios: Record<string, string>;
+    survivorDialogues: Record<string, Record<string, StoryDialogueTopicTranslation>>;
+    endings: Record<StoryEndingId, StoryEndingTranslation>;
   };
 }

@@ -31,6 +31,10 @@ export type ResourceId =
 
 export type InventoryState = Record<ResourceId, number>;
 
+export type WeaponId = 'steel_pipe' | 'scrap_blade' | 'service_pistol';
+export type WeaponKind = 'melee' | 'ranged';
+export type HitMarkerKind = 'hit' | 'crit' | 'kill';
+
 export interface InteractionPrompt {
   id: string;
   name: string;
@@ -55,6 +59,10 @@ export interface InteractionPrompt {
 }
 
 export type MissionCategory = 'main' | 'side';
+
+export type StoryActId = 'act1_shelter' | 'act2_investigation' | 'act3_convergence';
+
+export type StoryEndingId = 'dawn_beacon' | 'truth_unsealed' | 'iron_enclave';
 
 export type MissionStatus = 'locked' | 'available' | 'active' | 'completed' | 'failed';
 
@@ -96,6 +104,7 @@ export interface MissionSummary {
   id: string;
   order: number;
   category: MissionCategory;
+  actId?: StoryActId;
   chapterLabel: string;
   title: string;
   description: string;
@@ -116,6 +125,16 @@ export interface StoryClueSummary {
   discoveredDay: number;
 }
 
+export interface StoryRelayBroadcastChoice {
+  endingId: StoryEndingId;
+  title: string;
+  subtitle: string;
+  description: string;
+  unlocked: boolean;
+  lockedReason?: string;
+  tone: 'hope' | 'truth' | 'fortress';
+}
+
 export interface StoryObjectInspectionData {
   id: string;
   title: string;
@@ -126,6 +145,57 @@ export interface StoryObjectInspectionData {
   actionDisabledReason?: string;
   requiresResources?: Partial<InventoryState>;
   alreadyActivated: boolean;
+  loggedClueTitle?: string;
+  broadcastChoices?: StoryRelayBroadcastChoice[];
+}
+
+export interface SurvivorDialogueChoice {
+  id: string;
+  label: string;
+  hint?: string;
+  requiresResources?: Partial<InventoryState>;
+  affordable: boolean;
+  disabledReason?: string;
+}
+
+export interface SurvivorDialogueTopicView {
+  topicId: string;
+  stageTitle: string;
+  speakerLine: string;
+  choices: SurvivorDialogueChoice[];
+}
+
+export interface StoryChoiceSummary {
+  choiceId: string;
+  optionId: string;
+  title: string;
+  optionLabel: string;
+  consequenceSummary: string;
+  day: number;
+}
+
+export interface CharacterDossierSummary {
+  id: string;
+  name: string;
+  locationLabel: string;
+  recruited: boolean;
+  employeeId?: string;
+  professionLabel?: string;
+  trust: number;
+  trustTierLabel: string;
+  bio: string;
+  currentStatusNote: string;
+  topicsCompleted: number;
+  totalTopics: number;
+  activeTopic: SurvivorDialogueTopicView | null;
+}
+
+export interface StoryEndingSummary {
+  endingId: StoryEndingId;
+  badge: string;
+  title: string;
+  body: string;
+  epilogueLines: string[];
 }
 
 export interface MissionSnapshot {
@@ -140,6 +210,11 @@ export interface MissionSnapshot {
   endingCompleted: boolean;
   endingSeen: boolean;
   hasSaveData: boolean;
+  characters?: CharacterDossierSummary[];
+  recordedChoices?: StoryChoiceSummary[];
+  selectedEndingId?: StoryEndingId | null;
+  endingSummary?: StoryEndingSummary | null;
+  unlockedEndingIds?: StoryEndingId[];
 }
 
 export type ShopModalTab = 'counter' | 'transfer' | 'storage' | 'upgrades' | 'customers' | 'staff';
@@ -173,6 +248,7 @@ export interface WorldSurvivorSummary {
 
 export interface EmployeeSummary {
   id: string;
+  survivorId: string;
   name: string;
   profession: EmployeeProfession;
   professionLabel: string;
@@ -447,8 +523,20 @@ export interface HudSnapshot {
   latestToast: FeedbackToast | null;
   damagePulseId: number;
   attackPulseId: number;
+  hitMarkerId: number;
+  hitMarkerKind: HitMarkerKind | null;
   inActiveCombat: boolean;
+  weaponId: WeaponId;
+  weaponKind: WeaponKind;
   weaponLabel: string;
+  unlockedWeaponIds: WeaponId[];
+  magAmmo: number;
+  magSize: number;
+  reserveAmmo: number;
+  maxReserveAmmo: number;
+  isReloading: boolean;
+  reloadProgress: number;
+  attackCooldownRatio: number;
   zombiesDefeated: number;
   deathReason: string | null;
   noiseLevel: number;

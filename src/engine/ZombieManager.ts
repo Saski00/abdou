@@ -4,13 +4,20 @@ import {
   ZombieRig,
   ZombieSharedGeometries,
   animateZombieRig,
+  buildFirstPersonCombatBlade,
   buildFirstPersonMeleePipe,
+  buildFirstPersonServicePistol,
   buildProceduralZombieModel,
   createZombieSharedGeometries,
 } from '../assets/models/zombieModel';
 import {
-  BRUTE_ZOMBIE_CONFIG,
-  DEFAULT_MELEE_CONFIG,
+  CombatSystem,
+  WEAPON_DEFINITIONS,
+  performPlayerRangedShot,
+  performWeaponMelee,
+} from '../game/combatSystem';
+import { WeaponId } from '../game/types';
+import {
   INITIAL_ZOMBIE_SPAWNS,
   MeleeHitResult,
   NoiseEvent,
@@ -23,7 +30,6 @@ import {
   dispatchNoiseToZombies,
   hasLineOfSight2D,
   isPointBlocked,
-  performPlayerMelee,
   stepZombiesAI,
 } from '../game/zombieAI';
 import { SavedZombieState } from '../game/saveSystem';
@@ -69,16 +75,37 @@ const DYNAMIC_PROWLER_SPOTS: { x: number; z: number; yaw: number }[] = [
 const MAX_DYNAMIC_PROWLERS = 2;
 const MAX_LIVING_ZOMBIES = 16;
 
+export interface PlayerAttackAttemptResult {
+  triggered: boolean;
+  dryFire?: boolean;
+  autoReloadStarted?: boolean;
+  weaponId: WeaponId;
+  staminaSpent: number;
+  recoilKick: number;
+  result: MeleeHitResult | null;
+  killedSurgeId?: string;
+}
+
 export class ZombieManager {
   private root = new THREE.Group();
   private sharedGeos: ZombieSharedGeometries;
   private entities: ZombieEntityView[] = [];
   private agentsCache: ZombieAgent[] = [];
-  private meleeProp: ReturnType<typeof buildFirstPersonMeleePipe>;
 
+  private pipeProp: ReturnType<typeof buildFirstPersonMeleePipe>;
+  private bladeProp: ReturnType<typeof buildFirstPersonCombatBlade>;
+  private pistolProp: ReturnType<typeof buildFirstPersonServicePistol>;
+
+  public readonly combat = new CombatSystem();
   public zombiesDefeated = 0;
-  private meleeCooldown = 0;
-  private meleeSwingTimer = 0;
+
+  private attackCooldown = 0;
+  private attackMaxCooldown = 0.54;
+  private attackAnimTimer = 0;
+  private attackAnimDuration = 0.28;
+  private muzzleFlashTimer = 0;
+  private switchAnimTimer = 0;
+  private weaponVisible = false;
   private weaponBobTime = 0;
   private lastGroanTime = -99;
   private elapsedSec = 0;
@@ -94,11 +121,23 @@ export class ZombieManager {
     this.sharedGeos = createZombieSharedGeometries();
     scene.add(this.root);
 
-    this.meleeProp = buildFirstPersonMeleePipe();
-    this.meleeProp.group.position.set(0.32, -0.31, -0.50);
-    this.meleeProp.group.rotation.set(0.24, -0.35, 0.22);
-    this.meleeProp.group.visible = false;
-    camera.add(this.meleeProp.group);
+    this.pipeProp = buildFirstPersonMeleePipe();
+    this.pipeProp.group.position.set(0.32, -0.31, -0.5);
+    this.pipeProp.group.rotation.set(0.24, -0.35, 0.22);
+    this.pipeProp.group.visible = false;
+    camera.add(this.pipeProp.group);
+
+    this.bladeProp = buildFirstPersonCombatBlade();
+    this.bladeProp.group.position.set(0.29, -0.27, -0.45);
+    this.bladeProp.group.rotation.set(0.28, -0.42, 0.34);
+    this.bladeProp.group.visible = false;
+    camera.add(this.bladeProp.group);
+
+    this.pistolProp = buildFirstPersonServicePistol();
+    this.pistolProp.group.position.set(0.27, -0.24, -0.44);
+    this.pistolProp.group.rotation.set(0.03, -0.08, 0.02);
+    this.pistolProp.group.visible = false;
+    camera.add(this.pistolProp.group);
 
     this.spawnInitialZombies();
   }
@@ -159,13 +198,20 @@ export class ZombieManager {
   }
 
   public reset(): void {
+    this.combat.reset();
     this.zombiesDefeated = 0;
-    this.meleeCooldown = 0;
-    this.meleeSwingTimer = 0;
+    this.attackCooldown = 0;
+    this.attackMaxCooldown = WEAPON_DEFINITIONS.steel_pipe.cooldownSec;
+    this.attackAnimTimer = 0;
+    this.attackAnimDuration = WEAPON_DEFINITIONS.steel_pipe.animDurationSec;
+    this.muzzleFlashTimer = 0;
+    this.switchAnimTimer = 0;
+    this.pistolProp.muzzleFlash.visible = false;
     this.weaponBobTime = 0;
     this.lastGroanTime = -99;
     this.elapsedSec = 0;
     this.dynamicProwlerSeq = 1;
+    this.syncActiveViewmodelVisibility();
     this.spawnInitialZombies();
   }
 
@@ -175,6 +221,11 @@ export class ZombieManager {
       if (ent.agent.state !== 'dead') count += 1;
     }
     return count;
+  }
+
+  public getAttackCooldownRatio(): number {
+    if (this.attackCooldown <= 0 || this.attackMaxCooldown <= 0) return 0;
+    return Math.max(0, Math.min(1, this.attackCooldown / this.attackMaxCooldown));
   }
 
   public redirectStreetZombies(
@@ -235,7 +286,6 @@ export class ZombieManager {
     const toSpawn = Math.min(count, allowedByTotal, allowedByProwlerCap);
     if (toSpawn <= 0) return 0;
 
-    // Sort spots nearest to target while staying safely occluded/away from player and clear of walls/safeZones
     const validSpots = DYNAMIC_PROWLER_SPOTS.filter((spot) => {
       const distPlayer = Math.hypot(spot.x - playerX, spot.z - playerZ);
       if (distPlayer < minDistanceFromPlayer) return false;
@@ -355,8 +405,63 @@ export class ZombieManager {
     }
   }
 
+  private syncActiveViewmodelVisibility(): void {
+    const active = this.combat.getEquippedWeapon().id;
+    this.pipeProp.group.visible = this.weaponVisible && active === 'steel_pipe';
+    this.bladeProp.group.visible = this.weaponVisible && active === 'scrap_blade';
+    this.pistolProp.group.visible = this.weaponVisible && active === 'service_pistol';
+  }
+
   public setFirstPersonWeaponVisible(visible: boolean): void {
-    this.meleeProp.group.visible = visible;
+    this.weaponVisible = visible;
+    this.syncActiveViewmodelVisibility();
+  }
+
+  public selectWeapon(id: WeaponId): boolean {
+    const changed = this.combat.equipWeapon(id);
+    if (!changed) return false;
+    this.attackCooldown = Math.min(this.attackCooldown, 0.14);
+    this.attackAnimTimer = 0;
+    this.muzzleFlashTimer = 0;
+    this.pistolProp.muzzleFlash.visible = false;
+    this.switchAnimTimer = 0.18;
+    this.sound.playWeaponSwitch();
+    this.syncActiveViewmodelVisibility();
+    return true;
+  }
+
+  public cycleWeapon(direction: 1 | -1 = 1): WeaponId | null {
+    const next = this.combat.cycleWeapon(direction);
+    if (!next) return null;
+    this.attackCooldown = Math.min(this.attackCooldown, 0.14);
+    this.attackAnimTimer = 0;
+    this.muzzleFlashTimer = 0;
+    this.pistolProp.muzzleFlash.visible = false;
+    this.switchAnimTimer = 0.18;
+    this.sound.playWeaponSwitch();
+    this.syncActiveViewmodelVisibility();
+    return next;
+  }
+
+  public unlockAndMaybeEquipWeapon(id: WeaponId, autoEquip = false): boolean {
+    const unlockedNew = this.combat.unlockWeapon(id, autoEquip);
+    if (autoEquip) {
+      this.switchAnimTimer = 0.2;
+      this.sound.playWeaponSwitch();
+    }
+    this.syncActiveViewmodelVisibility();
+    return unlockedNew;
+  }
+
+  public triggerReload(): {
+    started: boolean;
+    reason: 'not_ranged' | 'already_reloading' | 'mag_full' | 'no_reserve' | null;
+  } {
+    const res = this.combat.startReload();
+    if (res.started) {
+      this.sound.playPistolReload(false);
+    }
+    return res;
   }
 
   public emitNoise(event: NoiseEvent, nightFactor = 0, rainIntensity = 0): void {
@@ -415,52 +520,181 @@ export class ZombieManager {
 
   public triggerPlayerAttack(
     playerX: number,
+    playerEyeY: number,
     playerZ: number,
     playerYaw: number,
-    nightFactor = 0
-  ): { triggered: boolean; result: MeleeHitResult | null; killedSurgeId?: string } {
-    if (this.meleeCooldown > 0) {
-      return { triggered: false, result: null };
+    playerPitch: number,
+    nightFactor = 0,
+    context?: { isMoving?: boolean; isSprinting?: boolean; exhausted?: boolean }
+  ): PlayerAttackAttemptResult {
+    const weapon = this.combat.getEquippedWeapon();
+    if (this.attackCooldown > 0) {
+      return {
+        triggered: false,
+        weaponId: weapon.id,
+        staminaSpent: 0,
+        recoilKick: 0,
+        result: null,
+      };
     }
 
-    this.meleeCooldown = DEFAULT_MELEE_CONFIG.cooldownSec;
-    this.meleeSwingTimer = 0.28;
-    this.sound.playMeleeSwing();
+    if (weapon.kind === 'ranged') {
+      const snap = this.combat.getSnapshot();
+      if (snap.isReloading) {
+        return {
+          triggered: false,
+          weaponId: weapon.id,
+          staminaSpent: 0,
+          recoilKick: 0,
+          result: null,
+        };
+      }
 
-    const agents = this.agentsCache;
+      if (!this.combat.consumeRoundOnFire()) {
+        this.attackCooldown = 0.24;
+        this.attackMaxCooldown = 0.24;
+        this.sound.playDryFire();
+        const autoReload = this.combat.startReload();
+        if (autoReload.started) {
+          this.sound.playPistolReload(false);
+        }
+        return {
+          triggered: false,
+          dryFire: true,
+          autoReloadStarted: autoReload.started,
+          weaponId: weapon.id,
+          staminaSpent: 0,
+          recoilKick: 0,
+          result: null,
+        };
+      }
+
+      this.attackCooldown = weapon.cooldownSec;
+      this.attackMaxCooldown = weapon.cooldownSec;
+      this.attackAnimTimer = weapon.animDurationSec;
+      this.attackAnimDuration = weapon.animDurationSec;
+      this.muzzleFlashTimer = 0.055;
+      this.pistolProp.muzzleFlash.visible = true;
+      this.sound.playPistolShot();
+
+      this.emitNoise(
+        {
+          x: playerX,
+          z: playerZ,
+          radius: weapon.airNoiseRadius,
+          source: 'combat',
+        },
+        nightFactor
+      );
+
+      const spreadRadians = context?.isSprinting
+        ? 0.032
+        : context?.isMoving
+          ? 0.015
+          : 0.004;
+
+      const result = performPlayerRangedShot(
+        this.agentsCache,
+        this.colliders,
+        weapon,
+        {
+          playerX,
+          playerEyeY,
+          playerZ,
+          playerYaw,
+          playerPitch,
+          spreadRadians,
+        }
+      );
+
+      let killedSurgeId: string | undefined;
+      if (result.hit) {
+        if (result.crit) {
+          this.sound.playCritHit();
+        } else {
+          this.sound.playMeleeHit();
+        }
+        if (result.killed) {
+          this.zombiesDefeated += 1;
+          this.sound.playZombieDeath();
+          const killedAgent = this.agentsCache.find((a) => a.id === result.targetId);
+          if (killedAgent?.surgeId) {
+            killedSurgeId = killedAgent.surgeId;
+          }
+        }
+      }
+
+      return {
+        triggered: true,
+        weaponId: weapon.id,
+        staminaSpent: 0,
+        recoilKick: 0.034,
+        result,
+        killedSurgeId,
+      };
+    }
+
+    // Melee weapon (Steel Pipe or Combat Knife)
+    const cooldown = context?.exhausted ? weapon.cooldownSec * 1.18 : weapon.cooldownSec;
+    this.attackCooldown = cooldown;
+    this.attackMaxCooldown = cooldown;
+    this.attackAnimTimer = weapon.animDurationSec;
+    this.attackAnimDuration = weapon.animDurationSec;
+
+    if (weapon.id === 'scrap_blade') {
+      this.sound.playKnifeSwing();
+    } else {
+      this.sound.playMeleeSwing();
+    }
+
+    const result = performWeaponMelee(
+      this.agentsCache,
+      playerX,
+      playerZ,
+      playerYaw,
+      this.colliders,
+      weapon,
+      Boolean(context?.exhausted)
+    );
+
+    // Subtle noise when swinging in empty air, louder metallic impact on solid hit
     this.emitNoise(
       {
         x: playerX,
         z: playerZ,
-        radius: 10.5,
+        radius: result.hit ? weapon.hitNoiseRadius : weapon.airNoiseRadius,
         source: 'combat',
       },
       nightFactor
     );
 
-    const result = performPlayerMelee(
-      agents,
-      playerX,
-      playerZ,
-      playerYaw,
-      this.colliders,
-      DEFAULT_MELEE_CONFIG
-    );
-
     let killedSurgeId: string | undefined;
     if (result.hit) {
-      this.sound.playMeleeHit();
+      if (result.crit) {
+        this.sound.playCritHit();
+      } else if (weapon.id === 'scrap_blade') {
+        this.sound.playKnifeHit();
+      } else {
+        this.sound.playMeleeHit();
+      }
       if (result.killed) {
         this.zombiesDefeated += 1;
         this.sound.playZombieDeath();
-        const killedAgent = agents.find((a) => a.id === result.targetId);
+        const killedAgent = this.agentsCache.find((a) => a.id === result.targetId);
         if (killedAgent?.surgeId) {
           killedSurgeId = killedAgent.surgeId;
         }
       }
     }
 
-    return { triggered: true, result, killedSurgeId };
+    return {
+      triggered: true,
+      weaponId: weapon.id,
+      staminaSpent: weapon.staminaCost,
+      recoilKick: result.hit ? 0.015 : 0,
+      result,
+      killedSurgeId,
+    };
   }
 
   public update(
@@ -473,14 +707,28 @@ export class ZombieManager {
     nightFactor: number,
     flashlightOn = false,
     extraContext?: Omit<ZombieStepContext, 'isMoving' | 'isSprinting'>
-  ): { playerDamage: number } {
+  ): { playerDamage: number; reloadCompleted: boolean } {
     this.elapsedSec += dt;
 
-    if (this.meleeCooldown > 0) {
-      this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
+    if (this.attackCooldown > 0) {
+      this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     }
-    if (this.meleeSwingTimer > 0) {
-      this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dt);
+    if (this.attackAnimTimer > 0) {
+      this.attackAnimTimer = Math.max(0, this.attackAnimTimer - dt);
+    }
+    if (this.switchAnimTimer > 0) {
+      this.switchAnimTimer = Math.max(0, this.switchAnimTimer - dt);
+    }
+    if (this.muzzleFlashTimer > 0) {
+      this.muzzleFlashTimer = Math.max(0, this.muzzleFlashTimer - dt);
+      if (this.muzzleFlashTimer <= 0) {
+        this.pistolProp.muzzleFlash.visible = false;
+      }
+    }
+
+    const combatStep = this.combat.step(dt);
+    if (combatStep.reloadCompleted) {
+      this.sound.playPistolReload(true);
     }
 
     this.updateFirstPersonWeapon(dt, isMoving, isSprinting);
@@ -510,7 +758,6 @@ export class ZombieManager {
       this.sound.playPlayerHurt();
     }
 
-    // Sync 3D transforms & distance-culled procedural rig animations
     for (const ent of this.entities) {
       const a = ent.agent;
       ent.group.position.set(a.x, a.y, a.z);
@@ -538,39 +785,92 @@ export class ZombieManager {
       }
     }
 
-    return { playerDamage: tickRes.playerDamage };
+    return {
+      playerDamage: tickRes.playerDamage,
+      reloadCompleted: combatStep.reloadCompleted,
+    };
   }
 
   private updateFirstPersonWeapon(dt: number, isMoving: boolean, isSprinting: boolean): void {
     const bobRate = isSprinting ? 12 : isMoving ? 8 : 2.2;
     this.weaponBobTime += dt * bobRate;
-    const bobX = isMoving ? Math.cos(this.weaponBobTime * 0.5) * 0.012 : 0;
+    const bobX = isMoving ? Math.cos(this.weaponBobTime * 0.5) * 0.011 : 0;
     const bobY = isMoving
-      ? Math.abs(Math.sin(this.weaponBobTime)) * 0.014
-      : Math.sin(this.weaponBobTime) * 0.003;
+      ? Math.abs(Math.sin(this.weaponBobTime)) * 0.013
+      : Math.sin(this.weaponBobTime) * 0.0028;
 
-    if (this.meleeSwingTimer > 0) {
-      const progress = 1 - this.meleeSwingTimer / 0.28;
+    const switchDrop = this.switchAnimTimer > 0 ? (this.switchAnimTimer / 0.18) * 0.14 : 0;
+    const combatSnap = this.combat.getSnapshot();
+    const active = combatSnap.equippedWeaponId;
+
+    if (active === 'service_pistol') {
+      const reloadTilt = combatSnap.isReloading
+        ? Math.sin(combatSnap.reloadProgress * Math.PI)
+        : 0;
+      const recoil =
+        this.attackAnimTimer > 0
+          ? Math.sin((this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration)) * Math.PI)
+          : 0;
+
+      this.pistolProp.group.position.set(
+        0.27 + bobX * 0.65 - reloadTilt * 0.05,
+        -0.24 + bobY * 0.65 - switchDrop - reloadTilt * 0.12 + recoil * 0.018,
+        -0.44 + recoil * 0.055
+      );
+      this.pistolProp.group.rotation.set(
+        0.03 + recoil * 0.24 - reloadTilt * 0.45,
+        -0.08 + reloadTilt * 0.35,
+        0.02 - reloadTilt * 0.42
+      );
+      return;
+    }
+
+    if (active === 'scrap_blade') {
+      if (this.attackAnimTimer > 0) {
+        const progress = 1 - this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration);
+        const slash = Math.sin(progress * Math.PI);
+        this.bladeProp.group.position.set(
+          0.29 - slash * 0.26,
+          -0.27 + slash * 0.06,
+          -0.45 - slash * 0.14
+        );
+        this.bladeProp.group.rotation.set(
+          0.28 - slash * 0.95,
+          -0.42 + slash * 1.15,
+          0.34 + slash * 0.95
+        );
+      } else {
+        this.bladeProp.group.position.set(0.29 + bobX, -0.27 + bobY - switchDrop, -0.45);
+        this.bladeProp.group.rotation.set(0.28, -0.42, 0.34);
+      }
+      return;
+    }
+
+    // Steel Pipe default melee
+    if (this.attackAnimTimer > 0) {
+      const progress = 1 - this.attackAnimTimer / Math.max(0.05, this.attackAnimDuration);
       const arc = Math.sin(progress * Math.PI);
-      this.meleeProp.group.position.set(
+      this.pipeProp.group.position.set(
         0.32 - arc * 0.22,
         -0.31 + arc * 0.11,
-        -0.50 - arc * 0.14
+        -0.5 - arc * 0.14
       );
-      this.meleeProp.group.rotation.set(
+      this.pipeProp.group.rotation.set(
         0.24 - arc * 1.15,
         -0.35 + arc * 0.85,
         0.22 + arc * 0.65
       );
     } else {
-      this.meleeProp.group.position.set(0.32 + bobX, -0.31 + bobY, -0.50);
-      this.meleeProp.group.rotation.set(0.24, -0.35, 0.22);
+      this.pipeProp.group.position.set(0.32 + bobX, -0.31 + bobY - switchDrop, -0.5);
+      this.pipeProp.group.rotation.set(0.24, -0.35, 0.22);
     }
   }
 
   public dispose(): void {
     this.clearEntities();
     this.sharedGeos.dispose();
-    this.meleeProp.dispose();
+    this.pipeProp.dispose();
+    this.bladeProp.dispose();
+    this.pistolProp.dispose();
   }
 }

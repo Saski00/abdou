@@ -145,7 +145,8 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       { label: 'Look', value: 'Drag Right Screen' },
       { label: 'Sprint', value: 'Hold Sprint / Push Full' },
       { label: 'Interact', value: 'Tap Context Button' },
-      { label: 'Attack', value: 'Swing Button' },
+      { label: 'Attack / Fire', value: 'Attack Button' },
+      { label: 'Switch / Reload', value: 'Weapon / Reload Buttons' },
       { label: 'Quick Use', value: 'Tap Pills 1 / 2 / 3' },
       { label: 'Flashlight', value: 'Light Button' },
       { label: 'Pack / Map', value: 'Top HUD Buttons' },
@@ -154,7 +155,9 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       { label: 'Move / Jump', value: 'WASD / Space' },
       { label: 'Sprint / Crouch', value: 'Shift / C' },
       { label: 'Interact / Door', value: 'E' },
-      { label: 'Attack (Pipe)', value: 'Left Click / Q' },
+      { label: 'Attack / Fire', value: 'Left Click / Q' },
+      { label: 'Switch Weapon', value: 'X / Tab / Scroll' },
+      { label: 'Reload Pistol', value: 'V' },
       { label: 'Flashlight', value: 'F' },
       { label: 'Rest (Safe)', value: 'R' },
       { label: 'Pack / Missions / Map', value: 'I / M / N' },
@@ -249,7 +252,7 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     objectiveAria: 'Active mission objective',
     dismissHintAria: 'Dismiss hint',
     desktopControlsBanner:
-      'WASD Move · Shift Sprint · C Crouch · E Interact · Click/Q Attack · 1/2/3 Use · R Rest · F Light · I Pack · M Missions · N Map · Esc Pause',
+      'WASD Move · Shift Sprint · C Crouch · E Interact · Click/Q Attack · X/Tab Switch · V Reload · 1/2/3 Use · R Rest · F Light · I/M/N UI',
     defaultLocationStreets: 'Main Street · Central District',
     defaultLocationOutsideShop: 'Outside The Last Shop',
   },
@@ -259,9 +262,55 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     flashlightOnAria: 'Turn flashlight off',
     flashlightOffAria: 'Turn flashlight on',
     meleeAttackAria: 'Melee attack',
+    rangedAttackAria: 'Fire pistol',
     attackLabel: 'Attack',
+    fireLabel: 'Fire',
+    switchWeaponAria: 'Switch weapon',
+    switchLabel: 'Switch',
+    reloadAria: 'Reload pistol',
+    reloadLabel: 'Reload',
     jumpAria: 'Jump',
     jumpLabel: 'Jump',
+  },
+  combat: {
+    weapons: {
+      steel_pipe: {
+        name: 'Steel Pipe',
+        shortTag: 'PIPE',
+        description: 'Heavy blunt bar with long reach and reliable stagger impact.',
+      },
+      scrap_blade: {
+        name: 'Combat Knife',
+        shortTag: 'KNIFE',
+        description: 'Fast, quiet steel blade that costs little stamina and rewards precision strikes.',
+      },
+      service_pistol: {
+        name: '9mm Service Pistol',
+        shortTag: '9MM',
+        description: 'Accurate semi-auto sidearm. Lethal at range, but gunfire draws nearby infected.',
+      },
+    },
+    ammoUnit: '9mm',
+    ammoBadge: '{mag}/{reserve}',
+    reloadingLabel: 'Reloading...',
+    emptyMagLabel: 'EMPTY',
+    switchWeaponAria: 'Switch weapon',
+    reloadAria: 'Reload pistol',
+    reloadBtn: 'Reload [V]',
+    switchBtn: 'Switch [X]',
+    equipBtn: 'Equip',
+    equippedBadge: 'Equipped',
+    unlockWeaponToast: 'Acquired Weapon: {name}',
+    foundAmmoToast: 'Found +{qty} {unit}',
+    critHitLabel: 'CRIT',
+    meleeRoleLabel: 'Melee',
+    rangedRoleLabel: 'Ranged',
+    damageStat: 'DMG {dmg}',
+    critStat: 'CRIT {dmg}',
+    noiseQuiet: 'Quiet',
+    noiseMedium: 'Audible',
+    noiseLoud: 'Loud',
+    pistolReserveSummary: 'Mag {mag}/{magSize} · Reserve {reserve}/{maxReserve}',
   },
   inventoryModal: {
     title: 'Inventory',
@@ -332,6 +381,10 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     closeAria: 'Close workbench',
     headerStats: 'Pack {used}/{cap} · Wood {wood} · Scrap {scrap}',
     outputBadge: '+{qty} {item} (Pack {owned})',
+    weaponOutputBadge: '{weapon}',
+    ammoOutputBadge: '+{qty} {unit} (Reserve {reserve}/{max})',
+    ownedWeaponBtn: 'Owned',
+    ammoFullBtn: 'Ammo Full',
     craftBtn: 'Craft',
     footerTouch: 'Tap Craft to assemble survival supplies from your pack.',
     footerDesktop: 'Press E or ESC to close · Crafted items go straight into your backpack',
@@ -622,7 +675,16 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
       shopClosedToast: 'Shop closed to customers',
       infectedDefeated: 'Infected defeated',
       hitInfected: 'Hit Infected (-{dmg} HP)',
+      hitCriticalInfected: 'Critical Hit! (-{dmg} HP)',
       swingMissed: 'Swing missed',
+      healOnCooldown: 'Bandage stabilizing — wait {sec}s',
+      weaponSwitched: 'Equipped: {name}',
+      weaponUnlocked: 'Acquired Weapon: {name}',
+      ammoFound: 'Found +{qty} {unit} rounds',
+      pistolReloading: 'Reloading {name}...',
+      pistolReloaded: '{name} reloaded ({mag}/{reserve})',
+      pistolEmptyNoAmmo: '{name}: Out of 9mm ammo',
+      pistolMagFull: 'Magazine is already full',
       attackedByInfected: 'Attacked by infected (-{dmg} HP)',
       noSaveFound: 'No saved game found',
       freshInfectedNewDay: 'Day {day}: Fresh infected spotted on the outer streets',
@@ -843,6 +905,14 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
     craft_ration: {
       name: 'Preserve Tin Ration',
       description: 'Seal dry emergency rations in reclaimed tinware over a bench burner.',
+    },
+    craft_scrap_blade: {
+      name: 'Forge Combat Knife',
+      description: 'Grind salvaged steel plate into a fast, quiet close-quarters blade.',
+    },
+    craft_pistol_ammo: {
+      name: 'Press 9mm Scrap Rounds',
+      description: 'Hand-load 7 salvaged 9mm rounds for the Service Pistol.',
     },
   },
   shopLevels: {
@@ -2527,6 +2597,338 @@ export const EN_TRANSLATIONS: TranslationCatalog = {
         title: 'Sudden Uncanny Stillness',
         description:
           'Wind and distant street echoes drop away all at once, leaving an uneasy, heavy silence.',
+      },
+    },
+  },
+  narrative: {
+    talkBtn: 'Talk',
+    manageStaffBtn: 'Manage Staff',
+    dialogueHeading: 'Conversation & Story',
+    allTopicsCaughtUp: 'All current story topics discussed — check back as District 04 unfolds.',
+    trustLabel: 'Trust {val}/3',
+    trustTiers: {
+      tier0: 'Cautious',
+      tier1: 'Acquainted',
+      tier2: 'Trusted',
+      tier3: 'Sworn Ally',
+    },
+    needItemShort: 'Need {qty} {item}',
+    clueLoggedBadge: 'Clue Logged: {title}',
+    clueLoggedToast: 'Journal Clue Logged: {title}',
+    relayChoiceHeading: 'Select 148.6 MHz Broadcast Protocol',
+    tabJournalCrew: 'Crew & Choices',
+    actsHeading: 'Story Arcs',
+    crewDossiersHeading: 'District 04 Survivors & Crew',
+    recordedChoicesHeading: 'Recorded Decisions',
+    noChoicesYetTitle: 'No major decisions recorded yet.',
+    noChoicesYetDesc:
+      'Speak with District 04 survivors—in the streets or on your staff—and shape how The Last Shop survives.',
+    recruitedAsBadge: 'Crew · {role}',
+    inDistrictBadge: 'Outpost · {loc}',
+    topicsProgress: 'Talks {done}/{total}',
+    dayBadge: 'Day {day}',
+    endingStatusHeading: 'Beacon Outcome',
+    epilogueHeading: 'Your Path Through District 04',
+    epilogueTruthUncovered:
+      'Complete Class-V4 evidence from Vale, the Police Precinct, Mercy Clinic, and the Research Lab was archived alongside the recovery log.',
+    epilogueTruthPartial:
+      'Fragments of the Class-V4 containment failure surfaced, leaving deeper questions inside District 04 archives.',
+    epilogueCrewStrong:
+      'Trusted survivors now staff The Last Shop, turning a lone storefront into a dependable community anchor.',
+    epilogueShopThriving:
+      'Your expanded shelves and storeroom give returning residents a working supply hub on Main Boulevard.',
+    acts: {
+      act1_shelter: {
+        title: 'Act I · First Light on Main Boulevard',
+        subtitle: 'Restore The Last Shop, gather street supplies, and trace the storeroom Channel 4 signal.',
+      },
+      act2_investigation: {
+        title: 'Act II · The Class-V4 Trail',
+        subtitle: 'Follow the evacuation convoy from Starlight Diner to Vale Dispensary and Depot 04.',
+      },
+      act3_convergence: {
+        title: 'Act III · Beacon Over District 04',
+        subtitle: 'Breach North Roadblock, recover Dr. Vance’s frequency, and decide what the valley hears.',
+      },
+    },
+    broadcastChoices: {
+      dawn_beacon: {
+        title: 'Open Haven Protocol',
+        subtitle: 'All-Clear & Safe Shelter Coordinates',
+        description:
+          'Broadcast The Last Shop’s location and Dr. Vance’s daylight recovery method so scattered valley families can return safely.',
+        consequenceSummary: 'Broadcast open safe-haven coordinates across the valley on 148.6 MHz.',
+      },
+      truth_unsealed: {
+        title: 'Truth Unsealed Protocol',
+        subtitle: 'Expose V4 Records + Recovery Frequency',
+        description:
+          'Attach the confiscated Class-V4 containment manifests from Vale, Precinct 04, and Mercy Clinic to force accountable medical relief.',
+        lockedReason:
+          'Requires deep V4 investigation (8+ clues logged, or Vale Manifest + Precinct/Clinic/Lab archive).',
+        consequenceSummary: 'Transmitted unsealed Class-V4 outbreak records alongside the safe-haven beacon.',
+      },
+      iron_enclave: {
+        title: 'Iron Perimeter Protocol',
+        subtitle: 'Fortified Trade Enclave Broadcast',
+        description:
+          'Transmit armed checkpoint routing turning The Last Shop and North Avenue into a defended, self-reliant supply stronghold.',
+        lockedReason:
+          'Requires Shop Level 2+ and strong defense (2+ hired crew or 20+ infected cleared).',
+        consequenceSummary: 'Established a fortified trade corridor anchored by The Last Shop.',
+      },
+    },
+    choiceTitles: {
+      choice_surv_maya_intro: 'Maya · Water & Trade Pact',
+      choice_surv_maya_chapter: 'Maya · Dr. Vance’s Notes',
+      choice_surv_soren_intro: 'Soren · Street Triage',
+      choice_surv_soren_chapter: 'Soren · North Roadblock Watch',
+      choice_surv_dante_intro: 'Dante · Depot 04 Salvage',
+      choice_surv_dante_chapter: 'Dante · Freight Routing',
+      choice_surv_kira_intro: 'Kira · Alley Recon Lead',
+      choice_surv_kira_chapter: 'Kira · Convoy Aftermath',
+      choice_surv_toby_intro: 'Toby · Porch Sanctuary',
+      choice_surv_toby_chapter: 'Toby · Night Watch Rules',
+      choice_final_broadcast: '148.6 MHz Final Transmission',
+    },
+    survivorBios: {
+      surv_maya:
+        'Former neighborhood grocer holding out beside Dr. Elena Vance’s abandoned residence in the southwest block.',
+      surv_soren:
+        'Wounded perimeter guard who held the Vale intersection until the Day 0 blackout severed communications.',
+      surv_dante:
+        'Depot 04 freight coordinator who locked down surviving civil-defense tools before the power grid failed.',
+      surv_kira:
+        'Agile alley courier and lookout stationed near Starlight Diner who witnessed the pre-dawn quarantine drop.',
+      surv_toby:
+        'Practical wanderer sheltering beside The Last Shop who knows how quickly hungry streets turn hostile.',
+    },
+    survivorDialogues: {
+      surv_maya: {
+        intro: {
+          stageTitle: 'SW Block Encounter',
+          speakerLine:
+            'Every tap in Mercer Flats ran dry on Day 2. If your generator at The Last Shop is still holding, how do we keep neighbors fed without sparking a panic?',
+          choices: {
+            opt_a: {
+              label: 'Share 1 Water Bottle & set fair shelter rations',
+              hint: '-1 Water · +2 Trust · +1 Goodwill · +$20',
+              outcomeToast: 'Maya gratefully shared her emergency register cash (+$20, +Trust).',
+              consequenceSummary: 'Shared clean water with Maya and agreed on fair neighborhood rationing.',
+            },
+            opt_b: {
+              label: 'Trade strictly for cash & salvage first',
+              hint: '+1 Trust · +1 Wood',
+              outcomeToast: 'Maya nodded pragmatically and handed over dry crate slats (+1 Wood).',
+              consequenceSummary: 'Agreed with Maya to keep strict trade margins until streets stabilize.',
+            },
+          },
+        },
+        chapter: {
+          stageTitle: 'After Vance’s Frequency',
+          speakerLine:
+            'Dr. Vance always said ash fog kept the V4 spores lingering near ground level. Do you believe survivors outside the ridge will actually answer 148.6 MHz?',
+          choices: {
+            opt_a: {
+              label: 'Promise to keep the counter open for returning families',
+              hint: '+1 Trust · +1 Goodwill · +$25',
+              outcomeToast: 'Maya pledged full support for returning District 04 families (+$25).',
+              consequenceSummary: 'Committed The Last Shop to welcome returning valley families.',
+            },
+            opt_b: {
+              label: 'Focus on self-sufficiency first—trust no unvetted convoy',
+              hint: '+1 Trust · +2 Scrap Metal',
+              outcomeToast: 'Maya passed along spare shutter brackets from the hall (+2 Scrap).',
+              consequenceSummary: 'Prioritized shop security and cautious vetting before outer convoys arrive.',
+            },
+          },
+        },
+      },
+      surv_soren: {
+        intro: {
+          stageTitle: 'Vale Intersection Watch',
+          speakerLine:
+            'Those bio-seal canisters burst behind Vale before anyone blew a whistle. My leg is torn up—what do you want done about the infected crowding Main Boulevard?',
+          choices: {
+            opt_a: {
+              label: 'Patch him up now (-1 Medical Supplies)',
+              hint: '-1 Medical · +2 Trust · +15 HP · +4 Ammo',
+              outcomeToast: 'Soren bound both cuts and shared spare 9mm cartridges (+4 Ammo, +Trust).',
+              consequenceSummary: 'Treated Soren’s wounds immediately and earned his tactical backing.',
+            },
+            opt_b: {
+              label: 'Map infected patrol blind spots together',
+              hint: '+1 Trust · +2 Scrap Metal',
+              outcomeToast: 'Soren sketched safe alleys and kicked over usable steel rebar (+2 Scrap).',
+              consequenceSummary: 'Mapped Main Boulevard chokepoints with Soren to keep patrols quiet.',
+            },
+          },
+        },
+        chapter: {
+          stageTitle: 'V4 Cover-Up Aftermath',
+          speakerLine:
+            'Seeing that Class-V4 stamp in Vale’s dispensary proves someone buried cold-chain failures until it was too late. What happens when the relay goes live?',
+          choices: {
+            opt_a: {
+              label: 'Expose the V4 cover-up so relief teams bring real gear',
+              hint: '+1 Trust · +4 Ammo',
+              outcomeToast: 'Soren racked his spare magazine and handed you extra rounds (+4 Ammo).',
+              consequenceSummary: 'Backed Soren’s call to broadcast accountability along with rescue.',
+            },
+            opt_b: {
+              label: 'Keep the signal focused strictly on perimeter defense',
+              hint: '+1 Trust · +1 Medical Supplies',
+              outcomeToast: 'Soren tossed over a sealed field dressing (+1 Medical Supplies).',
+              consequenceSummary: 'Focused Soren on locking down North Avenue before stirring politics.',
+            },
+          },
+        },
+      },
+      surv_dante: {
+        intro: {
+          stageTitle: 'Depot 04 Freight Cage',
+          speakerLine:
+            'Dispatcher Reyes ordered the relay coils north while I locked down the yard cage. Half District 04 still thinks Depot 04 holds army rations.',
+          choices: {
+            opt_a: {
+              label: 'Clear the latch together (-1 Scrap Metal)',
+              hint: '-1 Scrap · +2 Trust · +2 Wood · +$25',
+              outcomeToast: 'Dante freed a stuck freight locker (+2 Wood, +$25, +Trust).',
+              consequenceSummary: 'Helped Dante crack an old Depot locker and split the salvaged timber.',
+            },
+            opt_b: {
+              label: 'Catalog surviving warehouse stock quietly',
+              hint: '+1 Trust · +1 Canned Food',
+              outcomeToast: 'Dante handed over an intact shelf tin from his desk (+1 Canned Food).',
+              consequenceSummary: 'Reviewed Depot 04’s quiet freight manifest with Dante.',
+            },
+          },
+        },
+        chapter: {
+          stageTitle: 'Guild Supply Lines',
+          speakerLine:
+            'With lights back on at The Last Shop, old freight drivers from outside the ridge might risk Central Avenue again—if you give them clear routing.',
+          choices: {
+            opt_a: {
+              label: 'Establish open convoy drop points beside The Last Shop',
+              hint: '+1 Trust · +1 Goodwill · +$30',
+              outcomeToast: 'Dante drafted safe convoy markings for Main Boulevard (+$30).',
+              consequenceSummary: 'Set up open freight staging at The Last Shop with Dante.',
+            },
+            opt_b: {
+              label: 'Keep Depot 04 as an emergency reserve cache only',
+              hint: '+1 Trust · +2 Scrap Metal',
+              outcomeToast: 'Dante stowed spare reinforcement plates for you (+2 Scrap).',
+              consequenceSummary: 'Kept Depot 04 off main trade channels as a hidden backup cache.',
+            },
+          },
+        },
+      },
+      surv_kira: {
+        intro: {
+          stageTitle: 'Starlight Diner Lookout',
+          speakerLine:
+            'I watched trucks unload unmarked drums behind Vale ten minutes before the grid collapsed. Nobody in City Hall warned Main Street.',
+          choices: {
+            opt_a: {
+              label: 'Fund her street recon (-1 Canned Food)',
+              hint: '-1 Food · +2 Trust · +1 Goodwill · +4 Ammo',
+              outcomeToast: 'Kira shared an officer stash she spotted behind the diner (+4 Ammo).',
+              consequenceSummary: 'Supplied Kira’s scouting runs to track early outbreak shipments.',
+            },
+            opt_b: {
+              label: 'Ask her to keep eyes on Main Boulevard traffic',
+              hint: '+1 Trust · +1 Water Bottle',
+              outcomeToast: 'Kira slipped you a cold bottle from the diner cooler (+1 Water).',
+              consequenceSummary: 'Had Kira watch Main Boulevard approaches instead of deep alleys.',
+            },
+          },
+        },
+        chapter: {
+          stageTitle: 'Vale Evidence Confirmed',
+          speakerLine:
+            'You found the Vale manifest—and word is spreading fast that The Last Shop isn’t hoarding supplies like the old Depot brass did.',
+          choices: {
+            opt_a: {
+              label: 'Send scouts to guide stragglers toward our porch light',
+              hint: '+1 Trust · +1 Goodwill · +1 Canned Food',
+              outcomeToast: 'Kira’s runners left a trail pack by the door (+1 Canned Food).',
+              consequenceSummary: 'Sent Kira’s scouts to guide lost District 04 survivors home.',
+            },
+            opt_b: {
+              label: 'Stay low profile until North Roadblock is secure',
+              hint: '+1 Trust · +4 Ammo',
+              outcomeToast: 'Kira slipped 9mm rounds across the porch rail (+4 Ammo).',
+              consequenceSummary: 'Kept survivor movement quiet until North Roadblock is cleared.',
+            },
+          },
+        },
+      },
+      surv_toby: {
+        intro: {
+          stageTitle: 'Vacant Lot Watch',
+          speakerLine:
+            'Most storefronts boarded up and vanished on Night 1. Keeping your sign lit takes guts—what’s your plan when the ash fog gets thicker?',
+          choices: {
+            opt_a: {
+              label: 'Offer open shelter terms & fair trade at dusk',
+              hint: '+2 Trust · +1 Goodwill · +1 Water Bottle',
+              outcomeToast: 'Toby shared water from his pack (+1 Water, +Goodwill).',
+              consequenceSummary: 'Welcomed Toby with open shelter guarantees regardless of cash.',
+            },
+            opt_b: {
+              label: 'Enforce strict dusk curfews & barricades',
+              hint: '+1 Trust · +2 Wood',
+              outcomeToast: 'Toby stacked sturdy barricade planks by your wall (+2 Wood).',
+              consequenceSummary: 'Set strict curfew rules around The Last Shop with Toby.',
+            },
+          },
+        },
+        chapter: {
+          stageTitle: 'Roadblock Echoes',
+          speakerLine:
+            'Everyone down the block heard gunfire rolling from North Roadblock. Once that repeater hums, whole caravans could show up overnight.',
+          choices: {
+            opt_a: {
+              label: 'Expand the porch into an open community crossroads',
+              hint: '+1 Trust · +1 Goodwill · +$20',
+              outcomeToast: 'Toby pitched in spare trade scrip for the counter (+$20).',
+              consequenceSummary: 'Planned with Toby to expand The Last Shop into a valley crossroads.',
+            },
+            opt_b: {
+              label: 'Keep defenses tight and ration entry carefully',
+              hint: '+1 Trust · +1 Scrap Metal · +1 Wood',
+              outcomeToast: 'Toby brought reinforcing scrap and timber (+1 Scrap, +1 Wood).',
+              consequenceSummary: 'Prepared tighter checkpoint barricades around the shopfront.',
+            },
+          },
+        },
+      },
+    },
+    endings: {
+      dawn_beacon: {
+        badge: 'District 04 · 148.6 MHz Open Haven',
+        title: 'Hope on 148.6 MHz',
+        body:
+          'With the North Roadblock repeater calibrated and cleared, District 04 finally calls home across the valley. Dr. Vance’s research proves Ashfall spores decay in open daylight—and word of The Last Shop brings scattered families back to Main Boulevard.',
+        epilogueBase:
+          'Survivors across Mercer Flats and the outer ridge lock onto your clear coordinates, turning The Last Shop’s glowing sign into District 04’s heartbeat.',
+      },
+      truth_unsealed: {
+        badge: 'District 04 · Class-V4 Dossier Unsealed',
+        title: 'The Truth at 148.6 MHz',
+        body:
+          'Alongside the safe-haven coordinates, you transmitted every sealed manifest from Vale Dispensary, Precinct 04, Mercy Clinic, and the V4 Lab. Regional medical relief convoys roll in prepared—knowing both how the outbreak began and how sunlight breaks its grip.',
+        epilogueBase:
+          'No hidden canisters or buried logs remain in District 04. Accountability and science arrive together at sunrise.',
+      },
+      iron_enclave: {
+        badge: 'District 04 · Fortified Corridor Online',
+        title: 'Holders of the Last Avenue',
+        body:
+          'Backed by a thriving storehouse and battle-tested crew, your 148.6 MHz signal lays down disciplined convoy corridors through North Avenue. Traders arrive under armed escort, transforming The Last Shop from a corner shelter into a resilient frontier stronghold.',
+        epilogueBase:
+          'With stocked backrooms and armed watch along the roadblock, District 04 stands defended on its own terms.',
       },
     },
   },

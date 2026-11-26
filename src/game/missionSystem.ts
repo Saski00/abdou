@@ -3,14 +3,18 @@ import {
   formatTemplate,
   getTranslations,
   tClue,
+  tEnding,
   tMission,
   tMissionObjectiveLabel,
+  tResource,
   tResourceName,
   tStoryObject,
   tSurvivor,
+  tTrustTierLabel,
 } from '../i18n';
-import { RESOURCE_ORDER, consumeInventoryResource } from './resources';
+import { RESOURCE_ORDER, addInventoryResource, consumeInventoryResource } from './resources';
 import {
+  CharacterDossierSummary,
   InventoryState,
   MissionCategory,
   MissionObjectiveSummary,
@@ -20,8 +24,15 @@ import {
   MissionSummary,
   ObjectiveType,
   ResourceId,
+  StoryActId,
+  StoryChoiceSummary,
   StoryClueSummary,
+  StoryEndingId,
+  StoryEndingSummary,
   StoryObjectInspectionData,
+  StoryRelayBroadcastChoice,
+  SurvivorDialogueChoice,
+  SurvivorDialogueTopicView,
 } from './types';
 
 export interface StoryObjectConfig {
@@ -909,6 +920,258 @@ export const MISSION_DEFINITIONS: MissionDefinition[] = [
   },
 ];
 
+export const STORY_OBJECT_TO_CLUE: Record<string, string> = {
+  story_shop_radio: 'clue_vale_dispatch',
+  story_diner_clipboard: 'clue_evac_convoy',
+  story_vale_manifest: 'clue_v4_leak',
+  story_depot_ledger: 'clue_depot_shipment',
+  story_roadblock_log: 'clue_convoy_route',
+  story_house_journal: 'clue_relay_frequency',
+  story_police_blotter: 'clue_precinct_report',
+  story_clinic_triage: 'clue_clinic_triage',
+  story_lab_terminal: 'clue_v4_containment',
+};
+
+export function getMissionActId(missionId: string): StoryActId | undefined {
+  if (
+    missionId === 'm1_open_doors' ||
+    missionId === 'm2_street_supplies' ||
+    missionId === 'm3_static_signal'
+  ) {
+    return 'act1_shelter';
+  }
+  if (
+    missionId === 'm4_diner_clues' ||
+    missionId === 'm5_dispensary_secret' ||
+    missionId === 'm6_build_sanctuary' ||
+    missionId === 'm7_voices_in_dark'
+  ) {
+    return 'act2_investigation';
+  }
+  if (
+    missionId === 'm8_north_barricade' ||
+    missionId === 'm9_house_archive' ||
+    missionId === 'm10_ashfall_beacon'
+  ) {
+    return 'act3_convergence';
+  }
+  return undefined;
+}
+
+export const STORY_SURVIVOR_IDS = [
+  'surv_maya',
+  'surv_soren',
+  'surv_dante',
+  'surv_kira',
+  'surv_toby',
+] as const;
+
+export const SURVIVOR_CHAPTER_GATE_MISSION: Record<string, string> = {
+  surv_kira: 'm4_diner_clues',
+  surv_soren: 'm5_dispensary_secret',
+  surv_dante: 'm7_voices_in_dark',
+  surv_maya: 'm9_house_archive',
+  surv_toby: 'm8_north_barricade',
+};
+
+export interface DialogueChoiceEffectConfig {
+  id: 'opt_a' | 'opt_b';
+  requiresResources?: Partial<InventoryState>;
+  trustDelta: number;
+  goodwillDelta?: number;
+  moneyDelta?: number;
+  healDelta?: number;
+  ammoDelta?: number;
+  grantResources?: Partial<InventoryState>;
+}
+
+export interface DialogueTopicConfig {
+  topicId: 'intro' | 'chapter';
+  unlockMissionId?: string;
+  choices: DialogueChoiceEffectConfig[];
+}
+
+export const SURVIVOR_DIALOGUE_CONFIGS: Record<string, DialogueTopicConfig[]> = {
+  surv_maya: [
+    {
+      topicId: 'intro',
+      choices: [
+        {
+          id: 'opt_a',
+          requiresResources: { water_bottle: 1 },
+          trustDelta: 2,
+          goodwillDelta: 1,
+          moneyDelta: 20,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { wood: 1 },
+        },
+      ],
+    },
+    {
+      topicId: 'chapter',
+      unlockMissionId: 'm9_house_archive',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 1,
+          goodwillDelta: 1,
+          moneyDelta: 25,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { scrap_metal: 2 },
+        },
+      ],
+    },
+  ],
+  surv_soren: [
+    {
+      topicId: 'intro',
+      choices: [
+        {
+          id: 'opt_a',
+          requiresResources: { medical_supplies: 1 },
+          trustDelta: 2,
+          healDelta: 15,
+          ammoDelta: 4,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { scrap_metal: 2 },
+        },
+      ],
+    },
+    {
+      topicId: 'chapter',
+      unlockMissionId: 'm5_dispensary_secret',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 1,
+          ammoDelta: 4,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { medical_supplies: 1 },
+        },
+      ],
+    },
+  ],
+  surv_dante: [
+    {
+      topicId: 'intro',
+      choices: [
+        {
+          id: 'opt_a',
+          requiresResources: { scrap_metal: 1 },
+          trustDelta: 2,
+          moneyDelta: 25,
+          grantResources: { wood: 2 },
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { canned_food: 1 },
+        },
+      ],
+    },
+    {
+      topicId: 'chapter',
+      unlockMissionId: 'm7_voices_in_dark',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 1,
+          goodwillDelta: 1,
+          moneyDelta: 30,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { scrap_metal: 2 },
+        },
+      ],
+    },
+  ],
+  surv_kira: [
+    {
+      topicId: 'intro',
+      choices: [
+        {
+          id: 'opt_a',
+          requiresResources: { canned_food: 1 },
+          trustDelta: 2,
+          goodwillDelta: 1,
+          ammoDelta: 4,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { water_bottle: 1 },
+        },
+      ],
+    },
+    {
+      topicId: 'chapter',
+      unlockMissionId: 'm4_diner_clues',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 1,
+          goodwillDelta: 1,
+          grantResources: { canned_food: 1 },
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          ammoDelta: 4,
+        },
+      ],
+    },
+  ],
+  surv_toby: [
+    {
+      topicId: 'intro',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 2,
+          goodwillDelta: 1,
+          grantResources: { water_bottle: 1 },
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { wood: 2 },
+        },
+      ],
+    },
+    {
+      topicId: 'chapter',
+      unlockMissionId: 'm8_north_barricade',
+      choices: [
+        {
+          id: 'opt_a',
+          trustDelta: 1,
+          goodwillDelta: 1,
+          moneyDelta: 20,
+        },
+        {
+          id: 'opt_b',
+          trustDelta: 1,
+          grantResources: { scrap_metal: 1, wood: 1 },
+        },
+      ],
+    },
+  ],
+};
+
 export interface MissionRuntimeContext {
   day: number;
   inventory: InventoryState;
@@ -926,6 +1189,7 @@ export interface MissionRuntimeContext {
   inspectedStoryObjects: string[];
   activatedStoryObjects: string[];
   surgeKills: Record<string, number>;
+  staffMembers?: { id: string; survivorId: string; professionLabel: string }[];
 }
 
 export type MissionEvent =
@@ -954,6 +1218,10 @@ export interface SerializedMissionState {
   surgeKills: Record<string, number>;
   endingCompleted: boolean;
   endingSeen: boolean;
+  choices?: Record<string, { optionId: string; day: number }>;
+  completedDialogues?: string[];
+  survivorTrust?: Record<string, number>;
+  selectedEndingId?: StoryEndingId | null;
 }
 
 export interface MissionProcessOutcome {
@@ -970,6 +1238,19 @@ export interface MissionProcessOutcome {
   endingJustCompleted: boolean;
 }
 
+export interface DialogueChoiceResolveResult {
+  ok: boolean;
+  nextInventory: InventoryState;
+  moneyDelta: number;
+  healDelta: number;
+  goodwillDelta: number;
+  ammoDelta: number;
+  trustDelta: number;
+  toast: string;
+  choiceId: string;
+  optionId: string;
+}
+
 export function getSurvivorStoryRemark(
   survivorId: string,
   completedMissionIds: ReadonlySet<string>,
@@ -981,14 +1262,7 @@ export function getSurvivorStoryRemark(
     return remarks.endingCompleted;
   }
 
-  const missionCheckMap: Record<string, string> = {
-    surv_kira: 'm4_diner_clues',
-    surv_soren: 'm5_dispensary_secret',
-    surv_dante: 'm7_voices_in_dark',
-    surv_maya: 'm9_house_archive',
-    surv_toby: 'm8_north_barricade',
-  };
-  const gateId = missionCheckMap[survivorId];
+  const gateId = SURVIVOR_CHAPTER_GATE_MISSION[survivorId];
   if (gateId && completedMissionIds.has(gateId)) {
     return remarks.afterMission;
   }
@@ -1007,6 +1281,10 @@ export class MissionSystem {
   private surgeSpawned = new Map<string, boolean>();
   private surgeKills = new Map<string, number>();
   private trackedMissionId: string | null = 'm1_open_doors';
+  private completedDialogues = new Set<string>();
+  private survivorTrust = new Map<string, number>();
+  private recordedChoices = new Map<string, { optionId: string; day: number }>();
+  public selectedEndingId: StoryEndingId | null = null;
   public endingCompleted = false;
   public endingSeen = false;
 
@@ -1025,6 +1303,10 @@ export class MissionSystem {
     this.collectedResourceCount = 0;
     this.surgeSpawned.clear();
     this.surgeKills.clear();
+    this.completedDialogues.clear();
+    this.survivorTrust.clear();
+    this.recordedChoices.clear();
+    this.selectedEndingId = null;
     this.endingCompleted = false;
     this.endingSeen = false;
 
@@ -1105,9 +1387,300 @@ export class MissionSystem {
     }
   }
 
+  public isStorySurgeActive(): boolean {
+    if (this.hasSurgeSpawned('surge_roadblock') && (this.surgeKills.get('surge_roadblock') ?? 0) < 3) {
+      return true;
+    }
+    if (this.hasSurgeSpawned('surge_relay') && (this.surgeKills.get('surge_relay') ?? 0) < 3) {
+      return true;
+    }
+    return false;
+  }
+
+  public getSurvivorTrust(survivorId: string): number {
+    return Math.min(3, Math.max(0, this.survivorTrust.get(survivorId) ?? 0));
+  }
+
+  public getCompletedDialogueIds(): string[] {
+    return Array.from(this.completedDialogues);
+  }
+
+  public getRecordedChoices(): Record<string, { optionId: string; day: number }> {
+    const out: Record<string, { optionId: string; day: number }> = {};
+    for (const [k, v] of this.recordedChoices.entries()) out[k] = { ...v };
+    return out;
+  }
+
+  private unlockClue(clueId: string, day: number): StoryClueSummary | null {
+    if (this.discoveredClues.has(clueId)) return null;
+    const clueDef = STORY_CLUE_DEFINITIONS[clueId];
+    if (!clueDef) return null;
+    const clueLoc = tClue(clueDef.id);
+    const clue: StoryClueSummary = {
+      ...clueDef,
+      title: clueLoc?.title ?? clueDef.title,
+      source: clueLoc?.source ?? clueDef.source,
+      body: clueLoc?.body ?? clueDef.body,
+      discoveredDay: Math.max(1, day),
+    };
+    this.discoveredClues.set(clue.id, clue);
+    return clue;
+  }
+
+  public getActiveDialogueTopic(
+    survivorId: string,
+    inventory: InventoryState
+  ): SurvivorDialogueTopicView | null {
+    const configs = SURVIVOR_DIALOGUE_CONFIGS[survivorId];
+    if (!configs || configs.length === 0) return null;
+    const t = getTranslations();
+    const dlgLoc = t.narrative.survivorDialogues[survivorId];
+    if (!dlgLoc) return null;
+
+    for (const topicCfg of configs) {
+      const nodeKey = `${survivorId}:${topicCfg.topicId}`;
+      if (this.completedDialogues.has(nodeKey)) continue;
+      if (topicCfg.unlockMissionId && this.getStatus(topicCfg.unlockMissionId) !== 'completed') {
+        continue;
+      }
+
+      const topicLoc = dlgLoc[topicCfg.topicId];
+      if (!topicLoc) continue;
+
+      const choices: SurvivorDialogueChoice[] = topicCfg.choices.map((chCfg) => {
+        const chLoc = topicLoc.choices[chCfg.id];
+        let affordable = true;
+        let disabledReason: string | undefined;
+
+        if (chCfg.requiresResources) {
+          for (const resId of RESOURCE_ORDER) {
+            const req = chCfg.requiresResources[resId] ?? 0;
+            if (req > 0 && (inventory[resId] ?? 0) < req) {
+              affordable = false;
+              disabledReason = formatTemplate(t.narrative.needItemShort, {
+                qty: req,
+                item: tResource(resId).name,
+              });
+              break;
+            }
+          }
+        }
+
+        return {
+          id: chCfg.id,
+          label: chLoc?.label ?? chCfg.id,
+          hint: chLoc?.hint,
+          requiresResources: chCfg.requiresResources,
+          affordable,
+          disabledReason,
+        };
+      });
+
+      return {
+        topicId: topicCfg.topicId,
+        stageTitle: topicLoc.stageTitle,
+        speakerLine: topicLoc.speakerLine,
+        choices,
+      };
+    }
+
+    return null;
+  }
+
+  public resolveDialogueChoice(
+    survivorId: string,
+    topicId: string,
+    optionId: string,
+    day: number,
+    inventory: InventoryState
+  ): DialogueChoiceResolveResult {
+    const choiceId = `choice_${survivorId}_${topicId}`;
+    const configs = SURVIVOR_DIALOGUE_CONFIGS[survivorId];
+    const topicCfg = configs?.find((t) => t.topicId === topicId);
+    const chCfg = topicCfg?.choices.find((c) => c.id === optionId);
+    const nodeKey = `${survivorId}:${topicId}`;
+
+    if (!topicCfg || !chCfg || this.completedDialogues.has(nodeKey)) {
+      return {
+        ok: false,
+        nextInventory: inventory,
+        moneyDelta: 0,
+        healDelta: 0,
+        goodwillDelta: 0,
+        ammoDelta: 0,
+        trustDelta: 0,
+        toast: '',
+        choiceId,
+        optionId,
+      };
+    }
+    if (topicCfg.unlockMissionId && this.getStatus(topicCfg.unlockMissionId) !== 'completed') {
+      return {
+        ok: false,
+        nextInventory: inventory,
+        moneyDelta: 0,
+        healDelta: 0,
+        goodwillDelta: 0,
+        ammoDelta: 0,
+        trustDelta: 0,
+        toast: '',
+        choiceId,
+        optionId,
+      };
+    }
+
+    let nextInventory = { ...inventory };
+    if (chCfg.requiresResources) {
+      for (const resId of RESOURCE_ORDER) {
+        const req = chCfg.requiresResources[resId] ?? 0;
+        if (req > 0 && (nextInventory[resId] ?? 0) < req) {
+          return {
+            ok: false,
+            nextInventory: inventory,
+            moneyDelta: 0,
+            healDelta: 0,
+            goodwillDelta: 0,
+            ammoDelta: 0,
+            trustDelta: 0,
+            toast: formatTemplate(getTranslations().narrative.needItemShort, {
+              qty: req,
+              item: tResource(resId).name,
+            }),
+            choiceId,
+            optionId,
+          };
+        }
+      }
+      for (const resId of RESOURCE_ORDER) {
+        const req = chCfg.requiresResources[resId] ?? 0;
+        if (req > 0) {
+          nextInventory = consumeInventoryResource(nextInventory, resId, req);
+        }
+      }
+    }
+
+    if (chCfg.grantResources) {
+      for (const resId of RESOURCE_ORDER) {
+        const qty = chCfg.grantResources[resId] ?? 0;
+        if (qty > 0) {
+          nextInventory = addInventoryResource(nextInventory, resId, qty);
+        }
+      }
+    }
+
+    this.talkedSurvivors.add(survivorId);
+    this.completedDialogues.add(nodeKey);
+    const nextTrust = Math.min(3, this.getSurvivorTrust(survivorId) + chCfg.trustDelta);
+    this.survivorTrust.set(survivorId, nextTrust);
+    this.recordedChoices.set(choiceId, {
+      optionId,
+      day: Math.max(1, Math.floor(day || 1)),
+    });
+
+    const tr = getTranslations();
+    const toast =
+      tr.narrative.survivorDialogues[survivorId]?.[topicId]?.choices[optionId]?.outcomeToast ?? '';
+
+    return {
+      ok: true,
+      nextInventory,
+      moneyDelta: chCfg.moneyDelta ?? 0,
+      healDelta: chCfg.healDelta ?? 0,
+      goodwillDelta: chCfg.goodwillDelta ?? 0,
+      ammoDelta: chCfg.ammoDelta ?? 0,
+      trustDelta: chCfg.trustDelta,
+      toast,
+      choiceId,
+      optionId,
+    };
+  }
+
+  public evaluateUnlockedEndings(ctx: MissionRuntimeContext): StoryEndingId[] {
+    const unlocked: StoryEndingId[] = ['dawn_beacon'];
+
+    const inspectedSet = new Set([...ctx.inspectedStoryObjects, ...this.inspectedStoryObjects]);
+    const hasValeManifest = inspectedSet.has('story_vale_manifest');
+    const hasDeepArchive =
+      inspectedSet.has('story_police_blotter') ||
+      inspectedSet.has('story_clinic_triage') ||
+      inspectedSet.has('story_lab_terminal');
+    if (this.discoveredClues.size >= 8 || (hasValeManifest && hasDeepArchive)) {
+      unlocked.push('truth_unsealed');
+    }
+
+    if (ctx.shopLevel >= 2 && (ctx.employeeCount >= 2 || ctx.zombiesDefeated >= 20)) {
+      unlocked.push('iron_enclave');
+    }
+
+    return unlocked;
+  }
+
+  public resolveFinalBroadcast(
+    endingId: StoryEndingId,
+    ctx: MissionRuntimeContext
+  ): MissionProcessOutcome {
+    const unlocked = this.evaluateUnlockedEndings(ctx);
+    const chosen: StoryEndingId = unlocked.includes(endingId) ? endingId : 'dawn_beacon';
+    this.selectedEndingId = chosen;
+    this.recordedChoices.set('choice_final_broadcast', {
+      optionId: chosen,
+      day: Math.max(1, Math.floor(ctx.day || 1)),
+    });
+
+    return this.recordEvent(
+      {
+        type: 'interact_story_object',
+        objectId: 'story_final_relay',
+        mode: 'transmit',
+      },
+      ctx
+    );
+  }
+
+  public buildEndingSummary(ctx: MissionRuntimeContext): StoryEndingSummary | null {
+    if (!this.endingCompleted) return null;
+    const endingId = this.selectedEndingId ?? 'dawn_beacon';
+    const tr = getTranslations();
+    const loc = tEnding(endingId);
+    const epilogueLines: string[] = [loc.epilogueBase];
+
+    const inspectedSet = new Set([...ctx.inspectedStoryObjects, ...this.inspectedStoryObjects]);
+    const deepEvidenceCount =
+      (inspectedSet.has('story_vale_manifest') ? 1 : 0) +
+      (inspectedSet.has('story_police_blotter') ? 1 : 0) +
+      (inspectedSet.has('story_clinic_triage') ? 1 : 0) +
+      (inspectedSet.has('story_lab_terminal') ? 1 : 0);
+
+    if (deepEvidenceCount >= 3 || this.discoveredClues.size >= 9) {
+      epilogueLines.push(tr.narrative.epilogueTruthUncovered);
+    } else if (deepEvidenceCount >= 1) {
+      epilogueLines.push(tr.narrative.epilogueTruthPartial);
+    }
+
+    let trustedCount = 0;
+    for (const id of STORY_SURVIVOR_IDS) {
+      if (this.getSurvivorTrust(id) >= 2) trustedCount += 1;
+    }
+    if (ctx.employeeCount >= 2 || trustedCount >= 2) {
+      epilogueLines.push(tr.narrative.epilogueCrewStrong);
+    }
+    if (ctx.shopLevel >= 2 || ctx.totalSalesCount >= 6) {
+      epilogueLines.push(tr.narrative.epilogueShopThriving);
+    }
+
+    return {
+      endingId,
+      badge: loc.badge,
+      title: loc.title,
+      body: loc.body,
+      epilogueLines,
+    };
+  }
+
   public buildStoryInspectionData(
     objectId: string,
-    inventory: InventoryState
+    inventory: InventoryState,
+    ctx?: MissionRuntimeContext
   ): StoryObjectInspectionData | null {
     const cfg = STORY_OBJECTS.find((o) => o.id === objectId);
     if (!cfg) return null;
@@ -1118,7 +1691,9 @@ export class MissionSystem {
     const objBody = objLoc?.body ?? cfg.initialBody;
     const objActivatedBody = objLoc?.activatedBody ?? cfg.activatedBody ?? objBody;
     const relayMsg = getTranslations().gameMessages.storyRelay;
+    const tr = getTranslations();
     const alreadyActivated = this.activatedStoryObjects.has(objectId);
+
     if (cfg.id === 'story_final_relay') {
       const m10Status = this.getStatus('m10_ashfall_beacon');
       const surgeKills = this.surgeKills.get('surge_relay') ?? 0;
@@ -1194,6 +1769,40 @@ export class MissionSystem {
         };
       }
 
+      const effectiveCtx: MissionRuntimeContext = ctx ?? {
+        day: 1,
+        inventory,
+        shopStock: inventory,
+        shopStorage: inventory,
+        shopLevel: 1,
+        totalSalesCount: 0,
+        employeeCount: 0,
+        zombiesDefeated: 0,
+        visitedZones: this.getVisitedZones(),
+        openedDoors: [],
+        searchedContainers: [],
+        collectedResourceCount: this.collectedResourceCount,
+        talkedSurvivors: this.getTalkedSurvivors(),
+        inspectedStoryObjects: this.getInspectedStoryObjects(),
+        activatedStoryObjects: this.getActivatedStoryObjects(),
+        surgeKills: this.getSurgeKills(),
+      };
+      const unlockedEndings = new Set(this.evaluateUnlockedEndings(effectiveCtx));
+      const order: StoryEndingId[] = ['dawn_beacon', 'truth_unsealed', 'iron_enclave'];
+      const broadcastChoices: StoryRelayBroadcastChoice[] = order.map((eid) => {
+        const bLoc = tr.narrative.broadcastChoices[eid];
+        const unlocked = unlockedEndings.has(eid);
+        return {
+          endingId: eid,
+          title: bLoc.title,
+          subtitle: bLoc.subtitle,
+          description: bLoc.description,
+          unlocked,
+          lockedReason: unlocked ? undefined : bLoc.lockedReason,
+          tone: eid === 'truth_unsealed' ? 'truth' : eid === 'iron_enclave' ? 'fortress' : 'hope',
+        };
+      });
+
       return {
         id: cfg.id,
         title: objName,
@@ -1202,8 +1811,16 @@ export class MissionSystem {
         category: cfg.category,
         actionLabel: relayMsg.transmitActionLabel,
         alreadyActivated: true,
+        broadcastChoices,
       };
     }
+
+    const mappedClueId = STORY_OBJECT_TO_CLUE[cfg.id];
+    const clueLoc = mappedClueId ? tClue(mappedClueId) : null;
+    const loggedClueTitle =
+      mappedClueId && this.discoveredClues.has(mappedClueId)
+        ? clueLoc?.title ?? STORY_CLUE_DEFINITIONS[mappedClueId]?.title
+        : undefined;
 
     return {
       id: cfg.id,
@@ -1212,6 +1829,7 @@ export class MissionSystem {
       body: objBody,
       category: cfg.category,
       alreadyActivated: this.inspectedStoryObjects.has(objectId),
+      loggedClueTitle,
     };
   }
 
@@ -1287,6 +1905,17 @@ export class MissionSystem {
       endingJustCompleted: false,
     };
 
+    // Direct story clue discovery upon inspecting environmental story objects
+    if (event.type === 'interact_story_object') {
+      const directClueId = STORY_OBJECT_TO_CLUE[event.objectId];
+      if (directClueId) {
+        const discovered = this.unlockClue(directClueId, mergedCtx.day);
+        if (discovered) {
+          outcome.newlyDiscoveredClues.push(discovered);
+        }
+      }
+    }
+
     // Story surge trigger checks
     if (
       this.getStatus('m8_north_barricade') === 'active' &&
@@ -1355,23 +1984,28 @@ export class MissionSystem {
             });
           }
 
-          if (def.clueUnlockId && !this.discoveredClues.has(def.clueUnlockId)) {
-            const clueDef = STORY_CLUE_DEFINITIONS[def.clueUnlockId];
-            if (clueDef) {
-              const clueLoc = tClue(clueDef.id);
-              const clue: StoryClueSummary = {
-                ...clueDef,
-                title: clueLoc?.title ?? clueDef.title,
-                source: clueLoc?.source ?? clueDef.source,
-                body: clueLoc?.body ?? clueDef.body,
-                discoveredDay: Math.max(1, mergedCtx.day),
-              };
-              this.discoveredClues.set(clue.id, clue);
-              outcome.newlyDiscoveredClues.push(clue);
+          if (def.clueUnlockId) {
+            const unlockedClue = this.unlockClue(def.clueUnlockId, mergedCtx.day);
+            if (unlockedClue) {
+              outcome.newlyDiscoveredClues.push(unlockedClue);
             }
           }
 
           if (def.id === 'm10_ashfall_beacon' && !this.endingCompleted) {
+            if (!this.selectedEndingId) {
+              const unlocked = this.evaluateUnlockedEndings(mergedCtx);
+              this.selectedEndingId = unlocked.includes('truth_unsealed')
+                ? 'truth_unsealed'
+                : unlocked.includes('iron_enclave')
+                  ? 'iron_enclave'
+                  : 'dawn_beacon';
+            }
+            if (!this.recordedChoices.has('choice_final_broadcast')) {
+              this.recordedChoices.set('choice_final_broadcast', {
+                optionId: this.selectedEndingId,
+                day: Math.max(1, Math.floor(mergedCtx.day || 1)),
+              });
+            }
             this.endingCompleted = true;
             outcome.endingJustCompleted = true;
           }
@@ -1494,6 +2128,83 @@ export class MissionSystem {
     });
   }
 
+  private buildCharacterDossiers(ctx: MissionRuntimeContext): CharacterDossierSummary[] {
+    const tr = getTranslations();
+    const completedSet = this.getCompletedMissionIdSet();
+    const empBySurv = new Map<string, { id: string; professionLabel: string }>();
+    for (const e of ctx.staffMembers ?? []) {
+      empBySurv.set(e.survivorId, { id: e.id, professionLabel: e.professionLabel });
+    }
+
+    return STORY_SURVIVOR_IDS.map((id) => {
+      const survLoc = tSurvivor(id);
+      const emp = empBySurv.get(id);
+      const trust = this.getSurvivorTrust(id);
+      const topicConfigs = SURVIVOR_DIALOGUE_CONFIGS[id] ?? [];
+      const topicsCompleted = topicConfigs.filter((tc) =>
+        this.completedDialogues.has(`${id}:${tc.topicId}`)
+      ).length;
+      const activeTopic = this.getActiveDialogueTopic(id, ctx.inventory);
+
+      return {
+        id,
+        name: survLoc?.name ?? id,
+        locationLabel: survLoc?.locationLabel ?? '',
+        recruited: Boolean(emp),
+        employeeId: emp?.id,
+        professionLabel: emp?.professionLabel,
+        trust,
+        trustTierLabel: tTrustTierLabel(trust),
+        bio: tr.narrative.survivorBios[id] ?? '',
+        currentStatusNote: getSurvivorStoryRemark(id, completedSet, this.endingCompleted),
+        topicsCompleted,
+        totalTopics: topicConfigs.length,
+        activeTopic,
+      };
+    });
+  }
+
+  private buildRecordedChoiceSummaries(): StoryChoiceSummary[] {
+    const tr = getTranslations();
+    const out: StoryChoiceSummary[] = [];
+
+    for (const [choiceId, entry] of this.recordedChoices.entries()) {
+      let optionLabel = entry.optionId;
+      let consequenceSummary = '';
+
+      if (choiceId === 'choice_final_broadcast') {
+        const bLoc = tr.narrative.broadcastChoices[entry.optionId as StoryEndingId];
+        if (bLoc) {
+          optionLabel = bLoc.title;
+          consequenceSummary = bLoc.consequenceSummary;
+        }
+      } else {
+        const parts = choiceId.replace(/^choice_/, '');
+        const sepIdx = parts.lastIndexOf('_');
+        if (sepIdx > 0) {
+          const survivorId = parts.slice(0, sepIdx);
+          const topicId = parts.slice(sepIdx + 1);
+          const chLoc = tr.narrative.survivorDialogues[survivorId]?.[topicId]?.choices[entry.optionId];
+          if (chLoc) {
+            optionLabel = chLoc.label;
+            consequenceSummary = chLoc.consequenceSummary;
+          }
+        }
+      }
+
+      out.push({
+        choiceId,
+        optionId: entry.optionId,
+        title: tr.narrative.choiceTitles[choiceId] ?? choiceId,
+        optionLabel,
+        consequenceSummary,
+        day: entry.day,
+      });
+    }
+
+    return out;
+  }
+
   public getSnapshot(ctx: MissionRuntimeContext, hasSaveData: boolean): MissionSnapshot {
     const missions: MissionSummary[] = MISSION_DEFINITIONS.map((def) => {
       const status = this.getStatus(def.id);
@@ -1502,6 +2213,7 @@ export class MissionSystem {
         id: def.id,
         order: def.order,
         category: def.category,
+        actId: def.category === 'main' ? getMissionActId(def.id) : undefined,
         chapterLabel: missionLoc?.chapterLabel ?? def.chapterLabel,
         title: missionLoc?.title ?? def.title,
         description: missionLoc?.description ?? def.description,
@@ -1545,6 +2257,11 @@ export class MissionSystem {
       endingCompleted: this.endingCompleted,
       endingSeen: this.endingSeen,
       hasSaveData,
+      characters: this.buildCharacterDossiers(ctx),
+      recordedChoices: this.buildRecordedChoiceSummaries(),
+      selectedEndingId: this.selectedEndingId,
+      endingSummary: this.buildEndingSummary(ctx),
+      unlockedEndingIds: this.evaluateUnlockedEndings(ctx),
     };
   }
 
@@ -1553,6 +2270,8 @@ export class MissionSystem {
     for (const [k, v] of this.statuses.entries()) statuses[k] = v;
     const surgeSpawned: Record<string, boolean> = {};
     for (const [k, v] of this.surgeSpawned.entries()) surgeSpawned[k] = v;
+    const survivorTrust: Record<string, number> = {};
+    for (const [k, v] of this.survivorTrust.entries()) survivorTrust[k] = v;
 
     return {
       version: 1,
@@ -1572,6 +2291,10 @@ export class MissionSystem {
       surgeKills: this.getSurgeKills(),
       endingCompleted: this.endingCompleted,
       endingSeen: this.endingSeen,
+      choices: this.getRecordedChoices(),
+      completedDialogues: this.getCompletedDialogueIds(),
+      survivorTrust,
+      selectedEndingId: this.selectedEndingId,
     };
   }
 
@@ -1639,8 +2362,38 @@ export class MissionSystem {
       }
     }
 
+    if (Array.isArray(raw.completedDialogues)) {
+      raw.completedDialogues.forEach((d) => typeof d === 'string' && this.completedDialogues.add(d));
+    }
+    if (raw.survivorTrust && typeof raw.survivorTrust === 'object') {
+      for (const [id, val] of Object.entries(raw.survivorTrust)) {
+        if (typeof val === 'number' && Number.isFinite(val)) {
+          this.survivorTrust.set(id, Math.min(3, Math.max(0, Math.floor(val))));
+        }
+      }
+    }
+    if (raw.choices && typeof raw.choices === 'object') {
+      for (const [choiceId, entry] of Object.entries(raw.choices)) {
+        if (entry && typeof entry.optionId === 'string') {
+          this.recordedChoices.set(choiceId, {
+            optionId: entry.optionId,
+            day: Math.max(1, Math.floor(entry.day || 1)),
+          });
+        }
+      }
+    }
+
     this.endingCompleted = Boolean(raw.endingCompleted);
     this.endingSeen = Boolean(raw.endingSeen);
+    if (
+      raw.selectedEndingId === 'dawn_beacon' ||
+      raw.selectedEndingId === 'truth_unsealed' ||
+      raw.selectedEndingId === 'iron_enclave'
+    ) {
+      this.selectedEndingId = raw.selectedEndingId;
+    } else if (this.endingCompleted) {
+      this.selectedEndingId = 'dawn_beacon';
+    }
 
     if (typeof raw.trackedMissionId === 'string' && this.statuses.has(raw.trackedMissionId)) {
       this.trackedMissionId = raw.trackedMissionId;

@@ -1207,6 +1207,193 @@ export class SoundEngine {
     src.start(now, 0.2, 0.8);
   }
 
+  public playKnifeSwing(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || !this.noiseBuffer || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.18)) return;
+    const now = this.ctx.currentTime;
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1600, now);
+    filter.frequency.exponentialRampToValueAtTime(650, now + 0.13);
+    filter.Q.value = 1.6;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.13, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(out);
+    src.start(now, 0.05, 0.16);
+  }
+
+  public playKnifeHit(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || !this.noiseBuffer || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.2)) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(290, now);
+    osc.frequency.exponentialRampToValueAtTime(85, now + 0.11);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  }
+
+  public playCritHit(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.24)) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(210, now);
+    osc.frequency.exponentialRampToValueAtTime(62, now + 0.18);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 950;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.21);
+  }
+
+  public playPistolShot(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || !this.noiseBuffer || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.42)) return;
+    const now = this.ctx.currentTime;
+
+    // Punchy low chamber thump
+    const punch = this.ctx.createOscillator();
+    punch.type = 'sine';
+    punch.frequency.setValueAtTime(195, now);
+    punch.frequency.exponentialRampToValueAtTime(48, now + 0.11);
+
+    const punchGain = this.ctx.createGain();
+    punchGain.gain.setValueAtTime(0.001, now);
+    punchGain.gain.linearRampToValueAtTime(0.32, now + 0.006);
+    punchGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+    punch.connect(punchGain);
+    punchGain.connect(out);
+    punch.start(now);
+    punch.stop(now + 0.14);
+
+    // Sharp crack & decaying gunshot tail
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this.noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(420, now + 0.28);
+    filter.Q.value = 0.8;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.001, now);
+    noiseGain.gain.linearRampToValueAtTime(0.38, now + 0.008);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(out);
+    noise.start(now, Math.random() * 0.25, 0.36);
+  }
+
+  public playDryFire(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.1)) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1180, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.045);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.09, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.06);
+  }
+
+  public playPistolReload(complete = false): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.22)) return;
+    const now = this.ctx.currentTime;
+
+    const freqs = complete ? [520, 780] : [410, 320];
+    freqs.forEach((f, idx) => {
+      if (!this.ctx || !out) return;
+      const t0 = now + idx * 0.085;
+      const osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, t0);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.68, t0 + 0.05);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime(0.11, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.065);
+
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t0);
+      osc.stop(t0 + 0.07);
+    });
+  }
+
+  public playWeaponSwitch(): void {
+    const out = this.sfxGain ?? this.masterGain;
+    if (!this.ctx || !out || this.muted || this.ctx.state !== 'running') return;
+    if (!this.tryReserveVoice(0.12)) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(360, now);
+    osc.frequency.exponentialRampToValueAtTime(540, now + 0.055);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.08, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
   public dispose(): void {
     for (const src of [
       this.windSource,

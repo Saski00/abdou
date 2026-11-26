@@ -264,13 +264,21 @@ export interface PlayerMeleeConfig {
   minDot: number;
   damage: number;
   cooldownSec: number;
+  critMinDot?: number;
+  critMultiplier?: number;
+  knockback?: number;
+  stunMultiplier?: number;
 }
 
 export const DEFAULT_MELEE_CONFIG: PlayerMeleeConfig = {
   range: 2.55,
   minDot: 0.42,
-  damage: 28,
-  cooldownSec: 0.56,
+  damage: 30,
+  cooldownSec: 0.54,
+  critMinDot: 0.88,
+  critMultiplier: 1.32,
+  knockback: 0.42,
+  stunMultiplier: 1.15,
 };
 
 export interface ZombieAgent {
@@ -327,6 +335,7 @@ export interface ZombieTickResult {
 export interface MeleeHitResult {
   hit: boolean;
   killed: boolean;
+  crit: boolean;
   targetId: string | null;
   damageDealt: number;
   remainingHealth: number;
@@ -784,7 +793,7 @@ function beginSearchingAt(z: ZombieAgent, sx: number, sz: number, colliders: Wor
   z.lastProgressDist = Math.hypot(z.targetX - z.x, z.targetZ - z.z);
 }
 
-function resolveZombieCollisions(
+export function resolveZombieCollisions(
   z: ZombieAgent,
   colliders: WorldColliders,
   allZombies: ZombieAgent[],
@@ -1282,6 +1291,70 @@ export function stepZombiesAI(
   return result;
 }
 
+export function applyZombieDamage(
+  target: ZombieAgent,
+  allZombies: ZombieAgent[],
+  playerX: number,
+  playerZ: number,
+  colliders: WorldColliders,
+  options: {
+    damage: number;
+    crit?: boolean;
+    knockback?: number;
+    stunMultiplier?: number;
+  }
+): MeleeHitResult {
+  const dmg = Math.max(1, Math.round(options.damage));
+  const crit = Boolean(options.crit);
+  target.health = Math.max(0, target.health - dmg);
+  target.hitFlashTimer = crit ? 0.24 : 0.18;
+
+  // Knockback nudge away from player (clamped by walls/doors)
+  const kdx = target.x - playerX;
+  const kdz = target.z - playerZ;
+  const klen = Math.hypot(kdx, kdz) || 1;
+  const basePush = options.knockback ?? 0.36;
+  const push = target.config.id === 'brute' ? basePush * 0.55 : basePush;
+  target.x += (kdx / klen) * push;
+  target.z += (kdz / klen) * push;
+  resolveZombieCollisions(target, colliders, allZombies, playerX, playerZ, false);
+
+  if (target.health <= 0) {
+    target.state = 'dead';
+    target.deathTimer = 0;
+    target.attackWindup = 0;
+    return {
+      hit: true,
+      killed: true,
+      crit,
+      targetId: target.id,
+      damageDealt: dmg,
+      remainingHealth: 0,
+    };
+  }
+
+  // Surviving zombie briefly staggers, interrupts any windup, then locks onto attacker
+  const stunMult = (options.stunMultiplier ?? 1.0) * (crit ? 1.18 : 1.0);
+  target.state = 'stunned';
+  target.stunTimer = target.config.stunDurationSec * stunMult;
+  target.attackWindup = 0;
+  target.awareness = 1;
+  target.lastKnownX = playerX;
+  target.lastKnownZ = playerZ;
+  target.targetX = playerX;
+  target.targetZ = playerZ;
+  target.loseSightTimer = target.config.loseSightGraceSec;
+
+  return {
+    hit: true,
+    killed: false,
+    crit,
+    targetId: target.id,
+    damageDealt: dmg,
+    remainingHealth: target.health,
+  };
+}
+
 export function performPlayerMelee(
   zombies: ZombieAgent[],
   playerX: number,
@@ -1295,6 +1368,7 @@ export function performPlayerMelee(
 
   let bestTarget: ZombieAgent | null = null;
   let bestScore = Infinity;
+  let bestDot = 0;
 
   for (const z of zombies) {
     if (z.state === 'dead') continue;
@@ -1313,6 +1387,7 @@ export function performPlayerMelee(
     if (score < bestScore) {
       bestScore = score;
       bestTarget = z;
+      bestDot = dot;
     }
   }
 
@@ -1320,53 +1395,23 @@ export function performPlayerMelee(
     return {
       hit: false,
       killed: false,
+      crit: false,
       targetId: null,
       damageDealt: 0,
       remainingHealth: 0,
     };
   }
 
-  const dmg = config.damage;
-  bestTarget.health = Math.max(0, bestTarget.health - dmg);
-  bestTarget.hitFlashTimer = 0.18;
+  const critThreshold = config.critMinDot ?? 0.88;
+  const isCrit = bestDot >= critThreshold;
+  const dmg = isCrit
+    ? Math.round(config.damage * (config.critMultiplier ?? 1.3))
+    : config.damage;
 
-  // Knockback nudge away from player (clamped by walls/doors)
-  const kdx = bestTarget.x - playerX;
-  const kdz = bestTarget.z - playerZ;
-  const klen = Math.hypot(kdx, kdz) || 1;
-  const push = bestTarget.config.id === 'brute' ? 0.2 : 0.36;
-  bestTarget.x += (kdx / klen) * push;
-  bestTarget.z += (kdz / klen) * push;
-  resolveZombieCollisions(bestTarget, colliders, zombies, playerX, playerZ, false);
-
-  if (bestTarget.health <= 0) {
-    bestTarget.state = 'dead';
-    bestTarget.deathTimer = 0;
-    return {
-      hit: true,
-      killed: true,
-      targetId: bestTarget.id,
-      damageDealt: dmg,
-      remainingHealth: 0,
-    };
-  }
-
-  // Surviving zombie briefly staggers, interrupts any windup, then locks onto attacker
-  bestTarget.state = 'stunned';
-  bestTarget.stunTimer = bestTarget.config.stunDurationSec;
-  bestTarget.attackWindup = 0;
-  bestTarget.awareness = 1;
-  bestTarget.lastKnownX = playerX;
-  bestTarget.lastKnownZ = playerZ;
-  bestTarget.targetX = playerX;
-  bestTarget.targetZ = playerZ;
-  bestTarget.loseSightTimer = bestTarget.config.loseSightGraceSec;
-
-  return {
-    hit: true,
-    killed: false,
-    targetId: bestTarget.id,
-    damageDealt: dmg,
-    remainingHealth: bestTarget.health,
-  };
+  return applyZombieDamage(bestTarget, zombies, playerX, playerZ, colliders, {
+    damage: dmg,
+    crit: isCrit,
+    knockback: config.knockback ?? 0.36,
+    stunMultiplier: config.stunMultiplier ?? 1.0,
+  });
 }
