@@ -277,7 +277,7 @@ export function HudOverlay({
           }`}
         >
           <div
-            className={`bg-[#0e121a]/92 backdrop-blur-sm border border-amber-500/60 rounded-lg shadow-xl flex items-center gap-2 ${
+            className={`bg-[#0e121a]/94 border border-amber-500/60 rounded-lg shadow-xl flex items-center gap-2 ${
               isCompactLandscape ? 'px-2.5 py-1' : 'px-3 py-1.5'
             }`}
           >
@@ -300,7 +300,7 @@ export function HudOverlay({
           {/* Top-Start: Minimal Health + Dynamic Stamina + Conditional Need Alerts / Combat */}
           <div className="flex flex-col items-start gap-1.5 min-w-0">
             <div
-              className={`bg-[#0e121a]/82 backdrop-blur-sm border rounded-lg shadow-lg transition-colors ${healthBarWidth} ${
+              className={`bg-[#0e121a]/90 border rounded-lg shadow-lg transition-colors ${healthBarWidth} ${
                 isDesktopLike ? 'px-3 py-2' : 'px-2.5 py-1.5'
               } ${healthCritical ? 'border-rose-500/85' : 'border-stone-700/55'}`}
             >
@@ -477,7 +477,7 @@ export function HudOverlay({
             {showGearBadge && (
               <div
                 onPointerDown={(e) => e.stopPropagation()}
-                className="pointer-events-auto bg-[#0e121a]/86 backdrop-blur-sm border border-stone-700/60 rounded-lg px-2 py-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-200 shadow-md max-w-[260px]"
+                className="pointer-events-auto bg-[#0e121a]/90 border border-stone-700/60 rounded-lg px-2 py-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-200 shadow-md max-w-[260px]"
               >
                 {hud.weaponKind === 'ranged' ? (
                   <Crosshair
@@ -619,7 +619,7 @@ export function HudOverlay({
                 } flex items-center justify-center gap-1.5 rounded-lg border transition-colors cursor-pointer shadow-lg whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400 ${
                   isMapOpen
                     ? 'bg-amber-500 border-amber-300 text-stone-950'
-                    : 'bg-[#0e121a]/82 backdrop-blur-sm border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
+                    : 'bg-[#0e121a]/90 border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
                 }`}
               >
                 <MapIcon className={`w-4 h-4 ${isMapOpen ? 'text-stone-950' : 'text-sky-300'}`} />
@@ -639,7 +639,7 @@ export function HudOverlay({
                 } flex items-center justify-center gap-1 rounded-lg border transition-colors cursor-pointer shadow-lg whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400 ${
                   isMissionsOpen
                     ? 'bg-amber-500 border-amber-300 text-stone-950'
-                    : 'bg-[#0e121a]/82 backdrop-blur-sm border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
+                    : 'bg-[#0e121a]/90 border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
                 }`}
               >
                 <Compass
@@ -666,8 +666,8 @@ export function HudOverlay({
                     : packFull
                       ? 'bg-[#260e12]/92 border-rose-500/80 text-rose-200 hover:border-rose-400'
                       : packNearFull
-                        ? 'bg-[#0e121a]/88 border-amber-500/65 text-amber-200 hover:border-amber-400'
-                        : 'bg-[#0e121a]/82 backdrop-blur-sm border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
+                        ? 'bg-[#0e121a]/92 border-amber-500/65 text-amber-200 hover:border-amber-400'
+                        : 'bg-[#0e121a]/90 border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500'
                 }`}
               >
                 <Backpack className="w-4 h-4 shrink-0" />
@@ -688,7 +688,7 @@ export function HudOverlay({
                 onClick={onToggleMute}
                 aria-label={muted ? t.hud.unmuteAria : t.hud.muteAria}
                 title={muted ? t.hud.unmuteAria : t.hud.muteAria}
-                className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/82 backdrop-blur-sm border border-stone-700/60 text-stone-300 hover:text-stone-100 hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/90 border border-stone-700/60 text-stone-300 hover:text-stone-100 hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
@@ -697,7 +697,7 @@ export function HudOverlay({
                 type="button"
                 onClick={onPauseClick}
                 aria-label={t.hud.pauseAria}
-                className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/82 backdrop-blur-sm border border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="h-11 w-11 flex items-center justify-center rounded-lg bg-[#0e121a]/90 border border-stone-700/60 text-stone-200 hover:text-white hover:border-stone-500 transition-colors cursor-pointer shadow-lg shrink-0 focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 <Pause className="w-4 h-4" />
               </button>
@@ -710,7 +710,7 @@ export function HudOverlay({
                 onClick={onOpenMissions}
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={`${t.hud.objectiveAria}: ${nextObjective.description}`}
-                className={`pointer-events-auto flex items-center gap-1.5 rounded-lg bg-[#0e121a]/78 backdrop-blur-sm border border-stone-700/50 hover:border-amber-500/60 px-2.5 py-1 text-start transition-colors cursor-pointer shadow-md ${
+                className={`pointer-events-auto flex items-center gap-1.5 rounded-lg bg-[#0e121a]/88 border border-stone-700/50 hover:border-amber-500/60 px-2.5 py-1 text-start transition-colors cursor-pointer shadow-md ${
                   isDesktopLike
                     ? 'max-w-[300px]'
                     : isCompactLandscape
@@ -754,7 +754,7 @@ export function HudOverlay({
               key={hud.latestToast.id}
               role="status"
               aria-live="polite"
-              className={`px-3 py-1 rounded-lg border text-xs font-medium shadow-lg backdrop-blur-sm ${
+              className={`px-3 py-1 rounded-lg border text-xs font-medium shadow-lg ${
                 hud.latestToast.tone === 'warning'
                   ? 'bg-[#260e12]/94 border-rose-500/80 text-rose-200'
                   : hud.latestToast.tone === 'resource'
@@ -784,7 +784,7 @@ export function HudOverlay({
           <div
             role="status"
             aria-live="polite"
-            className={`bg-[#0e121a]/92 backdrop-blur-sm border border-stone-700/65 rounded-lg shadow-xl ${
+            className={`bg-[#0e121a]/94 border border-stone-700/65 rounded-lg shadow-xl ${
               isCompactLandscape
                 ? 'max-w-[min(360px,calc(100vw-305px))] px-3 py-1.5'
                 : 'max-w-sm sm:max-w-lg w-full sm:w-auto px-4 py-2.5 sm:px-5 sm:py-3'
@@ -884,7 +884,7 @@ export function HudOverlay({
           <div
             role="note"
             onPointerDown={(e) => e.stopPropagation()}
-            className={`pointer-events-auto bg-[#0e141e]/92 backdrop-blur-sm border border-sky-500/45 rounded-lg shadow-xl flex items-start gap-2 ${
+            className={`pointer-events-auto bg-[#0e141e]/94 border border-sky-500/45 rounded-lg shadow-xl flex items-start gap-2 ${
               isCompactLandscape
                 ? 'max-w-[min(360px,calc(100vw-305px))] ps-2.5 pe-1.5 py-1.5'
                 : 'max-w-sm sm:max-w-lg w-full sm:w-auto ps-3.5 pe-2 py-2'
@@ -915,7 +915,7 @@ export function HudOverlay({
           !isTouchMode &&
           !hud.pointerLocked &&
           !hud.contextMessage && (
-            <div className="bg-[#0e121a]/80 backdrop-blur-sm border border-stone-700/45 rounded-lg px-3.5 py-1 text-[11px] text-stone-300 font-mono-tabular text-center">
+            <div className="bg-[#0e121a]/90 border border-stone-700/45 rounded-lg px-3.5 py-1 text-[11px] text-stone-300 font-mono-tabular text-center">
               {t.hud.desktopControlsBanner}
             </div>
           )}

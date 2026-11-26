@@ -2,12 +2,30 @@ import * as THREE from 'three';
 
 export interface ProceduralTextureSet {
   asphalt: THREE.CanvasTexture;
+  asphaltNormal: THREE.DataTexture;
+  asphaltRoughness: THREE.CanvasTexture;
   sidewalk: THREE.CanvasTexture;
+  sidewalkNormal: THREE.DataTexture;
+  sidewalkRoughness: THREE.CanvasTexture;
   wasteland: THREE.CanvasTexture;
+  wastelandNormal: THREE.DataTexture;
   brickWall: THREE.CanvasTexture;
+  brickNormal: THREE.DataTexture;
+  brickRoughness: THREE.CanvasTexture;
   concreteWall: THREE.CanvasTexture;
+  concreteNormal: THREE.DataTexture;
+  concreteRoughness: THREE.CanvasTexture;
   rustedMetal: THREE.CanvasTexture;
+  rustedMetalNormal: THREE.DataTexture;
+  rustedMetalRoughness: THREE.CanvasTexture;
   woodPlank: THREE.CanvasTexture;
+  woodNormal: THREE.DataTexture;
+  woodRoughness: THREE.CanvasTexture;
+  wornTile: THREE.CanvasTexture;
+  wornTileNormal: THREE.DataTexture;
+  wornTileRoughness: THREE.CanvasTexture;
+  interiorPlaster: THREE.CanvasTexture;
+  interiorPlasterNormal: THREE.DataTexture;
   shopSign: THREE.CanvasTexture;
   awningStripe: THREE.CanvasTexture;
   signValeStore: THREE.CanvasTexture;
@@ -44,15 +62,95 @@ function finalizeTexture(
   isColor = true
 ): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
-  if (isColor) {
-    tex.colorSpace = THREE.SRGBColorSpace;
-  }
+  tex.colorSpace = isColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
   tex.anisotropy = Math.min(8, maxAnisotropy);
   tex.needsUpdate = true;
   return tex;
+}
+
+/**
+ * Converts a tileable grayscale canvas (luminance = height) into a tangent-space normal map.
+ */
+function createNormalFromHeightCanvas(
+  heightCanvas: HTMLCanvasElement,
+  repeatX: number,
+  repeatY: number,
+  maxAnisotropy: number,
+  strength = 2.2
+): THREE.DataTexture {
+  const w = heightCanvas.width;
+  const h = heightCanvas.height;
+  const ctx = heightCanvas.getContext('2d')!;
+  const src = ctx.getImageData(0, 0, w, h).data;
+  const out = new Uint8Array(w * h * 4);
+
+  const sampleH = (x: number, y: number): number => {
+    const wx = ((x % w) + w) % w;
+    const wy = ((y % h) + h) % h;
+    return src[(wy * w + wx) * 4] / 255;
+  };
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const hL = sampleH(x - 1, y);
+      const hR = sampleH(x + 1, y);
+      const hU = sampleH(x, y - 1);
+      const hD = sampleH(x, y + 1);
+
+      const dx = (hL - hR) * strength;
+      const dy = (hU - hD) * strength;
+      const dz = 1.0;
+      const invLen = 1 / Math.hypot(dx, dy, dz);
+
+      const idx = (y * w + x) * 4;
+      out[idx] = Math.max(0, Math.min(255, Math.round((dx * invLen * 0.5 + 0.5) * 255)));
+      out[idx + 1] = Math.max(0, Math.min(255, Math.round((dy * invLen * 0.5 + 0.5) * 255)));
+      out[idx + 2] = Math.max(0, Math.min(255, Math.round((dz * invLen * 0.5 + 0.5) * 255)));
+      out[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(out, w, h, THREE.RGBAFormat);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  tex.anisotropy = Math.min(8, maxAnisotropy);
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeCanvasPair(size = 256): {
+  color: HTMLCanvasElement;
+  cctx: CanvasRenderingContext2D;
+  height: HTMLCanvasElement;
+  hctx: CanvasRenderingContext2D;
+  rough: HTMLCanvasElement;
+  rctx: CanvasRenderingContext2D;
+} {
+  const color = document.createElement('canvas');
+  color.width = size;
+  color.height = size;
+  const height = document.createElement('canvas');
+  height.width = size;
+  height.height = size;
+  const rough = document.createElement('canvas');
+  rough.width = size;
+  rough.height = size;
+  return {
+    color,
+    cctx: color.getContext('2d')!,
+    height,
+    hctx: height.getContext('2d')!,
+    rough,
+    rctx: rough.getContext('2d')!,
+  };
 }
 
 function createSignboardTexture(
@@ -83,9 +181,13 @@ function createSignboardTexture(
   ctx.lineWidth = Math.max(4, Math.round(h * 0.055));
   ctx.strokeRect(6, 6, w - 12, h - 12);
 
-  // Subtle weathering grit
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(0, h - Math.round(h * 0.16), w, Math.round(h * 0.16));
+  // Grime & water-streak weathering along bottom and corners
+  const grime = ctx.createLinearGradient(0, 0, 0, h);
+  grime.addColorStop(0, 'rgba(0,0,0,0.08)');
+  grime.addColorStop(0.65, 'rgba(0,0,0,0)');
+  grime.addColorStop(1, 'rgba(0,0,0,0.34)');
+  ctx.fillStyle = grime;
+  ctx.fillRect(0, 0, w, h);
 
   ctx.fillStyle = opts.textColor;
   ctx.textAlign = 'center';
@@ -100,101 +202,196 @@ function createSignboardTexture(
     ctx.fillText(opts.subText, w * 0.5, h * 0.76, w - 36);
   }
 
-  const tex = finalizeTexture(canvas, 1, 1, maxAnisotropy);
+  const tex = finalizeTexture(canvas, 1, 1, maxAnisotropy, true);
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 
 export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTextureSet {
-  // 1. Weathered Asphalt
-  const asphaltCanvas = document.createElement('canvas');
-  asphaltCanvas.width = 256;
-  asphaltCanvas.height = 256;
-  const actx = asphaltCanvas.getContext('2d')!;
+  // 1. Weathered Cracked Asphalt + Aggregate Normal + Damp Puddle Roughness
+  const asp = makeCanvasPair(256);
   const randA = seededRand(101);
-  actx.fillStyle = '#20242c';
-  actx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 650; i++) {
-    const v = randA() > 0.5 ? 240 : 12;
-    actx.fillStyle = `rgba(${v},${v},${v},${0.025 + randA() * 0.045})`;
-    actx.beginPath();
-    actx.arc(randA() * 256, randA() * 256, 0.7 + randA() * 1.6, 0, Math.PI * 2);
-    actx.fill();
+  asp.cctx.fillStyle = '#1b1e25';
+  asp.cctx.fillRect(0, 0, 256, 256);
+  asp.hctx.fillStyle = 'rgb(138,138,138)';
+  asp.hctx.fillRect(0, 0, 256, 256);
+  asp.rctx.fillStyle = 'rgb(225,225,225)'; // ~0.88 rough dry asphalt baseline
+  asp.rctx.fillRect(0, 0, 256, 256);
+
+  // Subtle dark tar patches
+  for (let i = 0; i < 6; i++) {
+    const px = randA() * 200;
+    const py = randA() * 200;
+    const pw = 24 + randA() * 44;
+    const ph = 18 + randA() * 34;
+    asp.cctx.fillStyle = 'rgba(13, 15, 19, 0.42)';
+    asp.cctx.fillRect(px, py, pw, ph);
+    asp.rctx.fillStyle = 'rgb(155,155,155)';
+    asp.rctx.fillRect(px, py, pw, ph);
   }
-  actx.strokeStyle = 'rgba(10,12,16,0.5)';
-  actx.lineWidth = 1.3;
-  for (let i = 0; i < 5; i++) {
+
+  // Damp oil/rain sheen pockets (lower roughness = 0.38-0.55)
+  for (let i = 0; i < 7; i++) {
+    const x = randA() * 256;
+    const y = randA() * 256;
+    const rad = 18 + randA() * 36;
+    const grad = asp.rctx.createRadialGradient(x, y, 2, x, y, rad);
+    grad.addColorStop(0, 'rgba(98, 98, 98, 0.92)');
+    grad.addColorStop(1, 'rgba(225, 225, 225, 0)');
+    asp.rctx.fillStyle = grad;
+    asp.rctx.beginPath();
+    asp.rctx.arc(x, y, rad, 0, Math.PI * 2);
+    asp.rctx.fill();
+
+    const cGrad = asp.cctx.createRadialGradient(x, y, 2, x, y, rad);
+    cGrad.addColorStop(0, 'rgba(12, 15, 20, 0.35)');
+    cGrad.addColorStop(1, 'rgba(12, 15, 20, 0)');
+    asp.cctx.fillStyle = cGrad;
+    asp.cctx.beginPath();
+    asp.cctx.arc(x, y, rad, 0, Math.PI * 2);
+    asp.cctx.fill();
+  }
+
+  // Fine mineral gravel aggregate
+  for (let i = 0; i < 950; i++) {
+    const rx = randA() * 256;
+    const ry = randA() * 256;
+    const rSize = 0.6 + randA() * 1.5;
+    const bright = randA() > 0.5;
+    asp.cctx.fillStyle = bright ? 'rgba(210,215,222,0.055)' : 'rgba(8,10,13,0.09)';
+    asp.cctx.fillRect(rx, ry, rSize, rSize);
+    asp.hctx.fillStyle = bright ? 'rgba(195,195,195,0.28)' : 'rgba(72,72,72,0.3)';
+    asp.hctx.fillRect(rx, ry, rSize, rSize);
+  }
+
+  // Branching asphalt fractures
+  asp.cctx.strokeStyle = 'rgba(7,9,12,0.68)';
+  asp.hctx.strokeStyle = 'rgb(34,34,34)';
+  asp.cctx.lineWidth = 1.4;
+  asp.hctx.lineWidth = 2.0;
+  for (let i = 0; i < 8; i++) {
     let x = randA() * 256;
     let y = randA() * 256;
-    actx.beginPath();
-    actx.moveTo(x, y);
-    for (let s = 0; s < 5; s++) {
-      x += (randA() - 0.5) * 34;
-      y += (randA() - 0.5) * 34;
-      actx.lineTo(x, y);
+    asp.cctx.beginPath();
+    asp.hctx.beginPath();
+    asp.cctx.moveTo(x, y);
+    asp.hctx.moveTo(x, y);
+    for (let s = 0; s < 6; s++) {
+      x += (randA() - 0.5) * 38;
+      y += (randA() - 0.5) * 38;
+      asp.cctx.lineTo(x, y);
+      asp.hctx.lineTo(x, y);
     }
-    actx.stroke();
+    asp.cctx.stroke();
+    asp.hctx.stroke();
   }
-  const asphalt = finalizeTexture(asphaltCanvas, 20, 20, maxAnisotropy);
+  const asphalt = finalizeTexture(asp.color, 20, 20, maxAnisotropy, true);
+  const asphaltNormal = createNormalFromHeightCanvas(asp.height, 20, 20, maxAnisotropy, 1.9);
+  const asphaltRoughness = finalizeTexture(asp.rough, 20, 20, maxAnisotropy, false);
 
-  // 2. Concrete Sidewalk Slabs
-  const swCanvas = document.createElement('canvas');
-  swCanvas.width = 256;
-  swCanvas.height = 256;
-  const sctx = swCanvas.getContext('2d')!;
+  // 2. Cracked Concrete Sidewalk Slabs
+  const sw = makeCanvasPair(256);
   const randS = seededRand(202);
-  sctx.fillStyle = '#484e58';
-  sctx.fillRect(0, 0, 256, 256);
+  sw.cctx.fillStyle = '#3f454d';
+  sw.cctx.fillRect(0, 0, 256, 256);
+  sw.hctx.fillStyle = 'rgb(155,155,155)';
+  sw.hctx.fillRect(0, 0, 256, 256);
+  sw.rctx.fillStyle = 'rgb(230,230,230)';
+  sw.rctx.fillRect(0, 0, 256, 256);
+
   for (let gx = 0; gx < 256; gx += 64) {
     for (let gy = 0; gy < 256; gy += 64) {
       const shade = (randS() - 0.5) * 14;
-      sctx.fillStyle = `rgb(${72 + shade},${77 + shade},${86 + shade})`;
-      sctx.fillRect(gx + 1, gy + 1, 62, 62);
+      sw.cctx.fillStyle = `rgb(${64 + shade},${68 + shade},${75 + shade})`;
+      sw.cctx.fillRect(gx + 2, gy + 2, 60, 60);
+      const hTone = 148 + Math.round((randS() - 0.5) * 20);
+      sw.hctx.fillStyle = `rgb(${hTone},${hTone},${hTone})`;
+      sw.hctx.fillRect(gx + 2, gy + 2, 60, 60);
     }
   }
-  sctx.strokeStyle = 'rgba(18,21,26,0.65)';
-  sctx.lineWidth = 2;
-  for (let i = 0; i <= 256; i += 64) {
-    sctx.beginPath();
-    sctx.moveTo(i, 0);
-    sctx.lineTo(i, 256);
-    sctx.moveTo(0, i);
-    sctx.lineTo(256, i);
-    sctx.stroke();
+  // Subtle grime & olive moss near joints
+  for (let i = 0; i < 180; i++) {
+    const rx = randS() * 256;
+    const ry = randS() * 256;
+    sw.cctx.fillStyle = randS() > 0.7 ? 'rgba(56,68,46,0.12)' : 'rgba(18,20,24,0.12)';
+    sw.cctx.fillRect(rx, ry, 2 + randS() * 4, 2 + randS() * 4);
+    sw.hctx.fillStyle = 'rgba(105,105,105,0.22)';
+    sw.hctx.fillRect(rx, ry, 2, 2);
   }
-  const sidewalk = finalizeTexture(swCanvas, 6, 6, maxAnisotropy);
+  // Expansion grooves
+  sw.cctx.strokeStyle = 'rgba(14,17,22,0.72)';
+  sw.cctx.lineWidth = 2.5;
+  sw.hctx.strokeStyle = 'rgb(42,42,42)';
+  sw.hctx.lineWidth = 3.0;
+  for (let i = 0; i <= 256; i += 64) {
+    sw.cctx.beginPath();
+    sw.cctx.moveTo(i, 0);
+    sw.cctx.lineTo(i, 256);
+    sw.cctx.moveTo(0, i);
+    sw.cctx.lineTo(256, i);
+    sw.cctx.stroke();
 
-  // 3. Wasteland Ground (dirt, ash & muted moss)
-  const wCanvas = document.createElement('canvas');
-  wCanvas.width = 256;
-  wCanvas.height = 256;
-  const wctx = wCanvas.getContext('2d')!;
+    sw.hctx.beginPath();
+    sw.hctx.moveTo(i, 0);
+    sw.hctx.lineTo(i, 256);
+    sw.hctx.moveTo(0, i);
+    sw.hctx.lineTo(256, i);
+    sw.hctx.stroke();
+  }
+  const sidewalk = finalizeTexture(sw.color, 6, 6, maxAnisotropy, true);
+  const sidewalkNormal = createNormalFromHeightCanvas(sw.height, 6, 6, maxAnisotropy, 2.2);
+  const sidewalkRoughness = finalizeTexture(sw.rough, 6, 6, maxAnisotropy, false);
+
+  // 3. Wasteland Ground (damp earth, ash & muted scrub)
+  const wst = makeCanvasPair(256);
   const randW = seededRand(303);
-  wctx.fillStyle = '#252923';
-  wctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 42; i++) {
+  wst.cctx.fillStyle = '#21241f';
+  wst.cctx.fillRect(0, 0, 256, 256);
+  wst.hctx.fillStyle = 'rgb(120,120,120)';
+  wst.hctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 52; i++) {
     const x = randW() * 256;
     const y = randW() * 256;
     const rad = 14 + randW() * 34;
-    const grad = wctx.createRadialGradient(x, y, 2, x, y, rad);
-    grad.addColorStop(0, randW() > 0.5 ? 'rgba(52,66,46,0.28)' : 'rgba(54,47,39,0.28)');
+    const isMoss = randW() > 0.48;
+    const grad = wst.cctx.createRadialGradient(x, y, 2, x, y, rad);
+    grad.addColorStop(0, isMoss ? 'rgba(46,58,40,0.32)' : 'rgba(50,42,35,0.32)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
-    wctx.fillStyle = grad;
-    wctx.beginPath();
-    wctx.arc(x, y, rad, 0, Math.PI * 2);
-    wctx.fill();
-  }
-  const wasteland = finalizeTexture(wCanvas, 16, 16, maxAnisotropy);
+    wst.cctx.fillStyle = grad;
+    wst.cctx.beginPath();
+    wst.cctx.arc(x, y, rad, 0, Math.PI * 2);
+    wst.cctx.fill();
 
-  // 4. Weathered Brick Wall
-  const bCanvas = document.createElement('canvas');
-  bCanvas.width = 256;
-  bCanvas.height = 256;
-  const bctx = bCanvas.getContext('2d')!;
+    const hGrad = wst.hctx.createRadialGradient(x, y, 2, x, y, rad);
+    hGrad.addColorStop(0, isMoss ? 'rgba(175,175,175,0.4)' : 'rgba(78,78,78,0.4)');
+    hGrad.addColorStop(1, 'rgba(120,120,120,0)');
+    wst.hctx.fillStyle = hGrad;
+    wst.hctx.beginPath();
+    wst.hctx.arc(x, y, rad, 0, Math.PI * 2);
+    wst.hctx.fill();
+  }
+  for (let i = 0; i < 650; i++) {
+    const rx = randW() * 256;
+    const ry = randW() * 256;
+    wst.cctx.fillStyle = randW() > 0.5 ? 'rgba(84,92,72,0.12)' : 'rgba(12,12,10,0.18)';
+    wst.cctx.fillRect(rx, ry, 2, 2);
+    wst.hctx.fillStyle = randW() > 0.5 ? 'rgba(195,195,195,0.22)' : 'rgba(55,55,55,0.24)';
+    wst.hctx.fillRect(rx, ry, 2, 2);
+  }
+  const wasteland = finalizeTexture(wst.color, 18, 18, maxAnisotropy, true);
+  const wastelandNormal = createNormalFromHeightCanvas(wst.height, 18, 18, maxAnisotropy, 1.8);
+
+  // 4. Weathered Brick Wall (mortar recess + aged brick color + soot gradient)
+  const brk = makeCanvasPair(256);
   const randB = seededRand(404);
-  bctx.fillStyle = '#332926';
-  bctx.fillRect(0, 0, 256, 256);
+  brk.cctx.fillStyle = '#292220'; // dark recessed mortar
+  brk.cctx.fillRect(0, 0, 256, 256);
+  brk.hctx.fillStyle = 'rgb(48,48,48)'; // recessed mortar height
+  brk.hctx.fillRect(0, 0, 256, 256);
+  brk.rctx.fillStyle = 'rgb(245,245,245)';
+  brk.rctx.fillRect(0, 0, 256, 256);
+
   const bh = 16;
   const bw = 32;
   for (let row = 0; row < 16; row++) {
@@ -203,78 +400,250 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
       const bx = col * bw + offset;
       const by = row * bh;
       const tone = (randB() - 0.5) * 18;
-      bctx.fillStyle = `rgb(${84 + tone},${52 + tone * 0.7},${44 + tone * 0.6})`;
-      bctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
+      const r = Math.round(76 + tone);
+      const g = Math.round(48 + tone * 0.65);
+      const b = Math.round(41 + tone * 0.55);
+      brk.cctx.fillStyle = `rgb(${r},${g},${b})`;
+      brk.cctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
+
+      const hVal = Math.round(176 + (randB() - 0.5) * 32);
+      brk.hctx.fillStyle = `rgb(${hVal},${hVal},${hVal})`;
+      brk.hctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
+
+      const rVal = Math.round(215 + (randB() - 0.5) * 26);
+      brk.rctx.fillStyle = `rgb(${rVal},${rVal},${rVal})`;
+      brk.rctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
     }
   }
-  const bGrad = bctx.createLinearGradient(0, 0, 0, 256);
-  bGrad.addColorStop(0, 'rgba(12,12,14,0.25)');
-  bGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
-  bGrad.addColorStop(1, 'rgba(10,12,10,0.45)');
-  bctx.fillStyle = bGrad;
-  bctx.fillRect(0, 0, 256, 256);
-  const brickWall = finalizeTexture(bCanvas, 2, 2, maxAnisotropy);
+  const bGrad = brk.cctx.createLinearGradient(0, 0, 0, 256);
+  bGrad.addColorStop(0, 'rgba(10,10,12,0.32)');
+  bGrad.addColorStop(0.45, 'rgba(0,0,0,0)');
+  bGrad.addColorStop(1, 'rgba(8,10,8,0.52)');
+  brk.cctx.fillStyle = bGrad;
+  brk.cctx.fillRect(0, 0, 256, 256);
+  const brickWall = finalizeTexture(brk.color, 2, 2, maxAnisotropy, true);
+  const brickNormal = createNormalFromHeightCanvas(brk.height, 2, 2, maxAnisotropy, 2.8);
+  const brickRoughness = finalizeTexture(brk.rough, 2, 2, maxAnisotropy, false);
 
-  // 5. Weathered Concrete Wall
-  const cCanvas = document.createElement('canvas');
-  cCanvas.width = 256;
-  cCanvas.height = 256;
-  const cctx = cCanvas.getContext('2d')!;
+  // 5. Weathered Concrete Wall (form seams + drip stains + pitting)
+  const cnc = makeCanvasPair(256);
   const randC = seededRand(505);
-  cctx.fillStyle = '#474c54';
-  cctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 36; i++) {
-    cctx.fillStyle = randC() > 0.5 ? 'rgba(20,24,28,0.12)' : 'rgba(180,185,190,0.06)';
-    cctx.beginPath();
-    cctx.arc(randC() * 256, randC() * 256, 10 + randC() * 28, 0, Math.PI * 2);
-    cctx.fill();
-  }
-  cctx.strokeStyle = 'rgba(20,22,26,0.35)';
-  cctx.lineWidth = 2;
-  cctx.strokeRect(1, 1, 254, 126);
-  cctx.strokeRect(1, 129, 254, 126);
-  const concreteWall = finalizeTexture(cCanvas, 2, 2, maxAnisotropy);
+  cnc.cctx.fillStyle = '#41464e';
+  cnc.cctx.fillRect(0, 0, 256, 256);
+  cnc.hctx.fillStyle = 'rgb(148,148,148)';
+  cnc.hctx.fillRect(0, 0, 256, 256);
+  cnc.rctx.fillStyle = 'rgb(228,228,228)';
+  cnc.rctx.fillRect(0, 0, 256, 256);
 
-  // 6. Rusted Metal
-  const rCanvas = document.createElement('canvas');
-  rCanvas.width = 256;
-  rCanvas.height = 256;
-  const rctx = rCanvas.getContext('2d')!;
+  for (let i = 0; i < 42; i++) {
+    const cx = randC() * 256;
+    const cy = randC() * 256;
+    const cr = 8 + randC() * 26;
+    cnc.cctx.fillStyle = randC() > 0.5 ? 'rgba(18,21,26,0.14)' : 'rgba(165,172,180,0.06)';
+    cnc.cctx.beginPath();
+    cnc.cctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    cnc.cctx.fill();
+    cnc.hctx.fillStyle = randC() > 0.5 ? 'rgba(96,96,96,0.22)' : 'rgba(182,182,182,0.18)';
+    cnc.hctx.beginPath();
+    cnc.hctx.arc(cx, cy, cr * 0.65, 0, Math.PI * 2);
+    cnc.hctx.fill();
+  }
+  // Rainwater stain streaks
+  for (let i = 0; i < 14; i++) {
+    const sx = randC() * 256;
+    const sh = 40 + randC() * 110;
+    const g = cnc.cctx.createLinearGradient(sx, 0, sx, sh);
+    g.addColorStop(0, 'rgba(12,14,18,0.28)');
+    g.addColorStop(1, 'rgba(12,14,18,0)');
+    cnc.cctx.fillStyle = g;
+    cnc.cctx.fillRect(sx, 0, 4 + randC() * 8, sh);
+    cnc.rctx.fillStyle = 'rgb(185,185,185)';
+    cnc.rctx.fillRect(sx, 0, 3 + randC() * 5, sh * 0.7);
+  }
+  cnc.cctx.strokeStyle = 'rgba(16,18,22,0.45)';
+  cnc.cctx.lineWidth = 2;
+  cnc.cctx.strokeRect(1, 1, 254, 126);
+  cnc.cctx.strokeRect(1, 129, 254, 126);
+  cnc.hctx.strokeStyle = 'rgb(52,52,52)';
+  cnc.hctx.lineWidth = 2.5;
+  cnc.hctx.strokeRect(1, 1, 254, 126);
+  cnc.hctx.strokeRect(1, 129, 254, 126);
+  const concreteWall = finalizeTexture(cnc.color, 2, 2, maxAnisotropy, true);
+  const concreteNormal = createNormalFromHeightCanvas(cnc.height, 2, 2, maxAnisotropy, 2.1);
+  const concreteRoughness = finalizeTexture(cnc.rough, 2, 2, maxAnisotropy, false);
+
+  // 6. Rusted Metal (corrugated steel ribs + flaking oxidation roughness)
+  const rst = makeCanvasPair(256);
   const randR = seededRand(606);
-  rctx.fillStyle = '#495059';
-  rctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 45; i++) {
+  rst.cctx.fillStyle = '#424852';
+  rst.cctx.fillRect(0, 0, 256, 256);
+  rst.hctx.fillStyle = 'rgb(142,142,142)';
+  rst.hctx.fillRect(0, 0, 256, 256);
+  rst.rctx.fillStyle = 'rgb(125,125,125)'; // metallic base ~0.49 roughness
+  rst.rctx.fillRect(0, 0, 256, 256);
+
+  // Subtle vertical metal ribbing
+  for (let x = 0; x < 256; x += 16) {
+    rst.cctx.fillStyle = 'rgba(15,18,24,0.16)';
+    rst.cctx.fillRect(x, 0, 3, 256);
+    rst.hctx.fillStyle = 'rgb(88,88,88)';
+    rst.hctx.fillRect(x, 0, 4, 256);
+  }
+  for (let i = 0; i < 48; i++) {
     const x = randR() * 256;
     const y = randR() * 256;
     const rad = 8 + randR() * 26;
-    const grad = rctx.createRadialGradient(x, y, 2, x, y, rad);
-    grad.addColorStop(0, 'rgba(122, 58, 28, 0.55)');
-    grad.addColorStop(1, 'rgba(122, 58, 28, 0)');
-    rctx.fillStyle = grad;
-    rctx.beginPath();
-    rctx.arc(x, y, rad, 0, Math.PI * 2);
-    rctx.fill();
-  }
-  const rustedMetal = finalizeTexture(rCanvas, 1, 1, maxAnisotropy);
+    const grad = rst.cctx.createRadialGradient(x, y, 2, x, y, rad);
+    grad.addColorStop(0, 'rgba(118, 52, 26, 0.62)');
+    grad.addColorStop(1, 'rgba(118, 52, 26, 0)');
+    rst.cctx.fillStyle = grad;
+    rst.cctx.beginPath();
+    rst.cctx.arc(x, y, rad, 0, Math.PI * 2);
+    rst.cctx.fill();
 
-  // 7. Wood Plank
-  const pCanvas = document.createElement('canvas');
-  pCanvas.width = 256;
-  pCanvas.height = 256;
-  const pctx = pCanvas.getContext('2d')!;
+    // Rust is rough & pitted
+    const rGrad = rst.rctx.createRadialGradient(x, y, 2, x, y, rad);
+    rGrad.addColorStop(0, 'rgba(240,240,240,0.9)');
+    rGrad.addColorStop(1, 'rgba(240,240,240,0)');
+    rst.rctx.fillStyle = rGrad;
+    rst.rctx.beginPath();
+    rst.rctx.arc(x, y, rad, 0, Math.PI * 2);
+    rst.rctx.fill();
+
+    rst.hctx.fillStyle = 'rgba(182,182,182,0.28)';
+    rst.hctx.beginPath();
+    rst.hctx.arc(x, y, rad * 0.45, 0, Math.PI * 2);
+    rst.hctx.fill();
+  }
+  const rustedMetal = finalizeTexture(rst.color, 1, 1, maxAnisotropy, true);
+  const rustedMetalNormal = createNormalFromHeightCanvas(rst.height, 1, 1, maxAnisotropy, 2.4);
+  const rustedMetalRoughness = finalizeTexture(rst.rough, 1, 1, maxAnisotropy, false);
+
+  // 7. Wood Plank (grain + deep plank grooves)
+  const wdp = makeCanvasPair(256);
   const randP = seededRand(707);
-  pctx.fillStyle = '#4e3928';
-  pctx.fillRect(0, 0, 256, 256);
+  wdp.cctx.fillStyle = '#473424';
+  wdp.cctx.fillRect(0, 0, 256, 256);
+  wdp.hctx.fillStyle = 'rgb(160,160,160)';
+  wdp.hctx.fillRect(0, 0, 256, 256);
+  wdp.rctx.fillStyle = 'rgb(218,218,218)';
+  wdp.rctx.fillRect(0, 0, 256, 256);
+
   for (let y = 0; y < 256; y += 32) {
     const tone = (randP() - 0.5) * 14;
-    pctx.fillStyle = `rgb(${82 + tone},${60 + tone * 0.7},${41 + tone * 0.5})`;
-    pctx.fillRect(0, y + 1, 256, 30);
-    pctx.fillStyle = 'rgba(20,14,8,0.6)';
-    pctx.fillRect(0, y, 256, 2);
+    wdp.cctx.fillStyle = `rgb(${76 + tone},${55 + tone * 0.7},${38 + tone * 0.5})`;
+    wdp.cctx.fillRect(0, y + 1, 256, 30);
+    // Grain streaks
+    for (let g = 0; g < 6; g++) {
+      const gy = y + 4 + randP() * 24;
+      wdp.cctx.fillStyle = 'rgba(24,16,9,0.22)';
+      wdp.cctx.fillRect(0, gy, 256, 1.4);
+      wdp.hctx.fillStyle = 'rgba(118,118,118,0.32)';
+      wdp.hctx.fillRect(0, gy, 256, 1.5);
+    }
+    // Plank seam groove
+    wdp.cctx.fillStyle = 'rgba(15,10,6,0.72)';
+    wdp.cctx.fillRect(0, y, 256, 2);
+    wdp.hctx.fillStyle = 'rgb(36,36,36)';
+    wdp.hctx.fillRect(0, y, 256, 2.5);
   }
-  const woodPlank = finalizeTexture(pCanvas, 1, 1, maxAnisotropy);
+  const woodPlank = finalizeTexture(wdp.color, 1, 1, maxAnisotropy, true);
+  const woodNormal = createNormalFromHeightCanvas(wdp.height, 1, 1, maxAnisotropy, 2.3);
+  const woodRoughness = finalizeTexture(wdp.rough, 1, 1, maxAnisotropy, false);
 
-  // 8. LAST SHOP Signboard Texture
+  // 8. Worn Clinic / Store Tile Floor (checkered muted tiles + dirty grout + grime stains)
+  const til = makeCanvasPair(256);
+  const randT = seededRand(808);
+  til.cctx.fillStyle = '#2b3139';
+  til.cctx.fillRect(0, 0, 256, 256);
+  til.hctx.fillStyle = 'rgb(166,166,166)';
+  til.hctx.fillRect(0, 0, 256, 256);
+  til.rctx.fillStyle = 'rgb(156,156,156)'; // subtly scuffed semi-gloss ceramic tile
+  til.rctx.fillRect(0, 0, 256, 256);
+
+  for (let gx = 0; gx < 256; gx += 32) {
+    for (let gy = 0; gy < 256; gy += 32) {
+      const alt = ((gx / 32 + gy / 32) & 1) === 0;
+      const jitter = (randT() - 0.5) * 10;
+      const base = (alt ? 66 : 54) + jitter;
+      til.cctx.fillStyle = `rgb(${base - 4},${base + 2},${base + 7})`;
+      til.cctx.fillRect(gx + 1.5, gy + 1.5, 29, 29);
+
+      const roughTile = alt ? 148 : 172;
+      til.rctx.fillStyle = `rgb(${roughTile},${roughTile},${roughTile})`;
+      til.rctx.fillRect(gx + 1.5, gy + 1.5, 29, 29);
+    }
+  }
+  for (let i = 0; i < 24; i++) {
+    const sx = randT() * 256;
+    const sy = randT() * 256;
+    const sr = 10 + randT() * 24;
+    const g = til.cctx.createRadialGradient(sx, sy, 2, sx, sy, sr);
+    g.addColorStop(0, 'rgba(20, 22, 18, 0.34)');
+    g.addColorStop(1, 'rgba(20, 22, 18, 0)');
+    til.cctx.fillStyle = g;
+    til.cctx.beginPath();
+    til.cctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    til.cctx.fill();
+
+    til.rctx.fillStyle = 'rgba(232,232,232,0.5)';
+    til.rctx.beginPath();
+    til.rctx.arc(sx, sy, sr * 0.7, 0, Math.PI * 2);
+    til.rctx.fill();
+  }
+  til.hctx.strokeStyle = 'rgb(45,45,45)';
+  til.hctx.lineWidth = 2;
+  til.cctx.strokeStyle = 'rgba(15,18,22,0.75)';
+  til.cctx.lineWidth = 1.8;
+  for (let i = 0; i <= 256; i += 32) {
+    til.cctx.beginPath();
+    til.cctx.moveTo(i, 0);
+    til.cctx.lineTo(i, 256);
+    til.cctx.moveTo(0, i);
+    til.cctx.lineTo(256, i);
+    til.cctx.stroke();
+
+    til.hctx.beginPath();
+    til.hctx.moveTo(i, 0);
+    til.hctx.lineTo(i, 256);
+    til.hctx.moveTo(0, i);
+    til.hctx.lineTo(256, i);
+    til.hctx.stroke();
+  }
+  const wornTile = finalizeTexture(til.color, 3, 3, maxAnisotropy, true);
+  const wornTileNormal = createNormalFromHeightCanvas(til.height, 3, 3, maxAnisotropy, 1.8);
+  const wornTileRoughness = finalizeTexture(til.rough, 3, 3, maxAnisotropy, false);
+
+  // 9. Interior Stained Plaster Wall (peeling damp plaster)
+  const pls = makeCanvasPair(256);
+  const randPls = seededRand(909);
+  pls.cctx.fillStyle = '#4c5258';
+  pls.cctx.fillRect(0, 0, 256, 256);
+  pls.hctx.fillStyle = 'rgb(142,142,142)';
+  pls.hctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 38; i++) {
+    const x = randPls() * 256;
+    const y = randPls() * 256;
+    const rad = 10 + randPls() * 24;
+    pls.cctx.fillStyle = randPls() > 0.5 ? 'rgba(22,26,30,0.14)' : 'rgba(145,150,152,0.08)';
+    pls.cctx.beginPath();
+    pls.cctx.arc(x, y, rad, 0, Math.PI * 2);
+    pls.cctx.fill();
+    pls.hctx.fillStyle = randPls() > 0.5 ? 'rgba(92,92,92,0.28)' : 'rgba(176,176,176,0.22)';
+    pls.hctx.beginPath();
+    pls.hctx.arc(x, y, rad * 0.6, 0, Math.PI * 2);
+    pls.hctx.fill();
+  }
+  const pGrad = pls.cctx.createLinearGradient(0, 0, 0, 256);
+  pGrad.addColorStop(0, 'rgba(14,16,18,0.18)');
+  pGrad.addColorStop(0.65, 'rgba(0,0,0,0)');
+  pGrad.addColorStop(1, 'rgba(14,18,16,0.38)');
+  pls.cctx.fillStyle = pGrad;
+  pls.cctx.fillRect(0, 0, 256, 256);
+  const interiorPlaster = finalizeTexture(pls.color, 2, 1, maxAnisotropy, true);
+  const interiorPlasterNormal = createNormalFromHeightCanvas(pls.height, 2, 1, maxAnisotropy, 1.5);
+
+  // 10. LAST SHOP Signboard Texture
   const shopSign = createSignboardTexture(
     {
       bg: '#1c1917',
@@ -288,22 +657,22 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     maxAnisotropy
   );
 
-  // 9. Striped Shop Awning
+  // 11. Striped Shop Awning
   const awCanvas = document.createElement('canvas');
   awCanvas.width = 256;
   awCanvas.height = 128;
   const awctx = awCanvas.getContext('2d')!;
   const stripeCount = 8;
-  const sw = 256 / stripeCount;
+  const swPx = 256 / stripeCount;
   for (let i = 0; i < stripeCount; i++) {
-    awctx.fillStyle = i % 2 === 0 ? '#9a3412' : '#292524';
-    awctx.fillRect(i * sw, 0, sw + 1, 128);
+    awctx.fillStyle = i % 2 === 0 ? '#8c2f11' : '#262321';
+    awctx.fillRect(i * swPx, 0, swPx + 1, 128);
   }
-  awctx.fillStyle = 'rgba(0,0,0,0.22)';
-  awctx.fillRect(0, 96, 256, 32);
-  const awningStripe = finalizeTexture(awCanvas, 2, 1, maxAnisotropy);
+  awctx.fillStyle = 'rgba(0,0,0,0.28)';
+  awctx.fillRect(0, 92, 256, 36);
+  const awningStripe = finalizeTexture(awCanvas, 2, 1, maxAnisotropy, true);
 
-  // 10. Landmark Building & Street Signage
+  // 12. Landmark Building & Street Signage
   const signValeStore = createSignboardTexture(
     {
       bg: '#2c1718',
@@ -480,7 +849,7 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
   hzCanvas.width = 256;
   hzCanvas.height = 64;
   const hzctx = hzCanvas.getContext('2d')!;
-  hzctx.fillStyle = '#d97706';
+  hzctx.fillStyle = '#c46d08';
   hzctx.fillRect(0, 0, 256, 64);
   hzctx.fillStyle = '#18181b';
   for (let x = -64; x < 320; x += 48) {
@@ -492,16 +861,34 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     hzctx.closePath();
     hzctx.fill();
   }
-  const hazardStripe = finalizeTexture(hzCanvas, 2, 1, maxAnisotropy);
+  const hazardStripe = finalizeTexture(hzCanvas, 2, 1, maxAnisotropy, true);
 
-  const all = [
+  const all: THREE.Texture[] = [
     asphalt,
+    asphaltNormal,
+    asphaltRoughness,
     sidewalk,
+    sidewalkNormal,
+    sidewalkRoughness,
     wasteland,
+    wastelandNormal,
     brickWall,
+    brickNormal,
+    brickRoughness,
     concreteWall,
+    concreteNormal,
+    concreteRoughness,
     rustedMetal,
+    rustedMetalNormal,
+    rustedMetalRoughness,
     woodPlank,
+    woodNormal,
+    woodRoughness,
+    wornTile,
+    wornTileNormal,
+    wornTileRoughness,
+    interiorPlaster,
+    interiorPlasterNormal,
     shopSign,
     awningStripe,
     signValeStore,
@@ -522,12 +909,30 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   return {
     asphalt,
+    asphaltNormal,
+    asphaltRoughness,
     sidewalk,
+    sidewalkNormal,
+    sidewalkRoughness,
     wasteland,
+    wastelandNormal,
     brickWall,
+    brickNormal,
+    brickRoughness,
     concreteWall,
+    concreteNormal,
+    concreteRoughness,
     rustedMetal,
+    rustedMetalNormal,
+    rustedMetalRoughness,
     woodPlank,
+    woodNormal,
+    woodRoughness,
+    wornTile,
+    wornTileNormal,
+    wornTileRoughness,
+    interiorPlaster,
+    interiorPlasterNormal,
     shopSign,
     awningStripe,
     signValeStore,

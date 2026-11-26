@@ -8,6 +8,7 @@ import {
 import {
   GameLanguage,
   GameSettings,
+  GraphicsQuality,
   HorrorAudioLevel,
   ScreenOrientationMode,
   TouchControlsMode,
@@ -57,6 +58,21 @@ export function SettingsModal({
     { id: 'reduced', label: t.settingsModal.horrorReduced },
     { id: 'off', label: t.settingsModal.horrorOff },
   ];
+
+  const graphicsModes: { id: GraphicsQuality; label: string }[] = [
+    { id: 'low', label: t.settingsModal.graphicsLow },
+    { id: 'medium', label: t.settingsModal.graphicsMedium },
+    { id: 'high', label: t.settingsModal.graphicsHigh },
+  ];
+
+  const handleGraphicsQualitySelect = (q: GraphicsQuality) => {
+    onChange({
+      ...settings,
+      graphicsQuality: q,
+      shadowsEnabled: q !== 'low',
+      lightingQuality: q === 'low' ? 'performance' : 'atmospheric',
+    });
+  };
 
   const dayLengthOptions = [
     { seconds: 900, min: 15 },
@@ -448,6 +464,32 @@ export function SettingsModal({
             >
               {settings.muted ? t.settingsModal.mutedLabel : t.settingsModal.enabledLabel}
             </button>
+          </div>
+
+          {/* Graphics Quality Preset */}
+          <div className={`flex flex-wrap items-center justify-between gap-2 ${isCompactLandscape ? 'col-span-2' : ''}`}>
+            <div>
+              <div className="text-sm font-medium text-stone-200">
+                {t.settingsModal.graphicsQualityLabel}
+              </div>
+              <div className="text-xs text-stone-400">{t.settingsModal.graphicsQualityDesc}</div>
+            </div>
+            <div className="flex items-center gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800 shrink-0">
+              {graphicsModes.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleGraphicsQualitySelect(m.id)}
+                  className={`min-h-[36px] px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                    settings.graphicsQuality === m.id
+                      ? 'bg-amber-500 text-stone-950 font-semibold'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Dynamic Shadows Toggle */}

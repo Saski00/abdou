@@ -1,0 +1,1411 @@
+LAST SHOP — STORY DEVELOPMENT: COMPLETE NARRATIVE, CAMPAIGN, MISSIONS & ENDINGS
+
+PRIMARY OBJECTIVE
+
+Transform Last Shop into a story-driven survival horror game with a complete, coherent, immersive, and playable main narrative.
+
+Create and implement the actual story content, not merely a generic story framework.
+
+Develop the narrative from the opening scene through the final chapter and multiple possible endings.
+
+The story must be integrated with the existing gameplay systems, including:
+
+- Open-world exploration.
+- Survival.
+- The shop and safehouse.
+- Scavenging.
+- Zombies.
+- Combat.
+- Survivor recruitment.
+- NPC interactions.
+- Missions.
+- World events.
+- Environmental storytelling.
+- Player decisions.
+- Progression.
+- Save/load.
+
+The game should feel like a survival horror story in which the player gradually uncovers the truth behind the catastrophe while struggling to survive.
+
+IMPORTANT:
+
+This is an existing project.
+
+Inspect the current project, story systems, gameplay mechanics, characters, mission systems, world locations, and progression before making any changes.
+
+Preserve existing functional features.
+
+Adapt the story to existing mechanics instead of rebuilding the game to fit the story.
+
+If the story system is incomplete, implement the necessary lightweight functionality using the existing architecture.
+
+Do not merely create a document describing the story.
+
+IMPLEMENT THE STORY AND ITS PLAYABLE CONTENT DIRECTLY INTO THE GAME.
+
+---
+
+1. GAME IDENTITY AND NARRATIVE DIRECTION
+
+Game title:
+
+LAST SHOP
+
+Genre:
+
+- Survival horror.
+- Open-world survival.
+- Psychological horror.
+- Story-driven exploration.
+- Resource management.
+- Zombie apocalypse.
+
+Narrative tone:
+
+- Dark.
+- Serious.
+- Mysterious.
+- Emotional.
+- Realistic.
+- Atmospheric.
+- Occasionally hopeful.
+- Psychological horror rather than constant jump scares.
+
+The story should begin with a small personal survival problem and gradually expand into a larger mystery.
+
+The player should initially know very little.
+
+The truth must be revealed through exploration, missions, documents, characters, environmental clues, radio transmissions, and events.
+
+Do not reveal the entire conspiracy in the opening.
+
+---
+
+2. THE WORLD
+
+Location: Haven Creek
+
+Haven Creek is a fictional town that experienced a catastrophic outbreak.
+
+Before the outbreak, the town contained:
+
+- Residential neighborhoods.
+- A commercial district.
+- A hospital.
+- A small police station.
+- A gas station.
+- A supermarket.
+- Industrial facilities.
+- A research facility outside town.
+- A radio station.
+- An emergency shelter.
+- Abandoned roads.
+- Forest outskirts.
+- Underground infrastructure.
+
+The town has been abandoned, damaged, and partially overrun.
+
+Different locations should have different levels of danger.
+
+The world should contain environmental evidence of what happened.
+
+Examples:
+
+- Abandoned vehicles.
+- Emergency evacuation signs.
+- Barricaded buildings.
+- Blood trails.
+- Abandoned belongings.
+- Emergency messages.
+- Damaged infrastructure.
+- Missing-person posters.
+- Locked facilities.
+- Strange markings.
+- Evidence of failed rescue attempts.
+
+Use the existing world map and locations.
+
+Do not generate an entirely new world if the current game already has one.
+
+Adapt the narrative locations to the existing map.
+
+---
+
+3. THE CENTRAL MYSTERY
+
+Several months before the outbreak, a medical research organization operated a secret research program near Haven Creek.
+
+Officially, the organization was conducting neurological research and emergency medical studies.
+
+Unofficially, the research involved experimental treatments designed to influence brain activity, fear responses, aggression, and neurological recovery.
+
+Something went wrong.
+
+The outbreak was not initially understood.
+
+Authorities attempted to contain the situation.
+
+Information was suppressed.
+
+The research facility was abandoned.
+
+The town collapsed.
+
+The player gradually discovers that:
+
+- The outbreak was preceded by unusual medical incidents.
+- Some patients were transferred secretly.
+- Several employees disappeared.
+- Emergency communications were manipulated.
+- The facility was abandoned under suspicious circumstances.
+- Someone attempted to destroy evidence.
+- The outbreak may have been preventable.
+- The truth is more complicated than the rumors suggest.
+
+Keep the mystery grounded in the game's horror atmosphere.
+
+Do not introduce supernatural explanations unless the existing game already establishes them.
+
+The story should allow uncertainty about what happened during the early outbreak.
+
+---
+
+4. MAIN CHARACTER
+
+The protagonist is initially an ordinary survivor.
+
+The player should not begin as a trained military hero or an overpowered character.
+
+The protagonist's background should remain flexible enough to fit the existing character design.
+
+The opening should establish that the protagonist:
+
+- Was caught in the early chaos.
+- Lost contact with people they knew.
+- Is struggling to survive.
+- Has limited resources.
+- Needs a safe place.
+- Eventually discovers the shop and begins using it as a shelter.
+
+Avoid forcing a detailed character biography that conflicts with the existing player character.
+
+Use environmental storytelling and optional dialogue to gradually reveal the protagonist's past.
+
+---
+
+5. MAIN STORY CHARACTERS
+
+Create a small, memorable cast.
+
+Do not overload the game with dozens of NPCs.
+
+Each character should have a meaningful role in the story and gameplay.
+
+Use existing NPC systems and survivor systems.
+
+If these characters already exist under different names, preserve the existing characters and adapt the story.
+
+CHARACTER A — MAYA REED
+
+Role: Medic and survivor.
+
+Personality:
+
+- Compassionate.
+- Intelligent.
+- Cautious.
+- Strong under pressure.
+- Haunted by events at the hospital.
+
+Story role:
+
+Maya was a medical worker at Haven Creek Hospital.
+
+She witnessed unusual patient cases before the outbreak.
+
+She initially refuses to discuss what happened.
+
+She gradually becomes one of the player's most important sources of medical information and early outbreak clues.
+
+Possible gameplay role:
+
+- Medical support.
+- Healing-related services.
+- Survivor care.
+- Medical mission assistance.
+
+---
+
+CHARACTER B — DANIEL CROSS
+
+Role: Former police officer.
+
+Personality:
+
+- Practical.
+- Suspicious.
+- Protective.
+- Emotionally exhausted.
+- Not easily trusting.
+
+Story role:
+
+Daniel was involved in evacuation efforts.
+
+He knows that some evacuation orders were deliberately changed.
+
+He has incomplete information and does not know who was responsible.
+
+Possible gameplay role:
+
+- Guard.
+- Defensive support.
+- Combat-related missions.
+- Security information.
+
+---
+
+CHARACTER C — ELI PARK
+
+Role: Technician and radio specialist.
+
+Personality:
+
+- Curious.
+- Nervous.
+- Resourceful.
+- Uses humor to cope with fear.
+
+Story role:
+
+Eli discovers unusual radio transmissions.
+
+He believes someone is still broadcasting from outside Haven Creek.
+
+His discoveries help connect the player to the research facility and the final signal.
+
+Possible gameplay role:
+
+- Radio repair.
+- Technical upgrades.
+- Communication.
+- Unlocking locations.
+
+---
+
+CHARACTER D — SARAH VALE
+
+Role: Survivor with a hidden connection to the research facility.
+
+Personality:
+
+- Quiet.
+- Intelligent.
+- Defensive.
+- Emotionally conflicted.
+
+Story role:
+
+Sarah was connected to the research project.
+
+She knows more than she initially admits.
+
+She may have witnessed an important event during the early outbreak.
+
+Her story should unfold gradually.
+
+Do not make her an obvious villain.
+
+Her motivations should be understandable, even if her actions were morally questionable.
+
+---
+
+CHARACTER E — DR. ADRIAN WELLS
+
+Role: Former research scientist.
+
+Personality:
+
+- Intelligent.
+- Manipulative.
+- Fearful.
+- Morally conflicted.
+
+Story role:
+
+Dr. Wells was involved in the research.
+
+He initially attempts to justify his decisions.
+
+The player gradually discovers that he was involved in concealing information.
+
+However, he may also have attempted to prevent a worse catastrophe.
+
+His final fate should depend on the player's decisions.
+
+---
+
+6. PROLOGUE — THE NIGHT EVERYTHING ENDED
+
+Opening Scene
+
+The game begins during a normal day that gradually becomes disturbing.
+
+The player is near the shop or in an existing opening location.
+
+The environment initially appears normal.
+
+Then:
+
+- Emergency sirens begin.
+- Radio broadcasts become interrupted.
+- People begin running.
+- Emergency vehicles pass.
+- Communications become unreliable.
+- The first signs of violence appear.
+- The town becomes increasingly chaotic.
+
+Avoid an expensive cinematic.
+
+Use gameplay, camera transitions, ambient sound, environmental changes, and lightweight scripted events.
+
+Opening Gameplay
+
+The player must:
+
+1. Investigate the emergency.
+2. Find basic supplies.
+3. Avoid the first dangerous encounter.
+4. Reach a safe location.
+5. Discover that normal emergency services are no longer functioning.
+6. Find the shop.
+7. Secure the shop as a temporary shelter.
+
+The opening must teach basic gameplay naturally.
+
+Teach:
+
+- Movement.
+- Interaction.
+- Searching containers.
+- Collecting resources.
+- Basic survival.
+- Avoiding zombies.
+- Returning to safety.
+
+Do not overload the player with tutorials.
+
+---
+
+7. CHAPTER 1 — THE BEGINNING
+
+Main Objective
+
+Survive the first days.
+
+The player does not yet know what caused the outbreak.
+
+The shop becomes the first reliable safe location.
+
+Main Missions
+
+Mission 1 — No Signal
+
+Objective:
+
+- Investigate the emergency broadcasts.
+- Search nearby buildings.
+- Find a working radio or communication device.
+
+Narrative:
+
+The emergency broadcasts repeat contradictory instructions.
+
+One message tells residents to evacuate.
+
+Another tells residents to remain indoors.
+
+The player discovers that communications have been interrupted.
+
+Reward:
+
+- Basic supplies.
+- A radio clue.
+- Mission progression.
+
+---
+
+Mission 2 — The First Night
+
+Objective:
+
+- Secure the shop.
+- Collect basic supplies.
+- Protect the shelter from a small threat.
+
+Gameplay:
+
+- Scavenge.
+- Manage resources.
+- Barricade or secure entrances if the existing systems support it.
+- Survive a dangerous encounter.
+
+Narrative:
+
+The player hears movement outside the shop.
+
+The night is the first moment when the player realizes the town is no longer safe.
+
+---
+
+Mission 3 — Someone Is Outside
+
+Objective:
+
+- Investigate a nearby distress signal.
+- Find a survivor.
+- Decide whether to help.
+
+The survivor can introduce the first NPC interaction.
+
+The mission should demonstrate that helping people can create both rewards and risks.
+
+---
+
+8. CHAPTER 2 — THE SHELTER
+
+Main Objective
+
+Turn the shop into a functioning survival shelter.
+
+The player begins developing the shop and recruiting survivors.
+
+The story becomes more personal.
+
+Main Missions
+
+Mission 4 — Empty Shelves
+
+Objective:
+
+- Search the supermarket.
+- Recover food and basic supplies.
+- Return to the shop.
+
+Gameplay integration:
+
+- Inventory.
+- Scavenging.
+- Resource management.
+- Shop storage.
+
+Narrative:
+
+The supermarket has already been looted.
+
+The player discovers signs of a desperate evacuation.
+
+---
+
+Mission 5 — A Doctor's Request
+
+Objective:
+
+- Find medical supplies.
+- Investigate the hospital.
+- Locate Maya Reed.
+
+Narrative:
+
+Maya refuses to leave without medical equipment.
+
+The player discovers the first evidence of unusual patient cases.
+
+Clue:
+
+Some patients were transferred to a restricted facility shortly before the outbreak.
+
+---
+
+Mission 6 — People Are Not Supplies
+
+Objective:
+
+- Rescue survivors from a dangerous location.
+- Bring them back to the shop.
+
+Gameplay:
+
+- Exploration.
+- Combat or stealth.
+- Survivor recruitment.
+- Shop population.
+
+Narrative:
+
+The player learns that survivors have different opinions about whether the shop is a temporary refuge or a permanent settlement.
+
+Introduce meaningful survivor dialogue.
+
+---
+
+Mission 7 — The Generator
+
+Objective:
+
+- Find generator components.
+- Restore power to the shop if the existing mechanics support it.
+
+Narrative:
+
+Restoring power allows the player to access old communications equipment.
+
+The player receives an unusual signal.
+
+The signal contains a repeated location identifier associated with the research facility.
+
+---
+
+9. CHAPTER 3 — THE FORGOTTEN CITY
+
+Main Objective
+
+Explore Haven Creek and investigate the disappearance of its residents.
+
+The player begins to uncover clues connecting the outbreak to the medical research project.
+
+Main Missions
+
+Mission 8 — The Evacuation Route
+
+Objective:
+
+- Find evacuation records.
+- Explore abandoned streets.
+- Discover why evacuation routes were blocked.
+
+Clues:
+
+- Conflicting orders.
+- Abandoned vehicles.
+- Emergency barriers.
+- Missing personnel records.
+
+---
+
+Mission 9 — The Missing Patients
+
+Objective:
+
+- Investigate the hospital archives.
+- Find patient records.
+- Discover a restricted transfer list.
+
+Narrative:
+
+Several patients were transferred to a location that does not appear in official hospital records.
+
+The player discovers the name:
+
+PROJECT HOLLOW.
+
+Do not reveal its full purpose yet.
+
+---
+
+Mission 10 — Dead Frequency
+
+Objective:
+
+- Repair or locate a radio transmitter.
+- Identify the source of the mysterious signal.
+
+Narrative:
+
+The signal contains fragments of an emergency message.
+
+The message appears to have been recorded before the town's final collapse.
+
+Possible message:
+
+"Do not send anyone to the lower facility."
+
+The message ends abruptly.
+
+---
+
+Mission 11 — The Locked District
+
+Objective:
+
+- Find a way into a restricted area.
+- Discover evidence of security activity.
+
+Gameplay:
+
+- Exploration.
+- Resource gathering.
+- Combat or stealth.
+- Environmental clues.
+
+Narrative:
+
+The restricted district contains evidence that the outbreak was known before the public evacuation.
+
+---
+
+10. CHAPTER 4 — THE TRUTH
+
+Main Objective
+
+Investigate the secret research facility.
+
+The player now knows that the outbreak may have been connected to an experimental program.
+
+The mystery becomes more dangerous.
+
+Main Missions
+
+Mission 12 — The Missing File
+
+Objective:
+
+- Recover research documents.
+- Investigate a secure archive.
+
+Discoveries:
+
+- Experimental neurological treatments.
+- Patient transfer records.
+- Reports of aggressive behavioral changes.
+- Internal warnings.
+
+The player discovers that the program was discontinued officially, but the research continued secretly.
+
+---
+
+Mission 13 — The Survivor Who Knows
+
+Objective:
+
+- Find Sarah Vale.
+- Gain her trust.
+- Learn what she witnessed.
+
+Sarah reveals that the facility experienced an emergency before the public outbreak.
+
+She does not know whether the emergency was an accident, sabotage, or a failed containment operation.
+
+She refuses to reveal everything immediately.
+
+The player must earn her trust through missions or choices.
+
+---
+
+Mission 14 — Below the Surface
+
+Objective:
+
+- Enter an underground facility or existing restricted location.
+- Search for evidence.
+- Avoid or survive dangerous encounters.
+
+Narrative:
+
+The player discovers abandoned medical equipment and evidence of a failed evacuation.
+
+Environmental storytelling should be the primary narrative delivery.
+
+Avoid excessive exposition.
+
+---
+
+Mission 15 — The Doctor's Confession
+
+Objective:
+
+- Locate Dr. Adrian Wells.
+- Confront him.
+- Decide whether to trust him.
+
+Dr. Wells reveals:
+
+The research was intended to help patients recover from severe neurological damage.
+
+The project began producing unexpected behavioral changes.
+
+The organization attempted to conceal the incidents.
+
+An emergency occurred inside the facility.
+
+Containment failed.
+
+The outbreak spread beyond the research site.
+
+However, Dr. Wells claims that some records were falsified and that someone deliberately made the situation worse.
+
+He does not know who.
+
+The player must decide whether to believe him.
+
+---
+
+11. CHAPTER 5 — THE LAST HOPE
+
+Main Objective
+
+The player must decide what to do with the discovered truth.
+
+The shop is now a functioning shelter.
+
+Survivors depend on the player.
+
+The story should introduce moral conflict.
+
+Main Missions
+
+Mission 16 — The Survivors' Choice
+
+Objective:
+
+- Discuss the truth with the survivors.
+- Decide what information to share.
+
+Possible consequences:
+
+- Some survivors may become distrustful.
+- Some may support the investigation.
+- Some may want to abandon Haven Creek.
+
+Do not make every survivor agree.
+
+---
+
+Mission 17 — The Last Supplies
+
+Objective:
+
+- Recover critical resources.
+- Prepare the shelter for a dangerous event.
+
+Gameplay:
+
+- Scavenging.
+- Shop management.
+- Resource allocation.
+- Combat.
+- Survival.
+
+The player must decide how to allocate limited resources.
+
+---
+
+Mission 18 — The Facility's Secret
+
+Objective:
+
+- Recover the final research data.
+- Discover the true sequence of events.
+
+The player discovers evidence that the emergency was mishandled.
+
+The research organization prioritized protecting its secrets over evacuating the town.
+
+The evidence also reveals that the outbreak may have been worsened by deliberate decisions.
+
+Do not make the truth completely simple.
+
+Include uncertainty and conflicting evidence.
+
+---
+
+12. CHAPTER 6 — THE LAST SIGNAL
+
+Main Objective
+
+Discover the source of the final transmission.
+
+The player learns that a signal is being transmitted from outside the main town.
+
+The signal may contain:
+
+- Evacuation information.
+- Research data.
+- A warning.
+- A possible rescue opportunity.
+
+The signal may also be a trap.
+
+Main Missions
+
+Mission 19 — The Tower
+
+Objective:
+
+- Reach the radio tower.
+- Restore communication.
+- Survive the journey.
+
+Gameplay:
+
+- Exploration.
+- Dangerous enemies.
+- Resource preparation.
+- Optional survivor support.
+
+---
+
+Mission 20 — The Last Transmission
+
+Objective:
+
+- Decode or investigate the signal.
+- Discover who is transmitting.
+
+The signal reveals that a small group may have survived outside Haven Creek.
+
+However, the transmission also suggests that the outbreak is not limited to this town.
+
+---
+
+Mission 21 — No Easy Way Out
+
+Objective:
+
+- Decide what to do with the information.
+- Protect the shop and survivors.
+- Complete the final story objectives.
+
+The final mission should be influenced by the player's decisions.
+
+Do not force one ending.
+
+---
+
+13. MULTIPLE ENDINGS
+
+Implement three primary endings.
+
+The ending conditions should depend on story progress, important choices, survivor outcomes, and discoveries.
+
+Do not make the endings available through a simple menu selection.
+
+ENDING A — NEW BEGINNING
+
+Requirements may include:
+
+- Protecting the survivors.
+- Maintaining the shop.
+- Recovering important information.
+- Choosing to help others.
+
+Outcome:
+
+The survivors establish a stable refuge.
+
+The player decides to rebuild instead of abandoning Haven Creek.
+
+The final scene shows the shop becoming a symbol of hope.
+
+The radio receives a new transmission from another survivor settlement.
+
+The story ends with the possibility of a new beginning.
+
+---
+
+ENDING B — LAST SURVIVOR
+
+Requirements may include:
+
+- Prioritizing personal survival.
+- Losing or abandoning important survivor relationships.
+- Focusing on escape.
+
+Outcome:
+
+The player survives but leaves Haven Creek behind.
+
+The shop is abandoned.
+
+The final journey is lonely.
+
+The player carries the truth but has no certainty about what lies ahead.
+
+The ending is survival without a true home.
+
+---
+
+ENDING C — NO WAY BACK
+
+Requirements may include:
+
+- Making dangerous decisions.
+- Ignoring important warnings.
+- Losing critical resources or survivors.
+- Choosing a risky final action.
+
+Outcome:
+
+The final plan fails.
+
+The shop is lost.
+
+The player faces the consequences of the outbreak and their decisions.
+
+The ending should be tragic, but it should not feel arbitrary.
+
+The player must understand how their decisions contributed to the outcome.
+
+---
+
+14. OPTIONAL STORY ARCS
+
+Create optional narrative arcs that deepen the world.
+
+ARC A — MAYA'S PAST
+
+Discover what happened to Maya's patients.
+
+Possible missions:
+
+- Find medical records.
+- Recover patient belongings.
+- Investigate an abandoned ward.
+- Discover a missing patient's fate.
+
+Reward:
+
+Medical supplies, character development, and trust.
+
+---
+
+ARC B — DANIEL'S LAST PATROL
+
+Discover what happened to the evacuation route.
+
+Possible missions:
+
+- Recover police records.
+- Investigate abandoned checkpoints.
+- Find evidence of conflicting evacuation orders.
+
+Reward:
+
+Security information and character progression.
+
+---
+
+ARC C — ELI'S SIGNAL
+
+Discover who is transmitting.
+
+Possible missions:
+
+- Recover radio components.
+- Locate transmission equipment.
+- Investigate unusual frequencies.
+
+Reward:
+
+Radio upgrades and access to new locations.
+
+---
+
+ARC D — SARAH'S SECRET
+
+Discover Sarah's connection to the research project.
+
+Possible missions:
+
+- Find old documents.
+- Investigate her former workplace.
+- Confront conflicting evidence.
+
+Reward:
+
+Important story information and alternate final mission conditions.
+
+---
+
+15. MISSION DESIGN RULES
+
+Every mission must be playable using the actual existing game systems.
+
+Each mission should contain:
+
+- Mission title.
+- Narrative introduction.
+- Objective.
+- Objective steps.
+- Location.
+- Required interaction.
+- Gameplay challenge.
+- Completion condition.
+- Reward.
+- Follow-up event.
+
+Mission examples should not be empty placeholders.
+
+Do not create objectives that cannot be completed.
+
+Ensure mission progress is triggered by actual player actions.
+
+Avoid repetitive missions that only say:
+
+"Collect 10 items."
+
+Make resource collection meaningful through story context.
+
+---
+
+16. DIALOGUE AND STORY PRESENTATION
+
+Implement actual dialogue content.
+
+Do not use generic placeholders such as:
+
+"NPC has something important to say."
+
+Write the actual dialogue.
+
+Dialogue should be concise, emotionally believable, and contextual.
+
+Use a dialogue system compatible with the existing project.
+
+Include:
+
+- Opening conversations.
+- Mission dialogue.
+- Character reactions.
+- Important revelations.
+- Player choices.
+- Consequences.
+- Follow-up dialogue.
+
+Prevent dialogue from repeating unnecessarily.
+
+Use environmental storytelling to reduce excessive text.
+
+---
+
+17. PLAYER DECISIONS
+
+Implement meaningful choices throughout the campaign.
+
+Examples:
+
+- Help a survivor or prioritize resources.
+- Trust Sarah or investigate her independently.
+- Reveal research information or keep it secret.
+- Trust Dr. Wells or reject his explanation.
+- Protect the shop or pursue the final signal.
+- Save resources for the group or use them for personal survival.
+
+Choices should influence:
+
+- Character trust.
+- Mission availability.
+- Survivor state.
+- Shop events.
+- Dialogue.
+- Final mission.
+- Ending conditions.
+
+Track important decisions in persistent save data.
+
+Avoid choices that only change a single dialogue sentence.
+
+---
+
+18. STORY JOURNAL
+
+Implement or improve the story journal.
+
+The journal should include:
+
+- Main story chapters.
+- Active missions.
+- Completed missions.
+- Important discoveries.
+- Research clues.
+- Character information.
+- Important decisions.
+
+The journal should help players understand the story without spoiling undiscovered information.
+
+Only reveal entries after the player discovers them.
+
+---
+
+19. STORY PACING
+
+Maintain a balanced progression between:
+
+- Exploration.
+- Combat.
+- Survival.
+- Shop management.
+- Story missions.
+- Optional missions.
+- Dialogue.
+- Horror encounters.
+
+Do not force the player into constant story missions.
+
+Allow players to return to the shop, manage resources, recruit survivors, and explore freely between major story events.
+
+Use the existing open-world systems.
+
+The story must respect player freedom.
+
+---
+
+20. HORROR AND STORY ATMOSPHERE
+
+Connect the narrative to existing psychological horror systems.
+
+Use:
+
+- Environmental clues.
+- Radio messages.
+- Abandoned locations.
+- Strange but explainable events.
+- Suspicious sounds.
+- Missing survivors.
+- Incomplete records.
+- Unreliable information.
+- Unexpected story discoveries.
+
+Do not overuse jump scares.
+
+Do not make every location frightening in the same way.
+
+Create contrast between:
+
+- The relative safety of the shop.
+- The uncertainty of exploration.
+- The danger of restricted areas.
+- The disturbing atmosphere of the research facility.
+
+---
+
+21. ARABIC AND ENGLISH
+
+All story content must support Arabic and English.
+
+Implement localization for:
+
+- Story chapters.
+- Missions.
+- Objectives.
+- Dialogue.
+- Character descriptions.
+- Journal entries.
+- Choices.
+- Discoveries.
+- Notifications.
+- Endings.
+
+Support:
+
+- Arabic RTL.
+- Correct text alignment.
+- Readable Arabic fonts.
+- Mobile text layouts.
+- Language switching.
+
+Do not hardcode dialogue directly into gameplay components.
+
+Reuse the existing localization architecture.
+
+---
+
+22. PERFORMANCE AND TECHNICAL REQUIREMENTS
+
+This game must run on weak PCs and Android devices.
+
+Do not introduce:
+
+- Heavy cinematic systems.
+- Large cutscene assets.
+- Excessive animated dialogue.
+- Unnecessary dependencies.
+- Large memory allocations.
+- Expensive background story processing.
+- Excessive mission polling.
+- Duplicate quest managers.
+- Excessive event listeners.
+
+Use lightweight scripted events.
+
+Reuse existing game systems.
+
+Optimize story triggers and mission tracking.
+
+---
+
+23. SAVE/LOAD
+
+Save all important story state.
+
+Include:
+
+- Chapter progress.
+- Active missions.
+- Completed missions.
+- Mission objectives.
+- Character progression.
+- Player decisions.
+- Discovered clues.
+- Unlocked locations.
+- Ending conditions.
+- Story events already triggered.
+
+Prevent:
+
+- Duplicate rewards.
+- Repeated mission completion.
+- Resetting important decisions.
+- Broken progression after loading.
+- NPCs reverting to incorrect story states.
+
+Preserve existing saves and player progression.
+
+---
+
+24. STRICT PROJECT PRESERVATION
+
+Before editing, inspect the existing architecture.
+
+DO NOT:
+
+- Rebuild the game.
+- Replace the entire project.
+- Delete existing gameplay systems.
+- Replace the player controller.
+- Replace the inventory.
+- Replace the shop.
+- Replace the survivor system.
+- Replace the zombie AI.
+- Replace combat.
+- Remove world locations.
+- Remove missions already implemented.
+- Reset progress.
+- Create duplicate systems.
+- Introduce unnecessary libraries.
+- Break mobile controls.
+- Break portrait or landscape support.
+- Break localization.
+
+Integrate the narrative with the existing project.
+
+If an existing feature already works, preserve it.
+
+---
+
+25. IMPLEMENTATION PRIORITY
+
+Implement the narrative in the following order:
+
+PRIORITY 1:
+
+- Audit existing story and mission systems.
+- Create the actual campaign progression.
+- Implement the prologue.
+- Implement Chapters 1 and 2.
+- Implement the first playable main missions.
+- Connect the missions to actual gameplay.
+- Add story dialogue and initial NPC interactions.
+
+PRIORITY 2:
+
+- Implement Chapters 3 and 4.
+- Add story clues.
+- Connect research locations.
+- Implement character story arcs.
+- Implement meaningful choices.
+
+PRIORITY 3:
+
+- Implement Chapters 5 and 6.
+- Implement final missions.
+- Implement ending conditions.
+- Implement the three endings.
+- Add optional story arcs.
+
+If the project cannot support all chapters in one implementation pass, implement the foundation and playable early chapters first, then continue using the same architecture.
+
+Do not pretend unfinished chapters are complete.
+
+---
+
+26. TESTING
+
+Test the actual implementation.
+
+Test:
+
+- Opening scene.
+- Prologue progression.
+- First mission.
+- Shop shelter progression.
+- Survivor recruitment.
+- Main mission tracking.
+- Side mission tracking.
+- Mission objectives.
+- NPC dialogue.
+- Dialogue choices.
+- Player decisions.
+- Story clues.
+- Research discoveries.
+- Chapter progression.
+- Location unlocking.
+- Journal updates.
+- Story rewards.
+- Save/load.
+- Duplicate event prevention.
+- Ending conditions.
+- Arabic.
+- English.
+- RTL.
+- Mobile UI.
+- Performance.
+- Existing gameplay systems.
+
+Only report tests that were actually performed.
+
+If something cannot be tested, state it clearly.
+
+---
+
+FINAL DELIVERABLE
+
+Implement a real playable story campaign inside Last Shop.
+
+The story should begin with the outbreak, progress through survival and the development of the shop, expand into the mystery of Haven Creek, reveal the research conspiracy gradually, and conclude with meaningful player decisions and multiple endings.
+
+The player should care about the survivors, the shop, the world, and the truth.
+
+The narrative must be integrated into the existing game.
+
+DO NOT JUST WRITE A STORY DOCUMENT.
+
+IMPLEMENT THE PLAYABLE STORY CONTENT DIRECTLY INTO THE EXISTING PROJECT.
+
+Do not rebuild the game.
+
+Do not remove existing features.
+
+At the end, provide an honest implementation report specifying:
+
+- Which chapters are actually implemented.
+- Which missions are playable.
+- Which characters are implemented.
+- Which dialogue is implemented.
+- Which choices have consequences.
+- Which story arcs are implemented.
+- Which endings work.
+- Which features are incomplete.
+- Tests actually performed.
+- Remaining bugs.
+- Performance impact.

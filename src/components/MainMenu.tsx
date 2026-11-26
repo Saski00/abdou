@@ -74,7 +74,7 @@ export function MainMenu({
 
         {onChangeLanguage && (
           <div
-            className="flex items-center gap-1 p-1 rounded-lg bg-[#10151f]/90 border border-stone-700/70 backdrop-blur-sm shrink-0"
+            className="flex items-center gap-1 p-1 rounded-lg bg-[#10151f]/94 border border-stone-700/70 shrink-0"
             role="group"
             aria-label={t.mainMenu.languageLabel}
           >

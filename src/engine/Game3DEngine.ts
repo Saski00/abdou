@@ -34,6 +34,7 @@ import {
   EmployeeProfession,
   GameScreenState,
   GameSettings,
+  GraphicsQuality,
   HitMarkerKind,
   HudSnapshot,
   LocationDangerLevel,
@@ -81,6 +82,7 @@ import { AtmosphereManager } from './AtmosphereManager';
 import { CustomerManager } from './CustomerManager';
 import { FirstPersonController } from './FirstPersonController';
 import { InteractionManager } from './InteractionManager';
+import { ParticleVfxManager } from './ParticleVfxManager';
 import { StaffManager } from './StaffManager';
 import { BuiltWorld, buildNeighborhoodWorld } from './WorldBuilder';
 import { WorldEventManager } from './WorldEventManager';
@@ -104,6 +106,12 @@ export interface Engine3DCallbacks {
 }
 
 const _menuTarget = new THREE.Vector3();
+
+const SPARK_TARGETS: { x: number; y: number; z: number }[] = [
+  { x: -5.6, y: 1.35, z: -25.8 }, // North Roadblock Emergency Relay Console
+  { x: 0.2, y: 1.4, z: -24.2 },   // North Roadblock Checkpoint junction
+  { x: 25.0, y: 2.2, z: -14.2 },  // Depot 04 exterior junction light
+];
 
 function detectSoftwareWebGL(): boolean {
   try {
@@ -137,6 +145,7 @@ export class Game3DEngine {
   private assets: AssetManager;
   private world: BuiltWorld;
   private atmosphere: AtmosphereManager;
+  private vfx: ParticleVfxManager;
   private timeSystem: TimeSystem;
   private weatherSystem: WeatherSystem;
   private survival: SurvivalSystem;
@@ -364,6 +373,8 @@ export class Game3DEngine {
     this.ashPoints = new THREE.Points(ashGeo, this.ashMat);
     this.ashPoints.frustumCulled = false;
     this.scene.add(this.ashPoints);
+    this.vfx = new ParticleVfxManager(this.scene);
+    this.applyGraphicsQuality(this.settings.graphicsQuality);
 
     // First-Person Player Controller
     this.controller = new FirstPersonController(
@@ -486,7 +497,8 @@ export class Game3DEngine {
       this.weatherSystem.getSnapshot(),
       this.camera.position.x,
       this.camera.position.z,
-      this.settings.lightingQuality
+      this.settings.lightingQuality,
+      this.settings.graphicsQuality
     );
 
     if (!this.isSoftwareGl) {
@@ -1796,12 +1808,38 @@ export class Game3DEngine {
       this.controller.addRecoilKick(recoilKick);
     }
 
+    if (weaponId === 'service_pistol') {
+      this.vfx.spawnMuzzlePuff(
+        this.controller.position.x,
+        this.controller.position.y + 1.65,
+        this.controller.position.z,
+        this.controller.yaw,
+        this.controller.pitch,
+        this.settings.graphicsQuality
+      );
+    }
+
     this.hasAttacked = true;
     this.attackPulseId += 1;
     this.recentCombatTimer = 2.8;
     this.raiseNoiseLevel(
       weaponId === 'service_pistol' ? 98 : weaponId === 'scrap_blade' ? 54 : 74
     );
+
+    if (result.hit) {
+      const hitAgent = result.targetId
+        ? this.zombies.getAgents().find((z) => z.id === result.targetId)
+        : undefined;
+      if (hitAgent) {
+        this.vfx.spawnHitBurst(
+          hitAgent.x,
+          1.24,
+          hitAgent.z,
+          Boolean(result.crit || result.killed),
+          this.settings.graphicsQuality
+        );
+      }
+    }
 
     if (result.killed) {
       this.hitMarkerId += 1;
@@ -1937,7 +1975,32 @@ export class Game3DEngine {
     this.flashlight.visible = next.flashlightOn && this.screenState === 'PLAYING';
     this.renderer.shadowMap.enabled = !this.isSoftwareGl && next.shadowsEnabled;
     this.sunLight.castShadow = !this.isSoftwareGl && next.shadowsEnabled;
+    this.applyGraphicsQuality(next.graphicsQuality);
     this.emitHud(true);
+  }
+
+  private applyGraphicsQuality(q: GraphicsQuality): void {
+    const maxDpr = q === 'low' ? 1.0 : q === 'medium' ? 1.35 : 1.75;
+    this.renderer.setPixelRatio(
+      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, maxDpr)
+    );
+    const targetFar = q === 'low' ? 115 : q === 'medium' ? 140 : 165;
+    if (this.camera.far !== targetFar) {
+      this.camera.far = targetFar;
+      this.camera.updateProjectionMatrix();
+    }
+    this.world.detailDecorGroup.visible = q !== 'low';
+    const ashDrawCount = q === 'low' ? 45 : q === 'medium' ? 100 : 160;
+    this.ashPoints.geometry.setDrawRange(0, ashDrawCount);
+
+    const targetShadowSize = q === 'low' ? 512 : q === 'medium' ? 1024 : 2048;
+    if (this.sunLight.shadow.mapSize.x !== targetShadowSize) {
+      this.sunLight.shadow.mapSize.set(targetShadowSize, targetShadowSize);
+      if (this.sunLight.shadow.map) {
+        this.sunLight.shadow.map.dispose();
+        this.sunLight.shadow.map = null;
+      }
+    }
   }
 
   private showContextMessage(title: string, message: string, duration = 5.5): void {
@@ -1988,7 +2051,8 @@ export class Game3DEngine {
         this.weatherSystem.getSnapshot(),
         this.camera.position.x,
         this.camera.position.z,
-        this.settings.lightingQuality
+        this.settings.lightingQuality,
+        this.settings.graphicsQuality
       );
       return;
     }
@@ -2305,7 +2369,16 @@ export class Game3DEngine {
       weatherSnap,
       px,
       pz,
-      this.settings.lightingQuality
+      this.settings.lightingQuality,
+      this.settings.graphicsQuality
+    );
+    this.vfx.update(
+      dt,
+      px,
+      pz,
+      indoors,
+      this.settings.graphicsQuality,
+      SPARK_TARGETS
     );
     this.updateAshParticles(dt, weatherSnap.windGust, isPerfMode);
     this.ashMat.opacity = Math.max(
@@ -3414,8 +3487,14 @@ export class Game3DEngine {
     if (this.disposed) return;
     const width = Math.max(240, this.container.clientWidth || window.innerWidth);
     const height = Math.max(240, this.container.clientHeight || window.innerHeight);
+    const maxDpr =
+      this.settings.graphicsQuality === 'low'
+        ? 1.0
+        : this.settings.graphicsQuality === 'medium'
+          ? 1.35
+          : 1.75;
     this.renderer.setPixelRatio(
-      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 1.75)
+      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, maxDpr)
     );
     this.camera.aspect = width / height;
     const nextFov = computeResponsiveCameraFov(width, height, 72);
@@ -3503,6 +3582,7 @@ export class Game3DEngine {
     });
 
     this.atmosphere.dispose();
+    this.vfx.dispose();
     this.ashPoints.geometry.dispose();
     this.ashMat.dispose();
     this.worldEventManager.dispose();

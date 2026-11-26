@@ -50,43 +50,57 @@ export interface MaterialPalette {
 export function createMaterialPalette(textures: ProceduralTextureSet): MaterialPalette {
   const brick = new THREE.MeshStandardMaterial({
     map: textures.brickWall,
-    roughness: 0.88,
-    metalness: 0.04,
+    normalMap: textures.brickNormal,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+    roughnessMap: textures.brickRoughness,
+    roughness: 0.92,
+    metalness: 0.03,
   });
   const concrete = new THREE.MeshStandardMaterial({
     map: textures.concreteWall,
-    roughness: 0.9,
-    metalness: 0.05,
+    normalMap: textures.concreteNormal,
+    normalScale: new THREE.Vector2(0.7, 0.7),
+    roughnessMap: textures.concreteRoughness,
+    roughness: 0.92,
+    metalness: 0.04,
   });
   const darkTrim = new THREE.MeshStandardMaterial({
-    color: 0x22262e,
-    roughness: 0.65,
-    metalness: 0.35,
+    color: 0x1e2229,
+    roughness: 0.68,
+    metalness: 0.38,
   });
   const roofTar = new THREE.MeshStandardMaterial({
-    color: 0x1d2026,
+    color: 0x181b20,
+    normalMap: textures.asphaltNormal,
+    normalScale: new THREE.Vector2(0.35, 0.35),
     roughness: 0.95,
     metalness: 0.02,
   });
   const rustedMetal = new THREE.MeshStandardMaterial({
     map: textures.rustedMetal,
-    roughness: 0.72,
-    metalness: 0.45,
+    normalMap: textures.rustedMetalNormal,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    roughnessMap: textures.rustedMetalRoughness,
+    roughness: 0.85,
+    metalness: 0.52,
   });
   const wood = new THREE.MeshStandardMaterial({
     map: textures.woodPlank,
-    roughness: 0.86,
+    normalMap: textures.woodNormal,
+    normalScale: new THREE.Vector2(0.75, 0.75),
+    roughnessMap: textures.woodRoughness,
+    roughness: 0.88,
     metalness: 0.02,
   });
   const tireRubber = new THREE.MeshStandardMaterial({
-    color: 0x16181c,
+    color: 0x14161a,
     roughness: 0.92,
-    metalness: 0.05,
+    metalness: 0.04,
   });
   const glassDark = new THREE.MeshStandardMaterial({
-    color: 0x101720,
-    roughness: 0.16,
-    metalness: 0.25,
+    color: 0x0e151d,
+    roughness: 0.14,
+    metalness: 0.32,
   });
   const warmWindow = new THREE.MeshStandardMaterial({
     color: 0xf59e0b,
@@ -105,13 +119,13 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
   });
   const awning = new THREE.MeshStandardMaterial({
     map: textures.awningStripe,
-    roughness: 0.85,
+    roughness: 0.88,
     metalness: 0.04,
   });
   const lampMetal = new THREE.MeshStandardMaterial({
-    color: 0x3b424c,
-    roughness: 0.42,
-    metalness: 0.78,
+    color: 0x353c45,
+    roughness: 0.44,
+    metalness: 0.76,
   });
   const lampBulbLit = new THREE.MeshStandardMaterial({
     color: 0xfef3c7,
@@ -126,28 +140,28 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     roughness: 0.2,
   });
   const lampBulbDead = new THREE.MeshStandardMaterial({
-    color: 0x334155,
-    roughness: 0.4,
+    color: 0x2f3b49,
+    roughness: 0.42,
     metalness: 0.2,
   });
   const trashBag = new THREE.MeshStandardMaterial({
-    color: 0x1b2026,
-    roughness: 0.38,
+    color: 0x171b20,
+    roughness: 0.36,
     metalness: 0.08,
   });
   const foliage = new THREE.MeshStandardMaterial({
-    color: 0x344732,
-    roughness: 0.9,
+    color: 0x2d3d29,
+    roughness: 0.92,
     metalness: 0.0,
   });
   const hydrantRed = new THREE.MeshStandardMaterial({
-    color: 0x8b2626,
-    roughness: 0.55,
-    metalness: 0.35,
+    color: 0x762323,
+    roughness: 0.58,
+    metalness: 0.34,
   });
   const barrierHazard = new THREE.MeshStandardMaterial({
-    color: 0xc2781a,
-    roughness: 0.75,
+    color: 0xb26d18,
+    roughness: 0.78,
     metalness: 0.1,
   });
   const signValeStore = new THREE.MeshStandardMaterial({
@@ -546,16 +560,58 @@ export function buildUrbanBuildingModel(
   cornice.castShadow = true;
   group.add(cornice);
 
-  // 4. Rooftop AC / vent box
+  // 4. Rooftop AC / vent box & exhaust duct + vertical drainage conduit
   const vent = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1.5), mats.rustedMetal);
   vent.position.set(w * 0.2, h + 0.72, -d * 0.15);
   group.add(vent);
 
-  // 5. Recessed dark / boarded windows along front/back faces
+  const exhaustPipe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.16, 1.1, 8),
+    mats.lampMetal
+  );
+  exhaustPipe.position.set(-w * 0.24, h + 0.75, d * 0.12);
+  group.add(exhaustPipe);
+
+  if (h >= 7.5 && w >= 12) {
+    // Elevated weathered rooftop water tank silhouette for apartment/warehouse skyline depth
+    const tankLegs = new THREE.BoxGeometry(0.14, 1.2, 0.14);
+    for (const [lx, lz] of [
+      [-0.65, -0.65],
+      [0.65, -0.65],
+      [-0.65, 0.65],
+      [0.65, 0.65],
+    ]) {
+      const leg = new THREE.Mesh(tankLegs, mats.darkTrim);
+      leg.position.set(-w * 0.24 + lx, h + 0.85, -d * 0.18 + lz);
+      group.add(leg);
+    }
+    const tank = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.92, 0.92, 1.5, 10),
+      mats.wood
+    );
+    tank.position.set(-w * 0.24, h + 2.15, -d * 0.18);
+    tank.castShadow = true;
+    const cap = new THREE.Mesh(
+      new THREE.ConeGeometry(1.02, 0.5, 10),
+      mats.rustedMetal
+    );
+    cap.position.set(-w * 0.24, h + 3.15, -d * 0.18);
+    group.add(tank, cap);
+  }
+
+  const downPipe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.075, 0.08, h, 8),
+    mats.lampMetal
+  );
+  downPipe.position.set(w * 0.5 + 0.06, h * 0.5, d * 0.44);
+  group.add(downPipe);
+
+  // 5. Recessed dark / boarded windows with sills along front/back faces
   const floors = Math.max(1, Math.floor(h / 3.4));
   const cols = Math.max(2, Math.floor(w / 3.2));
   const winGeo = new THREE.BoxGeometry(1.3, 1.45, 0.12);
-  const plankGeo = new THREE.BoxGeometry(1.42, 0.24, 0.16);
+  const sillGeo = new THREE.BoxGeometry(1.48, 0.1, 0.22);
+  const plankGeo = new THREE.BoxGeometry(1.46, 0.22, 0.16);
 
   for (let f = 0; f < floors; f++) {
     const wy = 2.0 + f * 3.2;
@@ -564,32 +620,54 @@ export function buildUrbanBuildingModel(
       const wx = -w * 0.5 + ((c + 0.5) / cols) * w;
       const winFront = new THREE.Mesh(winGeo, mats.glassDark);
       winFront.position.set(wx, wy, d * 0.5 + 0.02);
-      group.add(winFront);
+      const sillFront = new THREE.Mesh(sillGeo, mats.darkTrim);
+      sillFront.position.set(wx, wy - 0.74, d * 0.5 + 0.08);
+      group.add(winFront, sillFront);
+
+      // Side-rear dark window variation on upper floors for 360-degree silhouette depth
+      if (f > 0 && c % 2 === 0) {
+        const winBack = new THREE.Mesh(winGeo, mats.glassDark);
+        winBack.position.set(wx, wy, -d * 0.5 - 0.02);
+        const sillBack = new THREE.Mesh(sillGeo, mats.darkTrim);
+        sillBack.position.set(wx, wy - 0.74, -d * 0.5 - 0.08);
+        group.add(winBack, sillBack);
+      }
 
       // Board up ground-floor windows on abandoned buildings
       if (f === 0 && (c + f) % 2 === 0) {
         const plank = new THREE.Mesh(plankGeo, mats.wood);
-        plank.position.set(wx, wy, d * 0.5 + 0.08);
-        plank.rotation.z = c % 2 === 0 ? 0.1 : -0.08;
+        plank.position.set(wx, wy + 0.12, d * 0.5 + 0.09);
+        plank.rotation.z = c % 2 === 0 ? 0.11 : -0.08;
         group.add(plank);
+        const plank2 = new THREE.Mesh(plankGeo, mats.wood);
+        plank2.position.set(wx, wy - 0.24, d * 0.5 + 0.09);
+        plank2.rotation.z = c % 2 === 0 ? -0.06 : 0.09;
+        group.add(plank2);
       }
     }
   }
 
-  // 6. Entry doorway on designated side
+  // 6. Entry doorway on designated side with small concrete stoop & lintel
   const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.35, 0.16), mats.darkTrim);
+  const doorLintel = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.2, 0.24), mats.concrete);
   if (doorSide === 'south') {
     door.position.set(0, 1.18, d * 0.5 + 0.05);
+    doorLintel.position.set(0, 2.42, d * 0.5 + 0.08);
   } else if (doorSide === 'north') {
     door.position.set(0, 1.18, -d * 0.5 - 0.05);
+    doorLintel.position.set(0, 2.42, -d * 0.5 - 0.08);
   } else if (doorSide === 'east') {
     door.rotation.y = Math.PI * 0.5;
     door.position.set(w * 0.5 + 0.05, 1.18, 0);
+    doorLintel.rotation.y = Math.PI * 0.5;
+    doorLintel.position.set(w * 0.5 + 0.08, 2.42, 0);
   } else {
     door.rotation.y = Math.PI * 0.5;
     door.position.set(-w * 0.5 - 0.05, 1.18, 0);
+    doorLintel.rotation.y = Math.PI * 0.5;
+    doorLintel.position.set(-w * 0.5 - 0.08, 2.42, 0);
   }
-  group.add(door);
+  group.add(door, doorLintel);
 
   // 7. Garage bay door or diner awning + Landmark Fascia Signboards
   if (style === 'garage') {
@@ -721,7 +799,7 @@ export function buildVehicleModel(
     }
   }
 
-  // 3. Front & rear bumpers
+  // 3. Front & rear bumpers + cracked/dead headlight & taillight housings
   const bumperGeo = new THREE.BoxGeometry(width + 0.06, 0.18, 0.16);
   const frontBumper = new THREE.Mesh(bumperGeo, mats.darkTrim);
   frontBumper.position.set(0, 0.36, length * 0.5 + 0.05);
@@ -731,9 +809,28 @@ export function buildVehicleModel(
   rearBumper.position.set(0, 0.36, -length * 0.5 - 0.05);
   group.add(rearBumper);
 
-  // 4. Four grounded wheels
+  const grille = new THREE.Mesh(
+    new THREE.BoxGeometry(width * 0.46, 0.22, 0.06),
+    mats.darkTrim
+  );
+  grille.position.set(0, 0.62, length * 0.5 + 0.01);
+  group.add(grille);
+
+  const headLensGeo = new THREE.BoxGeometry(0.24, 0.14, 0.06);
+  const tailLensGeo = new THREE.BoxGeometry(0.22, 0.13, 0.06);
+  for (const sx of [-width * 0.36, width * 0.36]) {
+    const hl = new THREE.Mesh(headLensGeo, mats.lampBulbDead);
+    hl.position.set(sx, 0.65, length * 0.5 + 0.01);
+    const tl = new THREE.Mesh(tailLensGeo, mats.hydrantRed);
+    tl.position.set(sx, 0.68, -length * 0.5 - 0.01);
+    group.add(hl, tl);
+  }
+
+  // 4. Four grounded wheels with steel hubcaps
   const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12);
   wheelGeo.rotateZ(Math.PI * 0.5);
+  const rimGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.26, 8);
+  rimGeo.rotateZ(Math.PI * 0.5);
   const wheelOffsets = [
     [-width * 0.47, 0.34, length * 0.31],
     [width * 0.47, 0.34, length * 0.31],
@@ -744,7 +841,9 @@ export function buildVehicleModel(
     const wheel = new THREE.Mesh(wheelGeo, mats.tireRubber);
     wheel.position.set(wx, wy, wz);
     wheel.castShadow = true;
-    group.add(wheel);
+    const rim = new THREE.Mesh(rimGeo, mats.lampMetal);
+    rim.position.set(wx, wy, wz);
+    group.add(wheel, rim);
   }
 
   return group;

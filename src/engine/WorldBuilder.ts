@@ -313,6 +313,7 @@ export interface DynamicLightHandle {
 
 export interface BuiltWorld {
   root: THREE.Group;
+  detailDecorGroup: THREE.Group;
   colliders: WorldColliders;
   interactables: WorldInteractable[];
   flickerLights: DynamicLightHandle[];
@@ -368,18 +369,23 @@ export function buildNeighborhoodWorld(
   const shopProgressions: ShopProgressionController[] = [];
   let activeShopLevel = 1;
   const resMats = createResourceMaterialPalette();
-  const intMats = createInteriorMaterialPalette();
+  const intMats = createInteriorMaterialPalette(textures);
   const localDisposables: { dispose: () => void }[] = [resMats, intMats];
+
+  const detailDecorGroup = new THREE.Group();
+  root.add(detailDecorGroup);
 
   // 1. Extended wasteland ground plane (prevents horizon void)
   const groundMat = new THREE.MeshStandardMaterial({
     map: textures.wasteland,
+    normalMap: textures.wastelandNormal,
+    normalScale: new THREE.Vector2(0.85, 0.85),
     roughness: 0.96,
     metalness: 0.02,
   });
   localDisposables.push(groundMat);
 
-  const groundGeo = new THREE.PlaneGeometry(240, 240);
+  const groundGeo = new THREE.PlaneGeometry(250, 250);
   groundGeo.rotateX(-Math.PI * 0.5);
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.position.y = -0.02;
@@ -387,10 +393,46 @@ export function buildNeighborhoodWorld(
   root.add(ground);
   localDisposables.push(groundGeo);
 
-  // 2. Asphalt Roads
+  // 1b. Distant Perimeter City Skyline (1 InstancedMesh draw call, atmospheric horizon depth)
+  const skylineGeo = new THREE.BoxGeometry(1, 1, 1);
+  const skylineMat = new THREE.MeshStandardMaterial({
+    color: 0x161b23,
+    roughness: 0.94,
+    metalness: 0.08,
+  });
+  const skylineCount = 32;
+  const skylineMesh = new THREE.InstancedMesh(skylineGeo, skylineMat, skylineCount);
+  skylineMesh.receiveShadow = false;
+  skylineMesh.castShadow = false;
+  const _skyMat = new THREE.Matrix4();
+  const _skyPos = new THREE.Vector3();
+  const _skyQuat = new THREE.Quaternion();
+  const _skyScale = new THREE.Vector3();
+  for (let i = 0; i < skylineCount; i++) {
+    const angle = (i / skylineCount) * Math.PI * 2 + 0.11;
+    const dist = 94 + ((i * 17) % 24);
+    const sx = Math.cos(angle) * dist;
+    const sz = Math.sin(angle) * dist;
+    const bw = 9 + ((i * 7) % 10);
+    const bd = 9 + ((i * 11) % 9);
+    const bh = 11 + ((i * 13) % 22);
+    _skyPos.set(sx, bh * 0.5 - 0.1, sz);
+    _skyQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle + (i % 3) * 0.2);
+    _skyScale.set(bw, bh, bd);
+    _skyMat.compose(_skyPos, _skyQuat, _skyScale);
+    skylineMesh.setMatrixAt(i, _skyMat);
+  }
+  skylineMesh.instanceMatrix.needsUpdate = true;
+  detailDecorGroup.add(skylineMesh);
+  localDisposables.push(skylineGeo, skylineMat);
+
+  // 2. Asphalt Roads (with aggregate normal + damp puddle roughness maps)
   const roadMat = new THREE.MeshStandardMaterial({
     map: textures.asphalt,
-    roughness: 0.9,
+    normalMap: textures.asphaltNormal,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+    roughnessMap: textures.asphaltRoughness,
+    roughness: 0.92,
     metalness: 0.04,
   });
   localDisposables.push(roadMat);
@@ -410,6 +452,57 @@ export function buildNeighborhoodWorld(
       minZ: r.z - r.d * 0.5,
       maxZ: r.z + r.d * 0.5,
     });
+  }
+
+  // Subtle street drainage manholes & weathered asphalt patches (zero Z-fighting)
+  const manholeGeo = new THREE.CylinderGeometry(0.42, 0.44, 0.02, 12);
+  const manholeMat = new THREE.MeshStandardMaterial({
+    color: 0x2a3038,
+    roughness: 0.55,
+    metalness: 0.65,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  const tarPatchGeo = new THREE.PlaneGeometry(2.4, 1.4);
+  tarPatchGeo.rotateX(-Math.PI * 0.5);
+  const tarPatchMat = new THREE.MeshStandardMaterial({
+    color: 0x13161c,
+    roughness: 0.65,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.68,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  localDisposables.push(manholeGeo, manholeMat, tarPatchGeo, tarPatchMat);
+  for (const [mx, mz] of [
+    [-10, -2.5],
+    [12, 2.5],
+    [-2.5, -20],
+    [2.5, 22],
+    [22, 34],
+    [-22, -2.5],
+  ]) {
+    const mh = new THREE.Mesh(manholeGeo, manholeMat);
+    mh.position.set(mx, 0.014, mz);
+    mh.receiveShadow = true;
+    detailDecorGroup.add(mh);
+  }
+  for (const [px, pz, rot] of [
+    [-16, 1.2, 0.25],
+    [8, -1.8, -0.4],
+    [-1.4, -14, 1.1],
+    [1.6, 15, 0.15],
+    [18, 36.2, -0.3],
+    [26, -34.5, 0.4],
+  ]) {
+    const patch = new THREE.Mesh(tarPatchGeo, tarPatchMat);
+    patch.position.set(px, 0.014, pz);
+    patch.rotation.y = rot;
+    patch.receiveShadow = true;
+    detailDecorGroup.add(patch);
   }
 
   // Road Markings (with polygonOffset to avoid Z-fighting)
@@ -507,10 +600,13 @@ export function buildNeighborhoodWorld(
     }
   }
 
-  // 3. Raised Concrete Sidewalks
+  // 3. Raised Concrete Sidewalks (with expansion joint normal + roughness maps)
   const swMat = new THREE.MeshStandardMaterial({
     map: textures.sidewalk,
-    roughness: 0.9,
+    normalMap: textures.sidewalkNormal,
+    normalScale: new THREE.Vector2(0.75, 0.75),
+    roughnessMap: textures.sidewalkRoughness,
+    roughness: 0.92,
     metalness: 0.03,
   });
   localDisposables.push(swMat);
@@ -1280,6 +1376,7 @@ export function buildNeighborhoodWorld(
 
   return {
     root,
+    detailDecorGroup,
     colliders,
     interactables,
     flickerLights,

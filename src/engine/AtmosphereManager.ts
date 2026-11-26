@@ -139,6 +139,8 @@ const _winOnColor = new THREE.Color(0xf59e0b);
 const _shaftDayColor = new THREE.Color(0xdbeafe);
 const _shaftSunsetColor = new THREE.Color(0xffb570);
 const _shaftNightColor = new THREE.Color(0x6485ad);
+const _sunDirScratch = new THREE.Vector3(0.4, 0.6, 0.2);
+const _sunGlowScratch = new THREE.Color(0xffb870);
 
 const RAIN_COUNT = 320;
 const RAIN_BOX_W = 24;
@@ -186,8 +188,8 @@ export class AtmosphereManager {
     private materials: MaterialPalette,
     private world: BuiltWorld
   ) {
-    // 1. Lightweight Sky Dome Gradient (no shadows, no fog, minimal fragment work)
-    const skyGeo = new THREE.SphereGeometry(128, 16, 10);
+    // 1. Atmospheric Sky Dome Shader (gradient + horizon haze + solar/lunar scattering + procedural cloud wisps & night stars)
+    const skyGeo = new THREE.SphereGeometry(128, 20, 14);
     this.skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
@@ -195,23 +197,74 @@ export class AtmosphereManager {
       uniforms: {
         uZenith: { value: new THREE.Color(0x557aa0) },
         uHorizon: { value: new THREE.Color(0xb4c2ce) },
+        uSunDir: { value: new THREE.Vector3(0.3, 0.4, 0.3) },
+        uSunGlow: { value: new THREE.Color(0xffaa66) },
+        uNightFactor: { value: 0.0 },
+        uOvercast: { value: 0.0 },
+        uTime: { value: 0.0 },
+        uDetail: { value: 2.0 },
       },
       vertexShader: `
-        varying float vHeight;
+        varying vec3 vLocalDir;
         void main() {
           vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vHeight = normalize(position).y;
+          vLocalDir = normalize(position);
           gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
       `,
       fragmentShader: `
         uniform vec3 uZenith;
         uniform vec3 uHorizon;
-        varying float vHeight;
+        uniform vec3 uSunDir;
+        uniform vec3 uSunGlow;
+        uniform float uNightFactor;
+        uniform float uOvercast;
+        uniform float uTime;
+        uniform float uDetail;
+        varying vec3 vLocalDir;
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
         void main() {
-          float h = clamp(vHeight, 0.0, 1.0);
-          float factor = pow(h, 0.55);
+          vec3 dir = normalize(vLocalDir);
+          float h = clamp(dir.y, 0.0, 1.0);
+          float factor = pow(h, 0.58);
           vec3 col = mix(uHorizon, uZenith, factor);
+
+          // Low horizon mist band blends ground & fog cleanly
+          float hazeBand = exp(-h * 7.5);
+          col = mix(col, uHorizon * 1.04, hazeBand * 0.45);
+
+          // Analytical solar / lunar corona scatter
+          float sunDot = max(dot(dir, normalize(uSunDir)), 0.0);
+          float wideHalo = pow(sunDot, 6.0) * 0.28 * (1.0 - uOvercast * 0.85);
+          float innerGlow = pow(sunDot, 42.0) * 0.36 * (1.0 - uOvercast * 0.9);
+          col += uSunGlow * (wideHalo + innerGlow);
+
+          // Subtle analytical overcast wisps + dim stars on Medium/High presets
+          if (uDetail > 0.5 && h > 0.03) {
+            vec2 cloudUv = dir.xz / (h + 0.24) * 1.35 + vec2(uTime * 0.008, uTime * 0.004);
+            float wisp = sin(cloudUv.x * 2.1 + sin(cloudUv.y * 1.7)) * 0.5 + 0.5;
+            wisp *= sin(cloudUv.y * 2.6 - cos(cloudUv.x * 1.5)) * 0.5 + 0.5;
+            float cloudAlpha = smoothstep(0.32, 0.85, wisp) * smoothstep(0.03, 0.28, h);
+            vec3 cloudTint = mix(uHorizon * 0.92, uHorizon * 1.15, 0.4 + 0.6 * (1.0 - uNightFactor));
+            col = mix(col, cloudTint, cloudAlpha * (0.14 + uOvercast * 0.22));
+
+            if (uNightFactor > 0.25 && uOvercast < 0.72) {
+              vec2 starCell = floor(vec2(atan(dir.z, dir.x + 1e-5) * 38.0, asin(h) * 76.0));
+              float rnd = hash21(starCell);
+              if (rnd > 0.986) {
+                float twinkle = 0.6 + 0.4 * sin(uTime * 1.8 + rnd * 62.8);
+                float starFade = smoothstep(0.14, 0.48, h) * uNightFactor * (1.0 - uOvercast);
+                col += vec3(0.75, 0.82, 0.94) * (0.35 * twinkle * starFade);
+              }
+            }
+          }
+
           gl_FragColor = vec4(col, 1.0);
         }
       `,
@@ -283,7 +336,8 @@ export class AtmosphereManager {
     weather: WeatherSnapshot,
     playerX: number,
     playerZ: number,
-    lightingQuality: 'atmospheric' | 'performance'
+    lightingQuality: 'atmospheric' | 'performance',
+    graphicsQuality: 'low' | 'medium' | 'high' = 'high'
   ): void {
     const hours = time.timeOfDay * 24;
 
@@ -359,6 +413,11 @@ export class AtmosphereManager {
 
     (this.skyMat.uniforms.uZenith.value as THREE.Color).copy(_zenithA);
     (this.skyMat.uniforms.uHorizon.value as THREE.Color).copy(_horizonA);
+    (this.skyMat.uniforms.uNightFactor.value as number) = time.nightFactor;
+    (this.skyMat.uniforms.uOvercast.value as number) = overcastStrength;
+    (this.skyMat.uniforms.uTime.value as number) = elapsedTime;
+    (this.skyMat.uniforms.uDetail.value as number) =
+      graphicsQuality === 'low' ? 0 : graphicsQuality === 'medium' ? 1 : 2;
     _fogColor.copy(_horizonA);
     (this.scene.background as THREE.Color).copy(_fogColor);
     this.fog.color.copy(_fogColor);
@@ -367,7 +426,8 @@ export class AtmosphereManager {
     this.skyMesh.position.set(playerX, 0, playerZ);
 
     // Dynamic Fog Density (day clearer than night, rain & fog noticeably thicken distance haze)
-    const perfBoost = lightingQuality === 'performance' ? 0.0025 : 0;
+    const perfBoost =
+      lightingQuality === 'performance' || graphicsQuality === 'low' ? 0.0028 : 0;
     const baseFog = THREE.MathUtils.lerp(0.0175, 0.0105, time.daylightFactor);
     this.fog.density =
       baseFog +
@@ -382,6 +442,16 @@ export class AtmosphereManager {
     const sunX = cosA * 96;
     const sunY = sinA * 96;
     const sunZ = 32;
+
+    if (sinA >= -0.06) {
+      _sunDirScratch.set(sunX, sunY, sunZ).normalize();
+      _sunGlowScratch.copy(_sunColA);
+    } else {
+      _sunDirScratch.set(-sunX, -sunY, -26).normalize();
+      _sunGlowScratch.setHex(0x6e88aa);
+    }
+    (this.skyMat.uniforms.uSunDir.value as THREE.Vector3).copy(_sunDirScratch);
+    (this.skyMat.uniforms.uSunGlow.value as THREE.Color).copy(_sunGlowScratch);
 
     this.sunDisc.position.set(playerX + sunX, sunY, playerZ + sunZ);
     const sunVisible = sinA > -0.06 && overcastStrength < 0.92;
@@ -421,17 +491,19 @@ export class AtmosphereManager {
       ? Math.max(0, Math.min(1, 0.45 + 0.55 * Math.sin(elapsedTime * 31.0) * Math.sin(elapsedTime * 13.7)))
       : 0;
 
-    // 4. Street Lamps (Automatic On/Off + Subtle Flicker + Grid Surge Dip)
+    // 4. Street Lamps (Automatic On/Off + Subtle Flicker + Grid Surge Dip + Preset Range Culling)
     const lampFactor = time.lampFactor;
     const lampDip = this.powerFlickerTimer > 0 ? 1 - powerSurge * 0.62 : 1;
     this.materials.streetLampBulb.color.copy(_lampOffColor).lerp(_lampOnColor, lampFactor * lampDip);
     this.materials.streetLampBulb.emissiveIntensity = lampFactor * 2.35 * lampDip;
     this.world.streetLampPoolMat.opacity = lampFactor * 0.92 * lampDip;
 
+    const lampCullRadius = graphicsQuality === 'low' ? 22 : graphicsQuality === 'medium' ? 32 : 44;
+    const lampCullSq = lampCullRadius * lampCullRadius;
     for (const sl of this.world.streetLampLights) {
       const dx = sl.light.position.x - playerX;
       const dz = sl.light.position.z - playerZ;
-      const inRange = lampFactor > 0.01 && dx * dx + dz * dz <= 38 * 38;
+      const inRange = lampFactor > 0.01 && dx * dx + dz * dz <= lampCullSq;
       sl.light.visible = inRange;
       if (!inRange) {
         sl.light.intensity = 0;
@@ -464,10 +536,12 @@ export class AtmosphereManager {
       pl.light.intensity = pl.baseIntensity * (0.22 + 0.85 * lampFactor) * flicker * surgeDip;
     }
 
+    const interiorCullRadius = graphicsQuality === 'low' ? 18 : graphicsQuality === 'medium' ? 26 : 36;
+    const interiorCullSq = interiorCullRadius * interiorCullRadius;
     for (const il of this.world.interiorLights) {
       const dx = il.light.position.x - playerX;
       const dz = il.light.position.z - playerZ;
-      const inRange = il.isSafeBase || dx * dx + dz * dz <= 26 * 26;
+      const inRange = (il.isSafeBase && dx * dx + dz * dz <= 30 * 30) || dx * dx + dz * dz <= interiorCullSq;
       il.light.visible = inRange;
       if (!inRange) {
         il.light.intensity = 0;
@@ -514,7 +588,8 @@ export class AtmosphereManager {
       weather.windGust ?? 0.25,
       playerX,
       playerZ,
-      lightingQuality
+      lightingQuality,
+      graphicsQuality
     );
   }
 
@@ -524,7 +599,8 @@ export class AtmosphereManager {
     windGust: number,
     playerX: number,
     playerZ: number,
-    lightingQuality: 'atmospheric' | 'performance'
+    lightingQuality: 'atmospheric' | 'performance',
+    graphicsQuality: 'low' | 'medium' | 'high'
   ): void {
     if (rainIntensity <= 0.015) {
       this.rainLines.visible = false;
@@ -534,7 +610,10 @@ export class AtmosphereManager {
     this.rainLines.visible = true;
     this.rainMat.opacity = Math.min(0.45, rainIntensity * 0.44);
 
-    const activeCount = lightingQuality === 'performance' ? Math.floor(RAIN_COUNT * 0.5) : RAIN_COUNT;
+    const qualityScale =
+      graphicsQuality === 'low' ? 0.45 : graphicsQuality === 'medium' ? 0.75 : 1.0;
+    const perfScale = lightingQuality === 'performance' ? 0.65 : 1.0;
+    const activeCount = Math.max(48, Math.floor(RAIN_COUNT * Math.min(qualityScale, perfScale)));
     this.rainLines.geometry.setDrawRange(0, activeCount * 2);
 
     const pos = this.rainPositions;

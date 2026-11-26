@@ -1,6 +1,6 @@
 import { clamp } from './collision';
 import { DEFAULT_DAY_LENGTH_SECONDS } from './timeSystem';
-import { HorrorAudioLevel, GameSettings } from './types';
+import { GameSettings, GraphicsQuality, HorrorAudioLevel } from './types';
 
 export const SETTINGS_STORAGE_KEY = 'last_shop_settings_v1';
 
@@ -16,11 +16,20 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   mouseSensitivity: 1.0,
   shadowsEnabled: true,
   lightingQuality: 'atmospheric',
+  graphicsQuality: 'high',
   flashlightOn: true,
   touchControls: 'auto',
   screenOrientation: 'auto',
   dayLengthSeconds: DEFAULT_DAY_LENGTH_SECONDS,
 };
+
+function detectDefaultGraphicsQuality(): GraphicsQuality {
+  if (typeof window === 'undefined') return DEFAULT_GAME_SETTINGS.graphicsQuality;
+  const coarsePointer =
+    typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const touchCapable = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+  return coarsePointer || touchCapable ? 'medium' : 'high';
+}
 
 function sanitizeVolume(val: unknown, fallback: number): number {
   return typeof val === 'number' && Number.isFinite(val) ? clamp(val, 0, 1) : fallback;
@@ -45,6 +54,20 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
     raw.lightingQuality === 'atmospheric' || raw.lightingQuality === 'performance'
       ? raw.lightingQuality
       : DEFAULT_GAME_SETTINGS.lightingQuality;
+  const shadowsEnabled =
+    typeof raw.shadowsEnabled === 'boolean'
+      ? raw.shadowsEnabled
+      : DEFAULT_GAME_SETTINGS.shadowsEnabled;
+  const graphicsQuality: GraphicsQuality =
+    raw.graphicsQuality === 'low' ||
+    raw.graphicsQuality === 'medium' ||
+    raw.graphicsQuality === 'high'
+      ? raw.graphicsQuality
+      : lightingQuality === 'performance' && !shadowsEnabled
+        ? 'low'
+        : lightingQuality === 'performance'
+          ? 'medium'
+          : DEFAULT_GAME_SETTINGS.graphicsQuality;
   const horrorAudioLevel: HorrorAudioLevel =
     raw.horrorAudioLevel === 'full' ||
     raw.horrorAudioLevel === 'reduced' ||
@@ -69,11 +92,9 @@ export function sanitizeGameSettings(raw: Partial<GameSettings> | null | undefin
       typeof raw.mouseSensitivity === 'number' && Number.isFinite(raw.mouseSensitivity)
         ? clamp(raw.mouseSensitivity, 0.3, 2.5)
         : DEFAULT_GAME_SETTINGS.mouseSensitivity,
-    shadowsEnabled:
-      typeof raw.shadowsEnabled === 'boolean'
-        ? raw.shadowsEnabled
-        : DEFAULT_GAME_SETTINGS.shadowsEnabled,
+    shadowsEnabled,
     lightingQuality,
+    graphicsQuality,
     flashlightOn:
       typeof raw.flashlightOn === 'boolean'
         ? raw.flashlightOn
@@ -90,7 +111,12 @@ export function loadSettingsFromStorage(): GameSettings {
       return { ...DEFAULT_GAME_SETTINGS };
     }
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_GAME_SETTINGS };
+    if (!raw) {
+      return {
+        ...DEFAULT_GAME_SETTINGS,
+        graphicsQuality: detectDefaultGraphicsQuality(),
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<GameSettings>;
     return sanitizeGameSettings(parsed);
   } catch {

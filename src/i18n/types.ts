@@ -303,6 +303,11 @@ export interface TranslationCatalog {
     audioEffectsLabel: string;
     audioEffectsDesc: string;
     enabledLabel: string;
+    graphicsQualityLabel: string;
+    graphicsQualityDesc: string;
+    graphicsLow: string;
+    graphicsMedium: string;
+    graphicsHigh: string;
     shadowsLabel: string;
     shadowsDesc: string;
     onLabel: string;

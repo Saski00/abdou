@@ -7,6 +7,7 @@ import {
 } from '../maps/buildingLayouts';
 import { MaterialPalette } from './proceduralModels';
 import { ResourceMaterialPalette } from './resourceModels';
+import { ProceduralTextureSet } from '../textures/proceduralTextures';
 
 export interface InteriorMaterialPalette {
   plasterWall: THREE.MeshStandardMaterial;
@@ -23,33 +24,46 @@ export interface InteriorMaterialPalette {
   dispose: () => void;
 }
 
-export function createInteriorMaterialPalette(): InteriorMaterialPalette {
+export function createInteriorMaterialPalette(
+  textures: ProceduralTextureSet
+): InteriorMaterialPalette {
   const plasterWall = new THREE.MeshStandardMaterial({
-    color: 0x52575e,
+    map: textures.interiorPlaster,
+    normalMap: textures.interiorPlasterNormal,
+    normalScale: new THREE.Vector2(0.55, 0.55),
     roughness: 0.92,
     metalness: 0.02,
   });
   const interiorWoodWall = new THREE.MeshStandardMaterial({
-    color: 0x453629,
+    color: 0x5c4636,
+    map: textures.woodPlank,
+    normalMap: textures.woodNormal,
+    normalScale: new THREE.Vector2(0.65, 0.65),
+    roughnessMap: textures.woodRoughness,
     roughness: 0.88,
     metalness: 0.03,
   });
   const wornTileFloor = new THREE.MeshStandardMaterial({
-    color: 0x3b414a,
-    roughness: 0.85,
-    metalness: 0.04,
+    map: textures.wornTile,
+    normalMap: textures.wornTileNormal,
+    normalScale: new THREE.Vector2(0.75, 0.75),
+    roughnessMap: textures.wornTileRoughness,
+    roughness: 0.82,
+    metalness: 0.05,
   });
   const ceilingSlab = new THREE.MeshStandardMaterial({
-    color: 0x262930,
+    color: 0x22262d,
+    normalMap: textures.concreteNormal,
+    normalScale: new THREE.Vector2(0.35, 0.35),
     roughness: 0.95,
     metalness: 0.02,
   });
   const windowGlass = new THREE.MeshStandardMaterial({
     color: 0x8fb3d4,
     roughness: 0.14,
-    metalness: 0.15,
+    metalness: 0.22,
     transparent: true,
-    opacity: 0.34,
+    opacity: 0.36,
   });
   const lightShaft = new THREE.MeshBasicMaterial({
     color: 0x9ec5e8,
@@ -59,29 +73,32 @@ export function createInteriorMaterialPalette(): InteriorMaterialPalette {
     side: THREE.DoubleSide,
   });
   const fabricDusty = new THREE.MeshStandardMaterial({
-    color: 0x4b423c,
+    color: 0x453d37,
     roughness: 0.94,
     metalness: 0.0,
   });
   const rugWeathered = new THREE.MeshStandardMaterial({
-    color: 0x592e28,
+    color: 0x542c27,
     roughness: 0.95,
     metalness: 0.0,
   });
   const porcelain = new THREE.MeshStandardMaterial({
-    color: 0xcfd6de,
-    roughness: 0.36,
-    metalness: 0.06,
+    color: 0xc2c9d1,
+    roughness: 0.34,
+    metalness: 0.08,
   });
   const brassHandle = new THREE.MeshStandardMaterial({
-    color: 0xd99b38,
+    color: 0xc88d32,
     roughness: 0.38,
-    metalness: 0.72,
+    metalness: 0.76,
   });
   const cabinetWood = new THREE.MeshStandardMaterial({
-    color: 0x5a422f,
-    roughness: 0.82,
-    metalness: 0.05,
+    color: 0x5c4532,
+    map: textures.woodPlank,
+    normalMap: textures.woodNormal,
+    normalScale: new THREE.Vector2(0.45, 0.45),
+    roughness: 0.84,
+    metalness: 0.04,
   });
 
   const all = [
@@ -256,6 +273,40 @@ export function buildEnterableBuildingShell(
     group.add(frame);
   }
 
+  // 5b. Physical Ceiling Lamp Housing aligned to cfg.interiorLightOffset (grounds indoor light)
+  const lampY = Math.min(ceilingH - 0.15, Math.max(2.35, cfg.interiorLightOffset.y + 0.28));
+  if (exteriorStyle === 'clinic' || exteriorStyle === 'lab') {
+    const housing = new THREE.Mesh(
+      new THREE.BoxGeometry(1.45, 0.08, 0.28),
+      mats.darkTrim
+    );
+    housing.position.set(cfg.interiorLightOffset.x, ceilingH - 0.04, cfg.interiorLightOffset.z);
+    const tube = new THREE.Mesh(
+      new THREE.BoxGeometry(1.32, 0.04, 0.14),
+      mats.beaconCyan
+    );
+    tube.position.set(cfg.interiorLightOffset.x, ceilingH - 0.09, cfg.interiorLightOffset.z);
+    group.add(housing, tube);
+  } else {
+    const dropLen = Math.max(0.22, ceilingH - lampY);
+    const cord = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, dropLen, 6),
+      mats.darkTrim
+    );
+    cord.position.set(cfg.interiorLightOffset.x, ceilingH - dropLen * 0.5, cfg.interiorLightOffset.z);
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.2, 10, 1, true),
+      mats.lampMetal
+    );
+    shade.position.set(cfg.interiorLightOffset.x, lampY, cfg.interiorLightOffset.z);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.085, 8, 6),
+      exteriorStyle === 'last_shop' ? mats.lampBulbLit : mats.beaconAmber
+    );
+    bulb.position.set(cfg.interiorLightOffset.x, lampY - 0.07, cfg.interiorLightOffset.z);
+    group.add(cord, shade, bulb);
+  }
+
   // 6. Archetype Exterior Details (Preserving Last Shop landmark identity + distinct building silhouettes)
   if (exteriorStyle === 'last_shop') {
     const frontZ = d * 0.5;
@@ -268,20 +319,39 @@ export function buildEnterableBuildingShell(
     awning.castShadow = true;
     group.add(awning);
 
+    // Iron awning tension tie-rods anchored cleanly to front brick piers
+    const rodGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.45, 6);
+    for (const rx of [-4.1, 4.1]) {
+      const rod = new THREE.Mesh(rodGeo, mats.lampMetal);
+      rod.position.set(rx, 3.25, frontZ + 0.68);
+      rod.rotation.x = -0.92;
+      group.add(rod);
+    }
+
     const sign = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.15, 0.2), mats.shopSign);
     sign.position.set(0, ceilingH + 0.45, frontZ + 0.16);
     group.add(sign);
 
+    const lanternHousing = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.28, 0.12, 8),
+      mats.darkTrim
+    );
+    lanternHousing.position.set(0, 2.77, frontZ + 0.35);
     const lantern = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 10, 8),
+      new THREE.SphereGeometry(0.16, 10, 8),
       mats.lampBulbLit
     );
-    lantern.position.set(0, 2.65, frontZ + 0.35);
-    group.add(lantern);
+    lantern.position.set(0, 2.64, frontZ + 0.35);
+    group.add(lanternHousing, lantern);
 
     const hvac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.85, 1.3), mats.rustedMetal);
     hvac.position.set(-w * 0.25, ceilingH + 0.92, -d * 0.15);
-    group.add(hvac);
+    const exhaust = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.16, 0.75, 8),
+      mats.lampMetal
+    );
+    exhaust.position.set(w * 0.28, ceilingH + 0.85, -d * 0.18);
+    group.add(hvac, exhaust);
   } else if (exteriorStyle === 'store') {
     const frontZ = d * 0.5;
     const fascia = new THREE.Mesh(
@@ -431,6 +501,16 @@ export function buildEnterableBuildingShell(
     );
     roofStrobe.position.set(0, ceilingH + 0.66, northZ + 0.35);
     group.add(roofStrobe);
+
+    // Exterior steel security bars across Precinct front windows
+    const barGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.42, 6);
+    for (const wx of [-3.1, 3.1]) {
+      for (let b = -0.9; b <= 0.91; b += 0.45) {
+        const bar = new THREE.Mesh(barGeo, mats.lampMetal);
+        bar.position.set(wx + b, 1.7, northZ - 0.14);
+        group.add(bar);
+      }
+    }
   } else if (exteriorStyle === 'clinic') {
     const northZ = -d * 0.5;
     const canopy = new THREE.Mesh(
@@ -440,6 +520,15 @@ export function buildEnterableBuildingShell(
     canopy.position.set(0, 2.95, northZ - 0.72);
     canopy.castShadow = true;
     group.add(canopy);
+
+    // Steel diagonal brackets under clinic ambulance bay canopy
+    const strutGeo = new THREE.BoxGeometry(0.12, 0.12, 1.4);
+    for (const sx of [-2.25, 2.25]) {
+      const strut = new THREE.Mesh(strutGeo, mats.lampMetal);
+      strut.position.set(sx, 2.6, northZ - 0.55);
+      strut.rotation.x = 0.45;
+      group.add(strut);
+    }
 
     const triageStrip = new THREE.Mesh(
       new THREE.BoxGeometry(5.36, 0.09, 0.1),
@@ -455,6 +544,11 @@ export function buildEnterableBuildingShell(
     sign.position.set(0, ceilingH + 0.16, northZ - 0.16);
     group.add(sign);
 
+    const crossBack = new THREE.Mesh(
+      new THREE.BoxGeometry(1.12, 1.12, 0.08),
+      mats.darkTrim
+    );
+    crossBack.position.set(-4.2, 2.58, northZ - 0.12);
     const crossH = new THREE.Mesh(
       new THREE.BoxGeometry(0.85, 0.24, 0.12),
       mats.beaconRed
@@ -465,7 +559,47 @@ export function buildEnterableBuildingShell(
       mats.beaconRed
     );
     crossV.position.set(-4.2, 2.58, northZ - 0.16);
-    group.add(crossH, crossV);
+    group.add(crossBack, crossH, crossV);
+
+    // Rooftop sterile exhaust & triage quarantine trim stripe inside waiting hall
+    const clinicVent = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 0.75, 1.2),
+      mats.rustedMetal
+    );
+    clinicVent.position.set(3.1, ceilingH + 0.82, 1.4);
+    const medChart = new THREE.Mesh(
+      new THREE.BoxGeometry(1.25, 0.9, 0.05),
+      intMats.porcelain
+    );
+    medChart.position.set(-1.6, 1.75, 0.08);
+    const chartStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.12, 0.06),
+      mats.beaconCyan
+    );
+    chartStripe.position.set(-1.6, 2.02, 0.09);
+
+    // IV Drip stand + bedside vital monitor nestled right alongside Exam Bed (-1.6, 2.6)
+    const ivPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.03, 1.75, 6),
+      mats.lampMetal
+    );
+    ivPole.position.set(-2.38, 0.9, 1.85);
+    const ivBag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.14, 0.24, 0.07),
+      mats.beaconCyan
+    );
+    ivBag.position.set(-2.38, 1.56, 1.85);
+    const monitorScreen = new THREE.Mesh(
+      new THREE.BoxGeometry(0.32, 0.24, 0.18),
+      mats.darkTrim
+    );
+    monitorScreen.position.set(-2.35, 1.02, 2.9);
+    const monitorGlow = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.15, 0.03),
+      mats.beaconCyan
+    );
+    monitorGlow.position.set(-2.35, 1.04, 2.8);
+    group.add(clinicVent, medChart, chartStripe, ivPole, ivBag, monitorScreen, monitorGlow);
   } else if (exteriorStyle === 'lab') {
     const southZ = d * 0.5;
     const airlock = new THREE.Mesh(

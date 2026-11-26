@@ -404,6 +404,8 @@ export interface FeedbackToast {
 
 export type HorrorAudioLevel = 'full' | 'reduced' | 'off';
 
+export type GraphicsQuality = 'low' | 'medium' | 'high';
+
 export interface GameSettings {
   language: GameLanguage;
   masterVolume: number;
@@ -416,6 +418,7 @@ export interface GameSettings {
   mouseSensitivity: number;
   shadowsEnabled: boolean;
   lightingQuality: 'atmospheric' | 'performance';
+  graphicsQuality: GraphicsQuality;
   flashlightOn: boolean;
   touchControls: TouchControlsMode;
   screenOrientation: ScreenOrientationMode;

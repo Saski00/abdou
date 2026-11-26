@@ -4,9 +4,11 @@ import { CustomerAIState } from '../../game/types';
 export interface CustomerSharedGeometries {
   torso: THREE.BoxGeometry;
   jacket: THREE.BoxGeometry;
+  belt: THREE.BoxGeometry;
   backpack: THREE.BoxGeometry;
   head: THREE.BoxGeometry;
   cap: THREE.BoxGeometry;
+  visor: THREE.BoxGeometry;
   arm: THREE.BoxGeometry;
   leg: THREE.BoxGeometry;
   shadowDisc: THREE.CircleGeometry;
@@ -31,9 +33,11 @@ export interface CustomerRig {
 export function createCustomerSharedGeometries(): CustomerSharedGeometries {
   const torso = new THREE.BoxGeometry(0.42, 0.54, 0.23);
   const jacket = new THREE.BoxGeometry(0.46, 0.44, 0.26);
+  const belt = new THREE.BoxGeometry(0.47, 0.08, 0.27);
   const backpack = new THREE.BoxGeometry(0.32, 0.38, 0.16);
   const head = new THREE.BoxGeometry(0.28, 0.30, 0.28);
   const cap = new THREE.BoxGeometry(0.30, 0.10, 0.31);
+  const visor = new THREE.BoxGeometry(0.28, 0.03, 0.12);
   const arm = new THREE.BoxGeometry(0.12, 0.54, 0.12);
   const leg = new THREE.BoxGeometry(0.15, 0.64, 0.16);
   const shadowDisc = new THREE.CircleGeometry(0.38, 14);
@@ -43,9 +47,11 @@ export function createCustomerSharedGeometries(): CustomerSharedGeometries {
   return {
     torso,
     jacket,
+    belt,
     backpack,
     head,
     cap,
+    visor,
     arm,
     leg,
     shadowDisc,
@@ -53,9 +59,11 @@ export function createCustomerSharedGeometries(): CustomerSharedGeometries {
     dispose: () => {
       torso.dispose();
       jacket.dispose();
+      belt.dispose();
       backpack.dispose();
       head.dispose();
       cap.dispose();
+      visor.dispose();
       arm.dispose();
       leg.dispose();
       shadowDisc.dispose();
@@ -155,12 +163,16 @@ export function buildProceduralCustomerModel(
   jacketMesh.receiveShadow = true;
   bodyPivot.add(jacketMesh);
 
+  const beltMesh = new THREE.Mesh(geos.belt, packMat);
+  beltMesh.position.set(0, 0.09, 0);
+  bodyPivot.add(beltMesh);
+
   const packMesh = new THREE.Mesh(geos.backpack, packMat);
   packMesh.position.set(0, 0.35, 0.19);
   packMesh.castShadow = true;
   bodyPivot.add(packMesh);
 
-  // Head & cap
+  // Head, cap & visor
   const headPivot = new THREE.Group();
   headPivot.position.set(0, 0.64, 0);
   const headMesh = new THREE.Mesh(geos.head, skinMat);
@@ -173,6 +185,10 @@ export function buildProceduralCustomerModel(
   capMesh.position.set(0, 0.28, -0.015);
   capMesh.castShadow = true;
   headPivot.add(capMesh);
+
+  const visorMesh = new THREE.Mesh(geos.visor, capMat);
+  visorMesh.position.set(0, 0.255, -0.185);
+  headPivot.add(visorMesh);
   bodyPivot.add(headPivot);
 
   // Arms hanging naturally at sides

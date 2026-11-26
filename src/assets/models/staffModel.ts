@@ -6,9 +6,11 @@ import { tProfession } from '../../i18n';
 export interface StaffSharedGeometries {
   torso: THREE.BoxGeometry;
   vest: THREE.BoxGeometry;
+  belt: THREE.BoxGeometry;
   backpack: THREE.BoxGeometry;
   head: THREE.BoxGeometry;
   cap: THREE.BoxGeometry;
+  visor: THREE.BoxGeometry;
   arm: THREE.BoxGeometry;
   leg: THREE.BoxGeometry;
   baton: THREE.CylinderGeometry;
@@ -41,9 +43,11 @@ export interface StaffCharacterRig {
 export function createStaffSharedGeometries(): StaffSharedGeometries {
   const torso = new THREE.BoxGeometry(0.42, 0.54, 0.23);
   const vest = new THREE.BoxGeometry(0.47, 0.45, 0.27);
+  const belt = new THREE.BoxGeometry(0.48, 0.08, 0.28);
   const backpack = new THREE.BoxGeometry(0.32, 0.38, 0.16);
   const head = new THREE.BoxGeometry(0.28, 0.30, 0.28);
   const cap = new THREE.BoxGeometry(0.30, 0.11, 0.31);
+  const visor = new THREE.BoxGeometry(0.28, 0.03, 0.12);
   const arm = new THREE.BoxGeometry(0.12, 0.54, 0.12);
   const leg = new THREE.BoxGeometry(0.15, 0.64, 0.16);
   const baton = new THREE.CylinderGeometry(0.025, 0.028, 0.46, 8);
@@ -55,9 +59,11 @@ export function createStaffSharedGeometries(): StaffSharedGeometries {
   return {
     torso,
     vest,
+    belt,
     backpack,
     head,
     cap,
+    visor,
     arm,
     leg,
     baton,
@@ -66,9 +72,11 @@ export function createStaffSharedGeometries(): StaffSharedGeometries {
     dispose: () => {
       torso.dispose();
       vest.dispose();
+      belt.dispose();
       backpack.dispose();
       head.dispose();
       cap.dispose();
+      visor.dispose();
       arm.dispose();
       leg.dispose();
       baton.dispose();
@@ -221,6 +229,10 @@ export function buildProceduralStaffModel(
   vestMesh.receiveShadow = true;
   bodyPivot.add(vestMesh);
 
+  const beltMesh = new THREE.Mesh(geos.belt, packMat);
+  beltMesh.position.set(0, 0.09, 0);
+  bodyPivot.add(beltMesh);
+
   const packMesh = new THREE.Mesh(geos.backpack, packMat);
   packMesh.position.set(0, 0.35, 0.19);
   packMesh.castShadow = true;
@@ -239,6 +251,10 @@ export function buildProceduralStaffModel(
   capMesh.position.set(0, 0.28, -0.015);
   capMesh.castShadow = true;
   headPivot.add(capMesh);
+
+  const visorMesh = new THREE.Mesh(geos.visor, capMat);
+  visorMesh.position.set(0, 0.255, -0.185);
+  headPivot.add(visorMesh);
   bodyPivot.add(headPivot);
 
   const leftArmPivot = new THREE.Group();

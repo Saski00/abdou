@@ -5,7 +5,11 @@ export interface ZombieSharedGeometries {
   torso: THREE.BoxGeometry;
   coat: THREE.BoxGeometry;
   ribPatch: THREE.BoxGeometry;
+  collar: THREE.BoxGeometry;
+  shoulderPad: THREE.BoxGeometry;
   head: THREE.BoxGeometry;
+  brow: THREE.BoxGeometry;
+  eyeSocket: THREE.BoxGeometry;
   eye: THREE.BoxGeometry;
   arm: THREE.BoxGeometry;
   leg: THREE.BoxGeometry;
@@ -33,8 +37,12 @@ export function createZombieSharedGeometries(): ZombieSharedGeometries {
   const torso = new THREE.BoxGeometry(0.46, 0.56, 0.25);
   const coat = new THREE.BoxGeometry(0.50, 0.44, 0.28);
   const ribPatch = new THREE.BoxGeometry(0.24, 0.22, 0.04);
+  const collar = new THREE.BoxGeometry(0.42, 0.08, 0.29);
+  const shoulderPad = new THREE.BoxGeometry(0.22, 0.14, 0.26);
   const head = new THREE.BoxGeometry(0.30, 0.32, 0.30);
-  const eye = new THREE.BoxGeometry(0.055, 0.04, 0.03);
+  const brow = new THREE.BoxGeometry(0.29, 0.065, 0.05);
+  const eyeSocket = new THREE.BoxGeometry(0.085, 0.06, 0.025);
+  const eye = new THREE.BoxGeometry(0.042, 0.028, 0.03);
   const arm = new THREE.BoxGeometry(0.13, 0.58, 0.13);
   const leg = new THREE.BoxGeometry(0.16, 0.66, 0.17);
   const shadowDisc = new THREE.CircleGeometry(0.42, 16);
@@ -44,7 +52,11 @@ export function createZombieSharedGeometries(): ZombieSharedGeometries {
     torso,
     coat,
     ribPatch,
+    collar,
+    shoulderPad,
     head,
+    brow,
+    eyeSocket,
     eye,
     arm,
     leg,
@@ -53,7 +65,11 @@ export function createZombieSharedGeometries(): ZombieSharedGeometries {
       torso.dispose();
       coat.dispose();
       ribPatch.dispose();
+      collar.dispose();
+      shoulderPad.dispose();
       head.dispose();
+      brow.dispose();
+      eyeSocket.dispose();
       eye.dispose();
       arm.dispose();
       leg.dispose();
@@ -112,6 +128,11 @@ export function buildProceduralZombieModel(
     roughness: 0.52,
     metalness: 0.1,
   });
+  const socketMat = new THREE.MeshStandardMaterial({
+    color: 0x0b0d0e,
+    roughness: 0.96,
+    metalness: 0.0,
+  });
   const eyeMat = new THREE.MeshStandardMaterial({
     color: eyeColorHex,
     emissive: eyeEmissiveHex,
@@ -153,7 +174,7 @@ export function buildProceduralZombieModel(
   rightLegPivot.add(rightLegMesh);
   bodyPivot.add(rightLegPivot);
 
-  // Torso & tattered jacket
+  // Torso, tattered jacket, torn collar & wound contrast
   const torsoMesh = new THREE.Mesh(geos.torso, skinMat);
   torsoMesh.position.y = 0.32;
   torsoMesh.castShadow = true;
@@ -166,11 +187,28 @@ export function buildProceduralZombieModel(
   coatMesh.receiveShadow = true;
   bodyPivot.add(coatMesh);
 
+  const collarMesh = new THREE.Mesh(geos.collar, coatMat);
+  collarMesh.position.set(0, 0.6, 0.02);
+  collarMesh.rotation.x = 0.14;
+  bodyPivot.add(collarMesh);
+
   const ribPatch = new THREE.Mesh(geos.ribPatch, woundMat);
   ribPatch.position.set(0.04, 0.34, -0.13);
   bodyPivot.add(ribPatch);
 
-  // Head & sunken eyes (forward is -Z)
+  if (archetypeId === 'brute') {
+    const padL = new THREE.Mesh(geos.shoulderPad, pantsMat);
+    padL.position.set(-0.27, 0.59, 0);
+    padL.rotation.z = 0.16;
+    padL.castShadow = true;
+    const padR = new THREE.Mesh(geos.shoulderPad, pantsMat);
+    padR.position.set(0.27, 0.59, 0);
+    padR.rotation.z = -0.16;
+    padR.castShadow = true;
+    bodyPivot.add(padL, padR);
+  }
+
+  // Head, gaunt brow ridge & sunken glowing eyes (forward is -Z)
   const headPivot = new THREE.Group();
   headPivot.position.set(0, 0.66, -0.02);
   const headMesh = new THREE.Mesh(geos.head, skinMat);
@@ -179,12 +217,23 @@ export function buildProceduralZombieModel(
   headMesh.receiveShadow = true;
   headPivot.add(headMesh);
 
+  const browMesh = new THREE.Mesh(geos.brow, skinMat);
+  browMesh.position.set(0, 0.24, -0.145);
+  browMesh.rotation.x = 0.12;
+  headPivot.add(browMesh);
+
+  const leftSocket = new THREE.Mesh(geos.eyeSocket, socketMat);
+  leftSocket.position.set(-0.068, 0.185, -0.148);
+  const rightSocket = new THREE.Mesh(geos.eyeSocket, socketMat);
+  rightSocket.position.set(0.068, 0.185, -0.148);
+  headPivot.add(leftSocket, rightSocket);
+
   const leftEye = new THREE.Mesh(geos.eye, eyeMat);
-  leftEye.position.set(-0.065, 0.18, -0.15);
+  leftEye.position.set(-0.068, 0.185, -0.154);
   headPivot.add(leftEye);
 
   const rightEye = new THREE.Mesh(geos.eye, eyeMat);
-  rightEye.position.set(0.065, 0.18, -0.15);
+  rightEye.position.set(0.068, 0.185, -0.154);
   headPivot.add(rightEye);
   bodyPivot.add(headPivot);
 
@@ -199,7 +248,7 @@ export function buildProceduralZombieModel(
 
   const rightArmPivot = new THREE.Group();
   rightArmPivot.position.set(0.31, 0.56, 0);
-  const rightArmMesh = new THREE.Mesh(geos.arm, coatMat);
+  const rightArmMesh = new THREE.Mesh(geos.arm, archetypeId === 'runner' ? woundMat : coatMat);
   rightArmMesh.position.y = -0.24;
   rightArmMesh.castShadow = true;
   rightArmPivot.add(rightArmMesh);
@@ -223,6 +272,7 @@ export function buildProceduralZombieModel(
       coatMat.dispose();
       pantsMat.dispose();
       woundMat.dispose();
+      socketMat.dispose();
       eyeMat.dispose();
       shadowMat.dispose();
     },
