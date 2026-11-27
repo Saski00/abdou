@@ -39,7 +39,13 @@ export interface PlayerAnimContext {
   verticalVelocity: number;
   landImpulse: number;
   yawRate: number;
+  characterTurnRate: number;
   strafeFactor: number;
+  localForward: number;
+  localStrafe: number;
+  speedDelta: number;
+  aimPitch: number;
+  isAiming: boolean;
   walkCycle: number;
   breathPhase: number;
 }
@@ -338,8 +344,12 @@ export class FirstPersonController {
   private landBobOffset = 0;
   private strafeRoll = 0;
   private yawRate = 0;
+  private characterTurnRate = 0;
   private actualMoveSpeed = 0;
+  private speedDelta = 0;
   private strafeFactor = 0;
+  private localForwardFactor = 0;
+  private localStrafeFactor = 0;
   private isRestingPose = false;
   private sensitivity = 1.0;
   private prefersReducedMotion = false;
@@ -372,7 +382,13 @@ export class FirstPersonController {
     verticalVelocity: 0,
     landImpulse: 0,
     yawRate: 0,
+    characterTurnRate: 0,
     strafeFactor: 0,
+    localForward: 0,
+    localStrafe: 0,
+    speedDelta: 0,
+    aimPitch: 0,
+    isAiming: false,
     walkCycle: 0,
     breathPhase: 0,
   };
@@ -423,8 +439,12 @@ export class FirstPersonController {
     this.landBobOffset = 0;
     this.strafeRoll = 0;
     this.yawRate = 0;
+    this.characterTurnRate = 0;
     this.actualMoveSpeed = 0;
+    this.speedDelta = 0;
     this.strafeFactor = 0;
+    this.localForwardFactor = 0;
+    this.localStrafeFactor = 0;
     this.isRestingPose = false;
     this.heldKeys.clear();
     this.jumpRequested = false;
@@ -472,7 +492,13 @@ export class FirstPersonController {
     this._animContext.verticalVelocity = this.velocity.y;
     this._animContext.landImpulse = this.landImpulse;
     this._animContext.yawRate = this.yawRate;
+    this._animContext.characterTurnRate = this.characterTurnRate;
     this._animContext.strafeFactor = this.strafeFactor;
+    this._animContext.localForward = this.localForwardFactor;
+    this._animContext.localStrafe = this.localStrafeFactor;
+    this._animContext.speedDelta = this.speedDelta;
+    this._animContext.aimPitch = this.pitch;
+    this._animContext.isAiming = this.aimLockTimer > 0;
     this._animContext.walkCycle = this.walkCycle;
     this._animContext.breathPhase = this.breathPhase;
     return this._animContext;
@@ -761,25 +787,48 @@ export class FirstPersonController {
 
     const actualMoved = Math.hypot(this.position.x - prevX, this.position.z - prevZ);
     const rawActualSpeed = actualMoved / safeDt;
+    const prevMoveSpeed = this.actualMoveSpeed;
     this.actualMoveSpeed = THREE.MathUtils.damp(this.actualMoveSpeed, rawActualSpeed, 18, dt);
     if (this.actualMoveSpeed < 0.04 && !hasInput) {
       this.actualMoveSpeed = 0;
     }
+    const rawSpeedDelta = clamp((this.actualMoveSpeed - prevMoveSpeed) / safeDt, -18, 18);
+    this.speedDelta = THREE.MathUtils.damp(this.speedDelta, rawSpeedDelta, 12, dt);
 
     // Smooth character body facing:
     // - Align to camera aim when actively firing/interacting/reloading (aimLockTimer > 0)
     // - Otherwise smoothly turn toward camera-relative travel direction while moving
+    const prevCharYaw = this.characterYaw;
     if (this.aimLockTimer > 0) {
       this.characterYaw = dampAngleRad(this.characterYaw, this.yaw, 16, dt);
     } else if (hasInput && Math.hypot(moveDirX, moveDirZ) > 0.1) {
       const moveYaw = Math.atan2(-moveDirX, -moveDirZ);
       this.characterYaw = dampAngleRad(this.characterYaw, moveYaw, 11, dt);
     }
+    const rawCharYawRate = clamp(wrapAngleRad(this.characterYaw - prevCharYaw) / safeDt, -8, 8);
+    this.characterTurnRate = THREE.MathUtils.damp(this.characterTurnRate, rawCharYawRate, 14, dt);
 
-    // Lateral velocity projection onto camera right vector for subtle turn/strafe banking
+    // Lateral velocity projection onto camera right vector & character-local axes
     const rightVel = this.velocity.x * cosY - this.velocity.z * sinY;
     const targetStrafe = clamp(rightVel / WALK_SPEED, -1, 1);
     this.strafeFactor = THREE.MathUtils.damp(this.strafeFactor, targetStrafe, 12, dt);
+
+    const cSin = Math.sin(this.characterYaw);
+    const cCos = Math.cos(this.characterYaw);
+    const charFwdVel = -this.velocity.x * cSin - this.velocity.z * cCos;
+    const charRightVel = this.velocity.x * cCos - this.velocity.z * cSin;
+    this.localForwardFactor = THREE.MathUtils.damp(
+      this.localForwardFactor,
+      clamp(charFwdVel / SPRINT_SPEED, -1, 1),
+      14,
+      dt
+    );
+    this.localStrafeFactor = THREE.MathUtils.damp(
+      this.localStrafeFactor,
+      clamp(charRightVel / WALK_SPEED, -1, 1),
+      14,
+      dt
+    );
 
     // 5. Vertical ground & sidewalk curb step-up
     const groundY = this.getGroundHeightAt(this.position.x, this.position.z, colliders);
