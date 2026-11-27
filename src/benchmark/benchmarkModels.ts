@@ -35,20 +35,31 @@ function makePbrMat(
     aoMapIntensity?: number;
     vertexColors?: boolean;
     side?: THREE.Side;
+    sheen?: number;
+    sheenRoughness?: number;
+    sheenColor?: number;
+    clearcoat?: number;
+    clearcoatRoughness?: number;
   }
-): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
+): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
     color: opts.color,
     map: maps.map,
     normalMap: maps.normalMap,
     normalScale: new THREE.Vector2(opts.normalScale, opts.normalScale),
     roughnessMap: maps.roughnessMap,
     roughness: opts.roughness,
+    metalnessMap: maps.metalnessMap,
     metalness: opts.metalness,
     aoMap: maps.aoMap,
     aoMapIntensity: opts.aoMapIntensity ?? 0.65,
     vertexColors: opts.vertexColors ?? true,
     side: opts.side ?? THREE.FrontSide,
+    sheen: opts.sheen ?? 0,
+    sheenRoughness: opts.sheenRoughness ?? 0.7,
+    sheenColor: new THREE.Color(opts.sheenColor ?? 0xffffff),
+    clearcoat: opts.clearcoat ?? 0,
+    clearcoatRoughness: opts.clearcoatRoughness ?? 0.3,
   });
 }
 
@@ -75,58 +86,78 @@ export function buildBenchmarkHuman(tex: BenchmarkTextureBundle): BenchmarkChara
 
   const skinMat = makePbrMat(tex.humanSkin, {
     color: 0xf4e8df,
-    roughness: 0.80,
+    roughness: 0.76,
     metalness: 0.02,
     normalScale: 0.55,
     aoMapIntensity: 0.45,
+    sheen: 0.22,
+    sheenRoughness: 0.68,
+    sheenColor: 0xffd7c2,
+    clearcoat: 0.06,
+    clearcoatRoughness: 0.52,
   });
   const shirtMat = makePbrMat(tex.dirtyCloth, {
     color: 0xc2cbd1,
     roughness: 0.98,
     metalness: 0.02,
     normalScale: 0.95,
+    sheen: 0.42,
+    sheenRoughness: 0.85,
+    sheenColor: 0xd0d4d8,
   });
   const pantsMat = makePbrMat(tex.dirtyCloth, {
     color: 0x8e9588,
     roughness: 0.98,
     metalness: 0.02,
     normalScale: 0.95,
+    sheen: 0.36,
+    sheenRoughness: 0.88,
+    sheenColor: 0xbcc0b8,
   });
   const leatherMat = makePbrMat(tex.leather, {
     color: 0xc2a894,
-    roughness: 0.74,
-    metalness: 0.05,
+    roughness: 0.72,
+    metalness: 0.06,
     normalScale: 1.05,
     side: THREE.DoubleSide,
+    clearcoat: 0.08,
+    clearcoatRoughness: 0.48,
   });
   const bootMat = makePbrMat(tex.leather, {
     color: 0x7a685b,
-    roughness: 0.78,
-    metalness: 0.04,
+    roughness: 0.76,
+    metalness: 0.05,
     normalScale: 0.95,
   });
   const hairMat = makePbrMat(tex.hair, {
     color: 0xa28c7a,
-    roughness: 0.95,
+    roughness: 0.92,
     metalness: 0.02,
     normalScale: 0.60,
+    sheen: 0.25,
+    sheenRoughness: 0.62,
+    sheenColor: 0xc9b5a0,
   });
   const metalMat = makePbrMat(tex.metal, {
     color: 0xc2c8d0,
     roughness: 0.42,
-    metalness: 0.88,
+    metalness: 0.94,
     normalScale: 1.0,
     vertexColors: false,
   });
-  const scleraMat = new THREE.MeshStandardMaterial({
+  const scleraMat = new THREE.MeshPhysicalMaterial({
     color: 0xc8c3ba,
     roughness: 0.22,
     metalness: 0.02,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.08,
   });
-  const irisMat = new THREE.MeshStandardMaterial({
+  const irisMat = new THREE.MeshPhysicalMaterial({
     color: 0x2f3b45,
     roughness: 0.16,
     metalness: 0.04,
+    clearcoat: 0.95,
+    clearcoatRoughness: 0.06,
   });
   const browMat = new THREE.MeshStandardMaterial({
     color: 0x3b2c22,
@@ -207,7 +238,7 @@ export function buildBenchmarkHuman(tex: BenchmarkTextureBundle): BenchmarkChara
     attachToBone(rig, 'head', iris);
 
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.set(sx * 0.031, 0.060, -0.0916);
+    pupil.position.set(sx * 0.031, 0.060, -0.0928);
     attachToBone(rig, 'head', pupil);
 
     const upperLid = new THREE.Mesh(lidGeo, skinMat);
@@ -225,9 +256,9 @@ export function buildBenchmarkHuman(tex: BenchmarkTextureBundle): BenchmarkChara
 
   // 3. Layered Open Leather Jacket + Flat Utility Belt + Steel Buckle
   const jacketGeo = buildBenchmarkOuterJacket(false);
-  const beltGeo = new THREE.CylinderGeometry(0.146, 0.144, 0.036, 22);
-  beltGeo.scale(1.01, 1.0, 0.74);
-  const buckleGeo = new THREE.BoxGeometry(0.044, 0.038, 0.012);
+  const beltGeo = new THREE.CylinderGeometry(0.160, 0.158, 0.038, 24);
+  beltGeo.scale(1.01, 1.0, 0.725);
+  const buckleGeo = new THREE.BoxGeometry(0.044, 0.038, 0.014);
   geometries.push(jacketGeo, beltGeo, buckleGeo);
 
   const jacketMesh = new THREE.Mesh(jacketGeo, leatherMat);
@@ -236,12 +267,12 @@ export function buildBenchmarkHuman(tex: BenchmarkTextureBundle): BenchmarkChara
   attachToBone(rig, 'spineUpper', jacketMesh);
 
   const beltMesh = new THREE.Mesh(beltGeo, bootMat);
-  beltMesh.position.set(0, 0.02, 0.005);
+  beltMesh.position.set(0, 0.02, 0.004);
   beltMesh.castShadow = true;
   attachToBone(rig, 'pelvis', beltMesh);
 
   const buckleMesh = new THREE.Mesh(buckleGeo, metalMat);
-  buckleMesh.position.set(0, 0.02, -0.106);
+  buckleMesh.position.set(0, 0.02, -0.114);
   buckleMesh.castShadow = true;
   attachToBone(rig, 'pelvis', buckleMesh);
 
@@ -334,6 +365,9 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
     roughness: 0.98,
     metalness: 0.01,
     normalScale: 1.05,
+    sheen: 0.35,
+    sheenRoughness: 0.88,
+    sheenColor: 0xa5aa9f,
   });
   const bloodClothMat = makePbrMat(tex.bloodStained, {
     color: 0xdad0c8,
@@ -341,12 +375,16 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
     metalness: 0.04,
     normalScale: 1.15,
     side: THREE.DoubleSide,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.24,
   });
   const pantsMat = makePbrMat(tex.dirtyCloth, {
     color: 0x7d8278,
     roughness: 0.98,
     metalness: 0.01,
     normalScale: 0.95,
+    sheen: 0.3,
+    sheenRoughness: 0.9,
   });
   const bootMat = makePbrMat(tex.leather, {
     color: 0x6a5b50,
@@ -360,10 +398,12 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
     metalness: 0.02,
     normalScale: 0.75,
   });
-  const deadEyeMat = new THREE.MeshStandardMaterial({
-    color: 0x6f695e,
+  const deadEyeMat = new THREE.MeshPhysicalMaterial({
+    color: 0x797367,
     roughness: 0.16,
     metalness: 0.04,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.12,
   });
   const socketDarkMat = new THREE.MeshStandardMaterial({
     color: 0x160e10,
@@ -379,6 +419,8 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
     roughness: 0.34,
     metalness: 0.08,
     normalScale: 1.4,
+    clearcoat: 0.82,
+    clearcoatRoughness: 0.12,
   });
   const boneMat = new THREE.MeshStandardMaterial({
     color: 0x9e9278,
@@ -419,10 +461,10 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
   makeSkinned(bodyGeos.legsCloth, pantsMat);
   makeSkinned(bodyGeos.exposedSkinBody, zombieSkinMat);
 
-  // 2. Sculpted Gaunt Head + Deep Dark Sockets + Dead Cataract Eyes + Teeth + Patchy Hair
+  // 2. Sculpted Gaunt Head + Deep Dark Sockets + Dead Cataract Eyes + Animated Hinged Jaw + Teeth
   const headGeo = buildBenchmarkHeadGeometry('zombie');
   const hairGeo = buildBenchmarkHairGeometry('zombie');
-  const { teeth: teethGeo, woundCavity: woundCavityGeo, ribs: ribsGeo } =
+  const { upperTeeth: upperTeethGeo, lowerJawSkin: lowerJawGeo, lowerTeeth: lowerTeethGeo, woundCavity: woundCavityGeo, ribs: ribsGeo } =
     buildBenchmarkZombieHorrorDetails();
   const socketGeo = new THREE.SphereGeometry(0.022, 12, 10);
   socketGeo.scale(1.1, 0.85, 0.55);
@@ -430,7 +472,18 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
   eyeGeo.scale(1.0, 0.86, 0.65);
   const mouthVoidGeo = new THREE.SphereGeometry(0.022, 10, 8);
   mouthVoidGeo.scale(1.15, 0.65, 0.42);
-  geometries.push(headGeo, hairGeo, teethGeo, woundCavityGeo, ribsGeo, socketGeo, eyeGeo, mouthVoidGeo);
+  geometries.push(
+    headGeo,
+    hairGeo,
+    upperTeethGeo,
+    lowerJawGeo,
+    lowerTeethGeo,
+    woundCavityGeo,
+    ribsGeo,
+    socketGeo,
+    eyeGeo,
+    mouthVoidGeo
+  );
 
   const headMesh = new THREE.Mesh(headGeo, zombieSkinMat);
   headMesh.castShadow = true;
@@ -443,12 +496,12 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
 
   for (const sx of [-1, 1]) {
     const socket = new THREE.Mesh(socketGeo, socketDarkMat);
-    socket.position.set(sx * 0.032, 0.062, -0.067);
+    socket.position.set(sx * 0.032, 0.062, -0.063);
     attachToBone(rig, 'head', socket);
 
-    // Dead non-glowing cataract eyeball deeply recessed inside orbital socket
+    // Dead non-glowing cataract eyeball visibly recessed inside orbital socket
     const eye = new THREE.Mesh(eyeGeo, deadEyeMat);
-    eye.position.set(sx * 0.032, 0.061, -0.071);
+    eye.position.set(sx * 0.032, 0.061, -0.0725);
     attachToBone(rig, 'head', eye);
   }
 
@@ -456,8 +509,15 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
   mouthVoid.position.set(0.002, 0.006, -0.066);
   attachToBone(rig, 'head', mouthVoid);
 
-  const teethMesh = new THREE.Mesh(teethGeo, toothMat);
-  attachToBone(rig, 'head', teethMesh);
+  const upperTeethMesh = new THREE.Mesh(upperTeethGeo, toothMat);
+  attachToBone(rig, 'head', upperTeethMesh);
+
+  const lowerJawMesh = new THREE.Mesh(lowerJawGeo, zombieSkinMat);
+  lowerJawMesh.castShadow = true;
+  attachToBone(rig, 'jaw', lowerJawMesh);
+
+  const lowerTeethMesh = new THREE.Mesh(lowerTeethGeo, toothMat);
+  attachToBone(rig, 'jaw', lowerTeethMesh);
 
   // 3. Torn Blood-Stained Outer Jacket + Exposed Chest Laceration + Pale Ribs
   const jacketGeo = buildBenchmarkOuterJacket(true);
@@ -519,6 +579,7 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
   rig.bones[b.forearmL].rotation.set(0.45, 0, 0);
   rig.bones[b.upperArmR].rotation.set(0.36, -0.06, 0.12);
   rig.bones[b.forearmR].rotation.set(0.58, 0, 0);
+  rig.bones[b.jaw].rotation.set(-0.14, 0.03, 0.06);
 
   const animate = (elapsed: number) => {
     const lurch = Math.sin(elapsed * 1.15);
@@ -527,6 +588,8 @@ export function buildBenchmarkZombie(tex: BenchmarkTextureBundle): BenchmarkChar
     rig.bones[b.spineLower].rotation.z = 0.06 + Math.cos(elapsed * 0.9) * 0.025;
     rig.bones[b.head].rotation.z = 0.16 + twitch * 0.08;
     rig.bones[b.head].rotation.y = -0.08 + Math.sin(elapsed * 0.55) * 0.10;
+    rig.bones[b.jaw].rotation.x = -0.14 - Math.abs(lurch) * 0.09 - Math.abs(twitch) * 0.08;
+    rig.bones[b.jaw].rotation.z = 0.06 + twitch * 0.04;
     rig.bones[b.upperArmL].rotation.x = 0.58 + lurch * 0.08;
     rig.bones[b.upperArmR].rotation.x = 0.36 - lurch * 0.06;
     rig.skeleton.update();
@@ -578,12 +641,14 @@ export function buildBenchmarkMaterialPlinth(tex: BenchmarkTextureBundle): Mater
     roughness: number;
     metalness: number;
     normalScale: number;
+    sheen?: number;
+    clearcoat?: number;
   }[] = [
-    { label: 'Skin', maps: tex.humanSkin, color: 0xf4e8df, roughness: 0.80, metalness: 0.02, normalScale: 0.75 },
-    { label: 'Dirty Cloth', maps: tex.dirtyCloth, color: 0xbec4ba, roughness: 0.98, metalness: 0.02, normalScale: 1.15 },
-    { label: 'Leather', maps: tex.leather, color: 0xc8ae9a, roughness: 0.72, metalness: 0.06, normalScale: 1.25 },
-    { label: 'Metal', maps: tex.metal, color: 0xc2c8d0, roughness: 0.42, metalness: 0.88, normalScale: 1.15 },
-    { label: 'Blood-Stained', maps: tex.bloodStained, color: 0xe6dcd4, roughness: 0.74, metalness: 0.05, normalScale: 1.25 },
+    { label: 'Skin', maps: tex.humanSkin, color: 0xf4e8df, roughness: 0.76, metalness: 0.02, normalScale: 0.75, sheen: 0.25, clearcoat: 0.06 },
+    { label: 'Dirty Cloth', maps: tex.dirtyCloth, color: 0xbec4ba, roughness: 0.98, metalness: 0.02, normalScale: 1.15, sheen: 0.45 },
+    { label: 'Leather', maps: tex.leather, color: 0xc8ae9a, roughness: 0.72, metalness: 0.06, normalScale: 1.25, clearcoat: 0.08 },
+    { label: 'Metal', maps: tex.metal, color: 0xc2c8d0, roughness: 0.42, metalness: 0.94, normalScale: 1.15 },
+    { label: 'Blood-Stained', maps: tex.bloodStained, color: 0xe6dcd4, roughness: 0.74, metalness: 0.05, normalScale: 1.25, clearcoat: 0.72 },
   ];
 
   const spacing = 0.42;
@@ -603,6 +668,8 @@ export function buildBenchmarkMaterialPlinth(tex: BenchmarkTextureBundle): Mater
       metalness: spec.metalness,
       normalScale: spec.normalScale,
       vertexColors: false,
+      sheen: spec.sheen,
+      clearcoat: spec.clearcoat,
     });
     materials.push(mat);
 

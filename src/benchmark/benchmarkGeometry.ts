@@ -8,16 +8,17 @@ export const BENCHMARK_BONE_NAMES = [
   'spineUpper',  // 2
   'neck',        // 3
   'head',        // 4
-  'upperArmL',   // 5
-  'forearmL',    // 6
-  'handL',       // 7
-  'upperArmR',   // 8
-  'forearmR',    // 9
-  'handR',       // 10
-  'thighL',      // 11
-  'shinL',       // 12
-  'thighR',      // 13
-  'shinR',       // 14
+  'jaw',         // 5
+  'upperArmL',   // 6
+  'forearmL',    // 7
+  'handL',       // 8
+  'upperArmR',   // 9
+  'forearmR',    // 10
+  'handR',       // 11
+  'thighL',      // 12
+  'shinL',       // 13
+  'thighR',      // 14
+  'shinR',       // 15
 ] as const;
 
 export type BenchmarkBoneIndex = Record<(typeof BENCHMARK_BONE_NAMES)[number], number>;
@@ -46,6 +47,7 @@ export function createBenchmarkSkeleton(): BenchmarkSkeletonRig {
   const spineUpper = makeBone('spineUpper', 0, 0.22, 0, spineLower);
   const neck = makeBone('neck', 0, 0.22, 0.006, spineUpper);
   const head = makeBone('head', 0, 0.09, -0.008, neck);
+  const jaw = makeBone('jaw', 0, 0.016, -0.024, head);
 
   // Arms in slight A-pose downward (more natural shoulder deformation than T-pose)
   const upperArmL = makeBone('upperArmL', -0.20, 0.17, 0.01, spineUpper);
@@ -71,16 +73,17 @@ export function createBenchmarkSkeleton(): BenchmarkSkeletonRig {
     spineUpper: 2,
     neck: 3,
     head: 4,
-    upperArmL: 5,
-    forearmL: 6,
-    handL: 7,
-    upperArmR: 8,
-    forearmR: 9,
-    handR: 10,
-    thighL: 11,
-    shinL: 12,
-    thighR: 13,
-    shinR: 14,
+    jaw: 5,
+    upperArmL: 6,
+    forearmL: 7,
+    handL: 8,
+    upperArmR: 9,
+    forearmR: 10,
+    handR: 11,
+    thighL: 12,
+    shinL: 13,
+    thighR: 14,
+    shinR: 15,
   };
 
   return { bones, boneMap, skeleton, rootBone: pelvis };
@@ -455,8 +458,8 @@ export function buildSkinnedBodyGeometries(
   );
   const wristL = loftSkinnedTube(
     [
-      { center: new THREE.Vector3(-0.288, 0.945, 0.004), rx: 0.029 * slim, rz: 0.024 * slim, tiltZ: -0.11, boneWeights: [[b.forearmL, 0.85], [b.handL, 0.15]] },
-      { center: new THREE.Vector3(-0.294, 0.895, 0.002), rx: 0.027 * slim, rz: 0.021 * slim, tiltZ: -0.11, boneWeights: [[b.handL, 0.75], [b.forearmL, 0.25]] },
+      { center: new THREE.Vector3(-0.288, 0.945, 0.010), rx: 0.029 * slim, rz: 0.024 * slim, tiltZ: -0.11, boneWeights: [[b.forearmL, 0.85], [b.handL, 0.15]] },
+      { center: new THREE.Vector3(-0.292, 0.895, 0.013), rx: 0.027 * slim, rz: 0.021 * slim, tiltZ: -0.11, boneWeights: [[b.handL, 0.75], [b.forearmL, 0.25]] },
     ],
     12,
     1.0,
@@ -464,8 +467,8 @@ export function buildSkinnedBodyGeometries(
   );
   const wristR = loftSkinnedTube(
     [
-      { center: new THREE.Vector3(0.288, 0.945, 0.004), rx: 0.029 * slim, rz: 0.024 * slim, tiltZ: 0.11, boneWeights: [[b.forearmR, 0.85], [b.handR, 0.15]] },
-      { center: new THREE.Vector3(0.294, 0.895, 0.002), rx: 0.027 * slim, rz: 0.021 * slim, tiltZ: 0.11, boneWeights: [[b.handR, 0.75], [b.forearmR, 0.25]] },
+      { center: new THREE.Vector3(0.288, 0.945, 0.010), rx: 0.029 * slim, rz: 0.024 * slim, tiltZ: 0.11, boneWeights: [[b.forearmR, 0.85], [b.handR, 0.15]] },
+      { center: new THREE.Vector3(0.292, 0.895, 0.013), rx: 0.027 * slim, rz: 0.021 * slim, tiltZ: 0.11, boneWeights: [[b.handR, 0.75], [b.forearmR, 0.25]] },
     ],
     12,
     1.0,
@@ -1041,14 +1044,18 @@ export function buildBenchmarkHairGeometry(mode: 'human' | 'zombie'): THREE.Buff
 }
 
 /**
- * Zombie crooked teeth + torn chest laceration cavity + separate pale fractured rib bones.
+ * Zombie crooked upper/lower teeth + torn chest laceration cavity + separate pale fractured rib bones
+ * + articulated asymmetric slack lower mandible attached to the `jaw` bone.
  */
 export function buildBenchmarkZombieHorrorDetails(): {
-  teeth: THREE.BufferGeometry;
+  upperTeeth: THREE.BufferGeometry;
+  lowerJawSkin: THREE.BufferGeometry;
+  lowerTeeth: THREE.BufferGeometry;
   woundCavity: THREE.BufferGeometry;
   ribs: THREE.BufferGeometry;
 } {
-  const toothParts: THREE.BufferGeometry[] = [];
+  const upperToothParts: THREE.BufferGeometry[] = [];
+  const lowerToothParts: THREE.BufferGeometry[] = [];
   const xs = [-0.018, -0.011, -0.003, 0.005, 0.012, 0.019];
   for (let i = 0; i < xs.length; i++) {
     if (i === 2) continue; // broken missing tooth gap
@@ -1056,14 +1063,29 @@ export function buildBenchmarkZombieHorrorDetails(): {
     topT.rotateX(Math.PI);
     topT.rotateZ((i - 2.5) * 0.14);
     topT.translate(xs[i], 0.013, -0.083 + Math.abs(i - 2.5) * 0.0022);
-    toothParts.push(topT);
+    upperToothParts.push(topT);
 
+    // Lower teeth live in `jaw` bone local space (jaw pivot is at y=0.016, z=-0.024 relative to head)
     const botT = new THREE.ConeGeometry(0.0028, 0.0085 + ((i + 1) % 2) * 0.003, 5);
     botT.rotateZ((2.5 - i) * 0.12);
-    botT.translate(xs[i] * 0.92, -0.002, -0.080 + Math.abs(i - 2.5) * 0.0022);
-    toothParts.push(botT);
+    botT.translate(xs[i] * 0.92 + 0.002, -0.019, -0.056 + Math.abs(i - 2.5) * 0.0022);
+    lowerToothParts.push(botT);
   }
-  const teeth = applyVertexAO(mergeBenchmarkParts(toothParts), () => 0.80);
+  const upperTeeth = applyVertexAO(mergeBenchmarkParts(upperToothParts), () => 0.80);
+  const lowerTeeth = applyVertexAO(mergeBenchmarkParts(lowerToothParts), () => 0.78);
+
+  // Asymmetric slack lower mandible + torn chin flesh in `jaw` bone local space
+  const jawBase = new THREE.SphereGeometry(0.044, 14, 10);
+  jawBase.scale(0.92, 0.56, 1.18);
+  jawBase.rotateX(0.18);
+  jawBase.rotateZ(0.08);
+  jawBase.translate(0.003, -0.036, -0.040);
+  const chinPoint = new THREE.SphereGeometry(0.022, 10, 8);
+  chinPoint.scale(0.84, 0.76, 0.92);
+  chinPoint.translate(0.004, -0.046, -0.068);
+  const lowerJawSkin = applyVertexAO(mergeBenchmarkParts([jawBase, chinPoint]), (_x, y, z) =>
+    y > -0.028 || z > -0.04 ? 0.65 : 0.92
+  );
 
   // Torn chest laceration cavity + exposed fractured ribs (mounted on spineUpper)
   const cavity = new THREE.SphereGeometry(0.062, 12, 9);
@@ -1092,5 +1114,5 @@ export function buildBenchmarkZombieHorrorDetails(): {
     z < -0.115 ? 0.98 : 0.65
   );
 
-  return { teeth, woundCavity, ribs };
+  return { upperTeeth, lowerJawSkin, lowerTeeth, woundCavity, ribs };
 }

@@ -55,7 +55,9 @@ export interface BenchmarkGeometryStats {
   hasVertexAO: boolean;
   hasNormalMaps: boolean;
   hasRoughnessMaps: boolean;
+  hasMetalnessMaps: boolean;
   hasAoMaps: boolean;
+  hasPhysicalPbr: boolean;
 }
 
 export interface BenchmarkTelemetry {
@@ -335,7 +337,9 @@ export class BenchmarkScene {
       hasVertexAO: Boolean(this.human.geometries[0]?.attributes.color),
       hasNormalMaps: Boolean(sampleMat?.normalMap),
       hasRoughnessMaps: Boolean(sampleMat?.roughnessMap),
+      hasMetalnessMaps: Boolean(sampleMat?.metalnessMap),
       hasAoMaps: Boolean(sampleMat?.aoMap),
+      hasPhysicalPbr: sampleMat instanceof THREE.MeshPhysicalMaterial,
     };
 
     this.applyState(this.state);
@@ -373,10 +377,10 @@ export class BenchmarkScene {
         : Math.min(window.devicePixelRatio || 1, 1.75);
     this.renderer.setPixelRatio(targetDpr);
 
-    const shadowEnabled = !this.isSoftwareGl && !isMobileSim;
+    const shadowEnabled = !this.isSoftwareGl;
     this.renderer.shadowMap.enabled = shadowEnabled;
     this.keyLight.castShadow = shadowEnabled;
-    const shadowRes = shadowEnabled ? 2048 : 0;
+    const shadowRes = shadowEnabled ? (isMobileSim ? 512 : 2048) : 0;
     if (shadowEnabled && this.keyLight.shadow.mapSize.x !== shadowRes) {
       this.keyLight.shadow.mapSize.set(shadowRes, shadowRes);
       this.keyLight.shadow.map?.dispose();
@@ -664,7 +668,7 @@ export class BenchmarkScene {
         pixelRatio: +this.renderer.getPixelRatio().toFixed(2),
         viewportWidth: w,
         viewportHeight: h,
-        shadowMapRes: this.renderer.shadowMap.enabled ? 2048 : 0,
+        shadowMapRes: this.renderer.shadowMap.enabled ? this.keyLight.shadow.mapSize.x : 0,
         isSoftwareGl: this.isSoftwareGl,
         rendererLabel: this.rendererLabel,
         geometryStats: this.geometryStats,

@@ -4,6 +4,7 @@ export interface BenchmarkMaterialMaps {
   map: THREE.CanvasTexture;
   normalMap: THREE.DataTexture;
   roughnessMap: THREE.CanvasTexture;
+  metalnessMap: THREE.CanvasTexture;
   aoMap: THREE.CanvasTexture;
 }
 
@@ -122,6 +123,7 @@ function buildPbrSet(
     albedo: CanvasRenderingContext2D;
     height: CanvasRenderingContext2D;
     rough: CanvasRenderingContext2D;
+    metal: CanvasRenderingContext2D;
     ao: CanvasRenderingContext2D;
     s: number;
   }) => void
@@ -129,12 +131,18 @@ function buildPbrSet(
   const a = makeCanvas(size);
   const h = makeCanvas(size);
   const r = makeCanvas(size);
+  const m = makeCanvas(size);
   const o = makeCanvas(size);
+
+  // Default dielectric metalness baseline (0) unless painted otherwise
+  m.ctx.fillStyle = '#040404';
+  m.ctx.fillRect(0, 0, size, size);
 
   paint({
     albedo: a.ctx,
     height: h.ctx,
     rough: r.ctx,
+    metal: m.ctx,
     ao: o.ctx,
     s: size,
   });
@@ -143,6 +151,7 @@ function buildPbrSet(
     map: toCanvasTex(a.canvas, repeatX, repeatY, anisotropy, true),
     normalMap: heightToNormalTexture(h.canvas, repeatX, repeatY, anisotropy, normalStrength),
     roughnessMap: toCanvasTex(r.canvas, repeatX, repeatY, anisotropy, false),
+    metalnessMap: toCanvasTex(m.canvas, repeatX, repeatY, anisotropy, false),
     aoMap: toCanvasTex(o.canvas, repeatX, repeatY, anisotropy, false),
   };
 }
@@ -405,8 +414,8 @@ export function createBenchmarkTextureBundle(
     }
   });
 
-  // 5. Forged / Pitted Metal (brushed steel + oxidized rust pits)
-  const metal = buildPbrSet(resolution, 2.0, 2.0, maxAnisotropy, 2.4, ({ albedo, height, rough, ao, s }) => {
+  // 5. Forged / Pitted Metal (brushed steel + oxidized rust pits with varying metalnessMap)
+  const metal = buildPbrSet(resolution, 2.0, 2.0, maxAnisotropy, 2.4, ({ albedo, height, rough, metal: metalCtx, ao, s }) => {
     const rand = seededRand(509);
     albedo.fillStyle = '#5c636b';
     albedo.fillRect(0, 0, s, s);
@@ -414,6 +423,8 @@ export function createBenchmarkTextureBundle(
     height.fillRect(0, 0, s, s);
     rough.fillStyle = '#686868';
     rough.fillRect(0, 0, s, s);
+    metalCtx.fillStyle = '#ebebeb';
+    metalCtx.fillRect(0, 0, s, s);
     ao.fillStyle = '#ededed';
     ao.fillRect(0, 0, s, s);
 
@@ -431,7 +442,7 @@ export function createBenchmarkTextureBundle(
       rough.fillRect(x, y, w, 1);
     }
 
-    // Scratches & rust pitting
+    // Scratches & rust pitting (oxidized pits lose metalness and gain roughness)
     for (let i = 0; i < 65; i++) {
       const x = rand() * s;
       const y = rand() * s;
@@ -451,6 +462,11 @@ export function createBenchmarkTextureBundle(
       rough.beginPath();
       rough.arc(x, y, rad * 0.75, 0, Math.PI * 2);
       rough.fill();
+
+      metalCtx.fillStyle = 'rgba(38,38,38,0.82)';
+      metalCtx.beginPath();
+      metalCtx.arc(x, y, rad * 0.72, 0, Math.PI * 2);
+      metalCtx.fill();
 
       ao.fillStyle = 'rgba(95,95,95,0.28)';
       ao.beginPath();
@@ -598,6 +614,7 @@ export function createBenchmarkTextureBundle(
         set.map.dispose();
         set.normalMap.dispose();
         set.roughnessMap.dispose();
+        set.metalnessMap.dispose();
         set.aoMap.dispose();
       }
     },

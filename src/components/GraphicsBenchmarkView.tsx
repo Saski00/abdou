@@ -434,14 +434,14 @@ export function GraphicsBenchmarkView({ onExit }: GraphicsBenchmarkViewProps) {
           <section className="space-y-1.5 border-t border-stone-800 pt-3">
             <h3 className="font-semibold text-stone-100">Geometry Capabilities (Test 3)</h3>
             <ul className="space-y-1 text-[11px] text-stone-300">
-              <li>Custom Meshes & Ring Lofting: Supported</li>
-              <li>Vertex Manipulation & Sculpting: Supported</li>
+              <li>Custom Meshes &amp; Ring Lofting: Supported</li>
+              <li>Vertex Manipulation &amp; Sculpting: Supported</li>
               <li>Laplacian Smoothing: Supported (Indexed Mesh)</li>
               <li>Custom Cylindrical / Triplanar UVs: Supported</li>
-              <li>Skeletal Mesh & Skinning: Supported (15-Bone SkinnedMesh)</li>
+              <li>Skeletal Mesh &amp; Skinning: Supported ({telemetry.geometryStats.boneCount}-Bone SkinnedMesh)</li>
               <li>Baked Normal / Roughness / AO Maps: Supported</li>
               <li className="text-amber-300/90">
-                Subdivision Surfaces / Facial Blendshapes: Procedural Approximation Only (No ZBrush-grade topology)
+                Catmull-Clark Subdivision / Facial Blendshapes: Procedural Approximation Only (No ZBrush-grade topology)
               </li>
             </ul>
           </section>
@@ -450,12 +450,13 @@ export function GraphicsBenchmarkView({ onExit }: GraphicsBenchmarkViewProps) {
             <h3 className="font-semibold text-stone-100">PBR Material Pipeline (Test 4)</h3>
             <ul className="space-y-1 text-[11px] text-stone-300">
               <li>ACES Filmic + sRGB + PMREM IBL: Active</li>
+              <li>MeshPhysicalMaterial (Sheen / Clearcoat): {telemetry.geometryStats.hasPhysicalPbr ? 'Active' : 'Off'}</li>
               <li>Normal Maps (Sobel Tangent-Space): {telemetry.geometryStats.hasNormalMaps ? 'Active' : 'Off'}</li>
-              <li>Roughness Maps: {telemetry.geometryStats.hasRoughnessMaps ? 'Active' : 'Off'}</li>
+              <li>Roughness &amp; Metalness Maps: {telemetry.geometryStats.hasRoughnessMaps && telemetry.geometryStats.hasMetalnessMaps ? 'Active' : 'Off'}</li>
               <li>AO Maps + Vertex AO: {telemetry.geometryStats.hasAoMaps && telemetry.geometryStats.hasVertexAO ? 'Active' : 'Off'}</li>
-              <li>PCFSoft Shadows (2048px Desktop): {telemetry.shadowMapRes > 0 ? 'Active' : 'Off (Mobile / SW GL)'}</li>
+              <li>PCFSoft Shadows: {telemetry.shadowMapRes > 0 ? `Active (${telemetry.shadowMapRes}px)` : 'Off (SW GL)'}</li>
               <li className="text-amber-300/90">
-                Subsurface Scattering (Skin) & Anisotropic Hair Shader: Not native in MeshStandardMaterial
+                True Subsurface Scattering (SSS) &amp; Strand Hair Shaders: Not native in WebGL2 Three.js PBR
               </li>
             </ul>
           </section>
