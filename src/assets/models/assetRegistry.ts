@@ -78,7 +78,12 @@ export const ASSET_REGISTRY: Record<string, AssetManifestEntry> = {
   'deco.fridge': {},
   'shop.expansion_wing': {},
   'shop.storage_rack': {},
-  'enemy.zombie': {},
+  'enemy.zombie': {
+    gltfUrl: '/src/assets/models/zombie-glb.glb',
+    scale: 1.36,
+    yOffset: 0.014,
+    rotationY: Math.PI,
+  },
   'npc.customer': {},
   'npc.survivor': {},
   'npc.employee_shopkeeper': {},

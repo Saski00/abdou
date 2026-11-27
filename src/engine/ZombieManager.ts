@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { SoundEngine } from '../assets/audio/soundEngine';
+import { ASSET_REGISTRY } from '../assets/models/assetRegistry';
 import {
-  ZombieRig,
+  GlbZombieAnimInfo,
+  GlbZombieRig,
+  animateGlbZombieRig,
+  createGlbZombieRig,
+} from '../assets/models/zombieGlbAdapter';
+import {
   ZombieSharedGeometries,
-  animateZombieRig,
   buildFirstPersonCombatBlade,
   buildFirstPersonMeleePipe,
   buildFirstPersonServicePistol,
-  buildProceduralZombieModel,
   createZombieSharedGeometries,
 } from '../assets/models/zombieModel';
 import { damp } from '../assets/models/characterGeometryKit';
@@ -60,7 +64,8 @@ export const STORY_SURGE_SPAWNS: Record<'surge_roadblock' | 'surge_relay', Zombi
 interface ZombieEntityView {
   agent: ZombieAgent;
   group: THREE.Group;
-  rig: ZombieRig | null;
+  tintVariant: number;
+  glbRig: GlbZombieRig | null;
 }
 
 const DYNAMIC_PROWLER_SPOTS: { x: number; z: number; yaw: number }[] = [
@@ -233,6 +238,10 @@ export class ZombieManager {
   private pendingMeleeStrike: PendingMeleeStrike | null = null;
   private weaponAnimState: PlayerWeaponAnimState = 'idle';
   private readonly viewPose: WeaponViewPose = createDefaultWeaponViewPose();
+  private readonly zombieModelUrl: string;
+  private zombieGlbError: string | null = null;
+  private zombieAnimInfo: GlbZombieAnimInfo | null = null;
+  private disposed = false;
 
   constructor(
     scene: THREE.Scene,
@@ -243,6 +252,8 @@ export class ZombieManager {
   ) {
     this.sharedGeos = createZombieSharedGeometries();
     scene.add(this.root);
+
+    this.zombieModelUrl = ASSET_REGISTRY['enemy.zombie']?.gltfUrl ?? '/src/assets/models/zombie-glb.glb';
 
     this.pipeProp = buildFirstPersonMeleePipe();
     this.pipeProp.group.position.set(0.32, -0.31, -0.5);
@@ -263,30 +274,109 @@ export class ZombieManager {
     camera.add(this.pistolProp.group);
 
     this.spawnInitialZombies();
+    void this.preloadZombieGlb();
+  }
+
+  private async preloadZombieGlb(): Promise<void> {
+    const loaded = await this.assets.loadExternalGltfAsset(this.zombieModelUrl);
+    if (this.disposed) return;
+
+    if (!loaded) {
+      this.zombieGlbError =
+        this.assets.getLastLoadError(this.zombieModelUrl) ??
+        `Unable to load zombie model at ${this.zombieModelUrl}`;
+      console.error(
+        `ZombieManager: Failed to load imported zombie GLB "${this.zombieModelUrl}": ${this.zombieGlbError}`
+      );
+      return;
+    }
+
+    this.zombieGlbError = null;
+    for (const ent of this.entities) {
+      if (!ent.glbRig) {
+        this.attachGlbRigToEntity(ent);
+      }
+    }
+  }
+
+  private attachGlbRigToEntity(ent: ZombieEntityView): void {
+    const entry = ASSET_REGISTRY['enemy.zombie'];
+    const prepared = this.assets.clonePreparedAsset(this.zombieModelUrl, entry, true, true);
+    if (!prepared) return;
+
+    const built = createGlbZombieRig(
+      prepared.root,
+      prepared.animations,
+      this.sharedGeos,
+      ent.tintVariant,
+      ent.agent.config.id,
+      ent.agent.config.visualScale
+    );
+    ent.group.add(built.group);
+    ent.glbRig = built.rig;
+    this.zombieAnimInfo = built.rig.animInfo;
+
+    // Immediately match pose if entity was restored dead or already active
+    animateGlbZombieRig(
+      built.rig,
+      ent.agent.state,
+      ent.agent.walkCycle,
+      ent.agent.attackWindup,
+      ent.agent.config.attackWindupSec,
+      ent.agent.hitFlashTimer,
+      ent.agent.deathTimer,
+      0.016,
+      0,
+      {
+        actualSpeed: ent.agent.actualSpeed,
+        yawRate: ent.agent.yawRate,
+        gaitStyle: ent.agent.gaitStyle,
+        attackRecoveryTimer: ent.agent.attackRecoveryTimer,
+        stunTimer: ent.agent.stunTimer,
+        stunMaxTimer: ent.agent.stunMaxTimer,
+        hitDirectionSign: ent.agent.hitDirectionSign,
+      }
+    );
+  }
+
+  public getZombieModelStatus(): {
+    modelUrl: string;
+    loaded: boolean;
+    error: string | null;
+    activeGlbCount: number;
+    animInfo: GlbZombieAnimInfo | null;
+  } {
+    let activeGlbCount = 0;
+    for (const ent of this.entities) {
+      if (ent.glbRig) activeGlbCount += 1;
+    }
+    return {
+      modelUrl: this.zombieModelUrl,
+      loaded: Boolean(this.assets.getCachedAsset(this.zombieModelUrl)),
+      error: this.zombieGlbError,
+      activeGlbCount,
+      animInfo: this.zombieAnimInfo,
+    };
   }
 
   private spawnZombieFromConfig(spawn: ZombieSpawnConfig, index: number): ZombieEntityView {
     const agent = createZombieAgent(spawn, index, this.colliders);
-    let rig: ZombieRig | null = null;
-    const group = this.assets.instantiateAsset(
-      'enemy.zombie',
-      () => {
-        const built = buildProceduralZombieModel(
-          this.sharedGeos,
-          index,
-          agent.config.id,
-          agent.config.visualScale
-        );
-        rig = built.rig;
-        return built.group;
-      },
-      true,
-      true
-    );
+    const group = new THREE.Group();
+    group.name = 'enemy.zombie';
     group.position.set(agent.x, agent.y, agent.z);
     group.rotation.y = agent.yaw;
     this.root.add(group);
-    const view = { agent, group, rig };
+
+    const view: ZombieEntityView = {
+      agent,
+      group,
+      tintVariant: index,
+      glbRig: null,
+    };
+    if (this.assets.getCachedAsset(this.zombieModelUrl)) {
+      this.attachGlbRigToEntity(view);
+    }
+
     this.entities.push(view);
     this.agentsCache.push(agent);
     return view;
@@ -314,7 +404,7 @@ export class ZombieManager {
   private clearEntities(): void {
     for (const ent of this.entities) {
       this.root.remove(ent.group);
-      ent.rig?.dispose();
+      ent.glbRig?.dispose();
     }
     this.entities = [];
     this.agentsCache = [];
@@ -985,7 +1075,7 @@ export class ZombieManager {
         continue;
       }
 
-      if (ent.rig) {
+      if (ent.glbRig) {
         const dx = a.x - playerX;
         const dz = a.z - playerZ;
         const distSq = dx * dx + dz * dz;
@@ -995,8 +1085,8 @@ export class ZombieManager {
             continue;
           }
           const animDt = isMidFar ? dt * 2 : dt;
-          animateZombieRig(
-            ent.rig,
+          animateGlbZombieRig(
+            ent.glbRig,
             a.state,
             a.walkCycle,
             a.attackWindup,
@@ -1229,6 +1319,7 @@ export class ZombieManager {
   }
 
   public dispose(): void {
+    this.disposed = true;
     this.clearEntities();
     this.sharedGeos.dispose();
     this.pipeProp.dispose();

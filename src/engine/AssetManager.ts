@@ -1,11 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { ASSET_REGISTRY } from '../assets/models/assetRegistry';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { ASSET_REGISTRY, AssetManifestEntry } from '../assets/models/assetRegistry';
+
+export interface CachedGltfAsset {
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+  hasSkinnedMesh: boolean;
+}
 
 export class AssetManager {
   private gltfLoader: GLTFLoader;
-  private modelCache = new Map<string, THREE.Group>();
-  private inFlight = new Map<string, Promise<THREE.Group | null>>();
+  private modelCache = new Map<string, CachedGltfAsset>();
+  private inFlight = new Map<string, Promise<CachedGltfAsset | null>>();
+  private loadErrors = new Map<string, string>();
 
   constructor() {
     this.gltfLoader = new GLTFLoader();
@@ -34,7 +42,16 @@ export class AssetManager {
     const url = entry.gltfUrl;
     const cached = this.modelCache.get(url);
     if (cached) {
-      container.add(this.prepareClone(cached, entry.scale ?? 1, entry.yOffset ?? 0, entry.rotationY ?? 0, castShadow, receiveShadow));
+      container.add(
+        this.prepareClone(
+          cached,
+          entry.scale ?? 1,
+          entry.yOffset ?? 0,
+          entry.rotationY ?? 0,
+          castShadow,
+          receiveShadow
+        )
+      );
       return container;
     }
 
@@ -42,7 +59,7 @@ export class AssetManager {
     const fallback = fallbackBuilder();
     container.add(fallback);
 
-    void this.loadExternalGltf(url).then((loaded) => {
+    void this.loadExternalGltfAsset(url).then((loaded) => {
       if (!loaded) return;
       container.remove(fallback);
       container.add(
@@ -60,24 +77,76 @@ export class AssetManager {
     return container;
   }
 
+  public getCachedAsset(url: string): CachedGltfAsset | null {
+    return this.modelCache.get(url) ?? null;
+  }
+
+  public getLastLoadError(url: string): string | null {
+    return this.loadErrors.get(url) ?? null;
+  }
+
+  public clonePreparedAsset(
+    url: string,
+    entry?: AssetManifestEntry,
+    castShadow = true,
+    receiveShadow = true
+  ): { root: THREE.Group; animations: THREE.AnimationClip[] } | null {
+    const cached = this.modelCache.get(url);
+    if (!cached) return null;
+    const root = this.prepareClone(
+      cached,
+      entry?.scale ?? 1,
+      entry?.yOffset ?? 0,
+      entry?.rotationY ?? 0,
+      castShadow,
+      receiveShadow
+    );
+    return { root, animations: cached.animations };
+  }
+
   public async loadExternalGltf(url: string): Promise<THREE.Group | null> {
+    const asset = await this.loadExternalGltfAsset(url);
+    return asset ? asset.scene : null;
+  }
+
+  public async loadExternalGltfAsset(url: string): Promise<CachedGltfAsset | null> {
     const existing = this.modelCache.get(url);
     if (existing) return existing;
 
     const pending = this.inFlight.get(url);
     if (pending) return pending;
 
-    const promise = new Promise<THREE.Group | null>((resolve) => {
+    this.loadErrors.delete(url);
+
+    const promise = new Promise<CachedGltfAsset | null>((resolve) => {
       this.gltfLoader.load(
         url,
         (gltf) => {
-          this.modelCache.set(url, gltf.scene);
+          let hasSkinnedMesh = false;
+          gltf.scene.traverse((child) => {
+            if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+              hasSkinnedMesh = true;
+            }
+          });
+          const asset: CachedGltfAsset = {
+            scene: gltf.scene,
+            animations: gltf.animations ?? [],
+            hasSkinnedMesh,
+          };
+          this.modelCache.set(url, asset);
           this.inFlight.delete(url);
-          resolve(gltf.scene);
+          resolve(asset);
         },
         undefined,
         (err) => {
-          console.warn(`AssetManager: Could not load GLTF "${url}", keeping procedural fallback.`, err);
+          const reason =
+            err instanceof Error
+              ? err.message
+              : typeof err === 'string'
+                ? err
+                : 'Failed to fetch or parse GLB/GLTF asset';
+          this.loadErrors.set(url, reason);
+          console.error(`AssetManager: Could not load GLTF "${url}": ${reason}`, err);
           this.inFlight.delete(url);
           resolve(null);
         }
@@ -89,14 +158,16 @@ export class AssetManager {
   }
 
   private prepareClone(
-    source: THREE.Group,
+    source: CachedGltfAsset,
     scale: number,
     yOffset: number,
     rotationY: number,
     castShadow: boolean,
     receiveShadow: boolean
   ): THREE.Group {
-    const clone = source.clone(true);
+    const clone = source.hasSkinnedMesh
+      ? (SkeletonUtils.clone(source.scene) as THREE.Group)
+      : source.scene.clone(true);
     clone.scale.setScalar(scale);
     clone.position.y = yOffset;
     clone.rotation.y = rotationY;
@@ -112,5 +183,6 @@ export class AssetManager {
   public dispose(): void {
     this.modelCache.clear();
     this.inFlight.clear();
+    this.loadErrors.clear();
   }
 }
