@@ -3,6 +3,13 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { SoundEngine } from '../assets/audio/soundEngine';
 import { ENTERABLE_BUILDINGS } from '../assets/maps/buildingLayouts';
 import { NEIGHBORHOOD_MAP } from '../assets/maps/neighborhoodMap';
+import { ASSET_REGISTRY } from '../assets/models/assetRegistry';
+import {
+  PlayerGlbRig,
+  createGlbPlayerRig,
+  setPlayerRigQuality,
+  updatePlayerGlbRig,
+} from '../assets/models/playerGlbAdapter';
 import { createMaterialPalette } from '../assets/models/proceduralModels';
 import { createProceduralTextureSet } from '../assets/textures/proceduralTextures';
 import {
@@ -165,6 +172,10 @@ export class Game3DEngine {
   private hemiLight: THREE.HemisphereLight;
   private flashlight: THREE.SpotLight;
   private flashlightTarget: THREE.Object3D;
+  private playerRig: PlayerGlbRig | null = null;
+  private readonly playerModelUrl: string;
+  private readonly _aimDir = new THREE.Vector3();
+  private readonly _aimFocal = new THREE.Vector3();
 
   private ashPoints: THREE.Points;
   private ashPositions: Float32Array;
@@ -316,16 +327,17 @@ export class Game3DEngine {
     this.scene.add(this.sunLight);
     this.scene.add(this.sunLight.target);
 
-    // Player Flashlight mounted to camera (shadowless for low-end GPU speed)
-    this.flashlight = new THREE.SpotLight(0xf5e8ce, 22, 32, Math.PI * 0.18, 0.62, 1.55);
+    // Player Flashlight mounted in scene space & positioned at survivor's chest/hand in third-person
+    this.flashlight = new THREE.SpotLight(0xf5e8ce, 22, 34, Math.PI * 0.19, 0.62, 1.5);
     this.flashlightTarget = new THREE.Object3D();
-    this.flashlightTarget.position.set(0, -0.05, -10);
-    this.camera.add(this.flashlight);
-    this.camera.add(this.flashlightTarget);
-    this.flashlight.position.set(0.18, -0.14, -0.1);
     this.flashlight.target = this.flashlightTarget;
     this.flashlight.visible = this.settings.flashlightOn;
+    this.scene.add(this.flashlight);
+    this.scene.add(this.flashlightTarget);
     this.scene.add(this.camera);
+    this.playerModelUrl =
+      ASSET_REGISTRY['player.survivor']?.gltfUrl ??
+      '/src/assets/models/c8ab20b8b539e27cabe59928e7abff79.glb';
 
     // Build Procedural Textures, Materials, and 3D Neighborhood World
     const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
@@ -425,6 +437,8 @@ export class Game3DEngine {
       this.world.colliders,
       this.sound
     );
+    this.zombies.setThirdPersonMode(true);
+    void this.preloadPlayerGlb();
     this.staff = new StaffManager(
       this.scene,
       this.assets,
@@ -509,6 +523,51 @@ export class Game3DEngine {
     this.bindEvents();
   }
 
+  private async preloadPlayerGlb(): Promise<void> {
+    const loaded = await this.assets.loadExternalGltfAsset(this.playerModelUrl);
+    if (this.disposed) return;
+
+    if (!loaded) {
+      const err =
+        this.assets.getLastLoadError(this.playerModelUrl) ??
+        `Unable to load player model at ${this.playerModelUrl}`;
+      console.error(`Game3DEngine: Failed to load player GLB "${this.playerModelUrl}": ${err}`);
+      return;
+    }
+
+    const entry = ASSET_REGISTRY['player.survivor'];
+    const rig = createGlbPlayerRig(
+      loaded.scene,
+      loaded.animations,
+      this.playerModelUrl,
+      entry?.scale ?? 1.78
+    );
+    if (!rig) return;
+
+    setPlayerRigQuality(
+      rig,
+      this.settings.graphicsQuality,
+      !this.isSoftwareGl && this.settings.shadowsEnabled
+    );
+    rig.root.visible = this.screenState !== 'MENU';
+    updatePlayerGlbRig(
+      rig,
+      0.016,
+      this.controller.position.x,
+      this.controller.position.y,
+      this.controller.position.z,
+      this.controller.getCharacterYaw(),
+      this.controller.getAnimContext(),
+      {
+        ...this.zombies.getPlayerWeaponVisualState(),
+        playerDead: this.survival.isDead(),
+        hurtFlash: false,
+      }
+    );
+    this.playerRig = rig;
+    this.scene.add(rig.root);
+  }
+
   public startLoop(): void {
     this.lastTime = performance.now();
     const tick = () => {
@@ -574,12 +633,15 @@ export class Game3DEngine {
   public setScreenState(next: GameScreenState): void {
     this.screenState = next;
     this.controller.clearInputs();
+    if (this.playerRig) {
+      this.playerRig.root.visible = next !== 'MENU';
+    }
     if (next === 'PLAYING') {
       this.sound.unlock();
       this.sound.startAmbience();
       this.sound.setAmbienceActive(true);
       this.flashlight.visible = this.settings.flashlightOn;
-      this.zombies.setFirstPersonWeaponVisible(!this.isModalBlockingInput());
+      this.zombies.setFirstPersonWeaponVisible(false);
     } else {
       this.sound.setAmbienceActive(false);
       this.controller.exitPointerLock();
@@ -1663,6 +1725,7 @@ export class Game3DEngine {
       target?.kind === 'container' && Boolean(target.requiresToolResource) && !target.unlocked;
 
     if (this.interactions.interact()) {
+      this.controller.notifyAimAction(0.75);
       const emitsPhysicalNoise =
         targetKind === 'door' ||
         targetKind === 'container' ||
@@ -1733,6 +1796,7 @@ export class Game3DEngine {
     const t = getTranslations();
     const res = this.zombies.triggerReload();
     if (res.started) {
+      this.controller.notifyAimAction(1.3);
       this.interactions.pushToast(
         formatTpl(t.gameMessages.toasts.pistolReloading, {
           name: tWeaponLabel('service_pistol'),
@@ -1758,16 +1822,70 @@ export class Game3DEngine {
     }
   }
 
+  private computeThirdPersonRangedAim(): { yaw: number; pitch: number } {
+    const aimDir = this.controller.getAimDirection(this._aimDir);
+    const camPos = this.camera.position;
+
+    // Converge camera center reticle onto nearest zombie along camera ray or 18m downrange
+    let focalDist = 18.0;
+    for (const z of this.zombies.getAgents()) {
+      if (z.state === 'dead') continue;
+      const toX = z.x - camPos.x;
+      const toY = z.y + 1.15 - camPos.y;
+      const toZ = z.z - camPos.z;
+      const tProj = toX * aimDir.x + toY * aimDir.y + toZ * aimDir.z;
+      if (tProj <= this.controller.getCameraDistance() * 0.7 || tProj >= focalDist) continue;
+      const hx = camPos.x + aimDir.x * tProj;
+      const hy = camPos.y + aimDir.y * tProj;
+      const hz = camPos.z + aimDir.z * tProj;
+      const rad = z.config.radius * 1.25;
+      if (
+        Math.hypot(hx - z.x, hz - z.z) <= rad &&
+        hy >= z.y &&
+        hy <= z.y + 1.75 * z.config.visualScale
+      ) {
+        focalDist = tProj;
+      }
+    }
+
+    this._aimFocal.copy(camPos).addScaledVector(aimDir, focalDist);
+    const originX = this.controller.position.x;
+    const originY = this.controller.position.y + 1.44;
+    const originZ = this.controller.position.z;
+    const dx = this._aimFocal.x - originX;
+    const dy = this._aimFocal.y - originY;
+    const dz = this._aimFocal.z - originZ;
+    const horiz = Math.hypot(dx, dz);
+
+    // Ensure aim point is genuinely ahead of player; fallback to raw camera angles if point-blank
+    const fwdDot = dx * -Math.sin(this.controller.yaw) + dz * -Math.cos(this.controller.yaw);
+    if (horiz < 0.8 || fwdDot <= 0.25) {
+      return { yaw: this.controller.yaw, pitch: this.controller.pitch };
+    }
+    return {
+      yaw: Math.atan2(-dx, -dz),
+      pitch: Math.atan2(dy, horiz),
+    };
+  }
+
   public triggerAttack(): void {
     if (this.screenState !== 'PLAYING' || this.isModalBlockingInput()) return;
     this.sound.unlock();
     this.sound.startAmbience();
+    this.controller.notifyAimAction(1.35);
+
+    const activeKind = this.zombies.combat.getEquippedWeapon().kind;
+    const convergedAim =
+      activeKind === 'ranged'
+        ? this.computeThirdPersonRangedAim()
+        : { yaw: this.controller.yaw, pitch: this.controller.pitch };
+
     const attackRes = this.zombies.triggerPlayerAttack(
       this.controller.position.x,
-      this.controller.position.y + 1.68,
+      this.controller.position.y + 1.44,
       this.controller.position.z,
-      this.controller.yaw,
-      this.controller.pitch,
+      convergedAim.yaw,
+      convergedAim.pitch,
       this.timeSystem.getSnapshot().nightFactor,
       {
         isMoving: this.controller.isActivelyMoving(),
@@ -1810,12 +1928,14 @@ export class Game3DEngine {
     }
 
     if (weaponId === 'service_pistol') {
+      const cosY = Math.cos(convergedAim.yaw);
+      const sinY = Math.sin(convergedAim.yaw);
       this.vfx.spawnMuzzlePuff(
-        this.controller.position.x,
-        this.controller.position.y + 1.65,
-        this.controller.position.z,
-        this.controller.yaw,
-        this.controller.pitch,
+        this.controller.position.x + cosY * 0.24 - sinY * 0.42,
+        this.controller.position.y + 1.15,
+        this.controller.position.z - sinY * 0.24 - cosY * 0.42,
+        convergedAim.yaw,
+        convergedAim.pitch,
         this.settings.graphicsQuality
       );
     }
@@ -2012,6 +2132,13 @@ export class Game3DEngine {
         this.sunLight.shadow.map = null;
       }
     }
+    if (this.playerRig) {
+      setPlayerRigQuality(
+        this.playerRig,
+        q,
+        !this.isSoftwareGl && this.settings.shadowsEnabled
+      );
+    }
   }
 
   private showContextMessage(title: string, message: string, duration = 5.5): void {
@@ -2074,15 +2201,21 @@ export class Game3DEngine {
 
     // PLAYING
     const modalBlocked = this.isModalBlockingInput();
+    if (this.playerRig) {
+      this.playerRig.root.visible = true;
+    }
     this.flashlight.visible = this.settings.flashlightOn;
-    this.zombies.setFirstPersonWeaponVisible(!modalBlocked);
+    this.zombies.setFirstPersonWeaponVisible(false);
     const moveInputActive = !modalBlocked && this.controller.hasMovementIntent();
     if (!modalBlocked) {
       this.controller.update(dt, this.world.colliders, {
         canSprint: this.survival.canSprint(),
         isResting: this.survival.isResting,
       });
+    } else {
+      this.controller.syncThirdPersonCamera(dt, false, this.world.colliders);
     }
+    this.updateThirdPersonFlashlight();
 
     const indoors = this.isPlayerIndoors(
       this.controller.position.x,
@@ -2258,6 +2391,23 @@ export class Game3DEngine {
     }
 
     this.controller.health = this.survival.health;
+
+    if (this.playerRig) {
+      updatePlayerGlbRig(
+        this.playerRig,
+        dt,
+        this.controller.position.x,
+        this.controller.position.y,
+        this.controller.position.z,
+        this.controller.getCharacterYaw(),
+        this.controller.getAnimContext(),
+        {
+          ...this.zombies.getPlayerWeaponVisualState(),
+          playerDead: this.survival.isDead(),
+          hurtFlash: zombieTick.playerDamage > 0 || this.recentCombatTimer > 3.1,
+        }
+      );
+    }
 
     if (this.survival.isDead()) {
       this.screenState = 'GAMEOVER';
@@ -3607,6 +3757,8 @@ export class Game3DEngine {
       }
     });
 
+    this.playerRig?.dispose();
+    this.playerRig = null;
     this.atmosphere.dispose();
     this.vfx.dispose();
     this.ashPoints.geometry.dispose();
@@ -3625,5 +3777,25 @@ export class Game3DEngine {
     if (dom.parentElement === this.container) {
       this.container.removeChild(dom);
     }
+  }
+
+  private updateThirdPersonFlashlight(): void {
+    const aimDir = this.controller.getAimDirection(this._aimDir);
+    const charYaw = this.controller.getCharacterYaw();
+    const fwdX = -Math.sin(charYaw);
+    const fwdZ = -Math.cos(charYaw);
+    const rightX = Math.cos(charYaw);
+    const rightZ = -Math.sin(charYaw);
+
+    const originX = this.controller.position.x + fwdX * 0.28 + rightX * 0.22;
+    const originY = this.controller.position.y + 1.24;
+    const originZ = this.controller.position.z + fwdZ * 0.28 + rightZ * 0.22;
+
+    this.flashlight.position.set(originX, originY, originZ);
+    this.flashlightTarget.position.set(
+      this.camera.position.x + aimDir.x * 18,
+      this.camera.position.y + aimDir.y * 18,
+      this.camera.position.z + aimDir.z * 18
+    );
   }
 }

@@ -89,6 +89,9 @@ export interface BoxCollider {
   w: number;
   d: number;
   rotationY: number;
+  minY?: number;
+  maxY?: number;
+  ignoreCamera?: boolean;
   active?: boolean;
 }
 
@@ -96,6 +99,9 @@ export interface CircleCollider {
   x: number;
   z: number;
   radius: number;
+  minY?: number;
+  maxY?: number;
+  ignoreCamera?: boolean;
 }
 
 export interface SegmentCollider {
@@ -104,6 +110,9 @@ export interface SegmentCollider {
   x2: number;
   z2: number;
   halfThickness: number;
+  minY?: number;
+  maxY?: number;
+  ignoreCamera?: boolean;
   active?: boolean;
 }
 
@@ -130,6 +139,7 @@ export interface WorldColliders {
   segments: SegmentCollider[];
   sidewalks: { minX: number; maxX: number; minZ: number; maxZ: number }[];
   floors: FloorZone[];
+  ceilings?: FloorZone[];
   roads: { minX: number; maxX: number; minZ: number; maxZ: number }[];
   safeZones?: SafeZoneBounds[];
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -374,6 +384,7 @@ export function buildNeighborhoodWorld(
     segments: [],
     sidewalks: [],
     floors: [],
+    ceilings: [],
     roads: [],
     safeZones: [],
     bounds: map.bounds,
@@ -737,6 +748,8 @@ export function buildNeighborhoodWorld(
       w: b.w + 0.2,
       d: b.d + 0.2,
       rotationY: 0,
+      minY: 0,
+      maxY: SIDEWALK_HEIGHT + b.h,
     });
 
     // Warm sanctuary PointLight on Last Shop porch (no shadow cast for low-end speed)
@@ -782,6 +795,8 @@ export function buildNeighborhoodWorld(
       w: wid,
       d: len,
       rotationY: v.rotationY,
+      minY: 0,
+      maxY: v.kind === 'van' ? 1.95 : 1.65,
     });
 
     const vSpec = VEHICLE_INTERACT_SPECS[v.id];
@@ -851,7 +866,7 @@ export function buildNeighborhoodWorld(
     group.rotation.y = l.rotationY;
     root.add(group);
 
-    colliders.circles.push({ x: l.x, z: l.z, radius: 0.28 });
+    colliders.circles.push({ x: l.x, z: l.z, radius: 0.28, minY: 0, maxY: SIDEWALK_HEIGHT + 5.2 });
 
     if (l.lit) {
       const forwardX = Math.sin(l.rotationY) * 1.2;
@@ -896,6 +911,8 @@ export function buildNeighborhoodWorld(
       x2: f.x2,
       z2: f.z2,
       halfThickness: 0.16,
+      minY: 0,
+      maxY: f.kind === 'chainlink' ? 2.3 : 1.85,
     });
   }
 
@@ -944,6 +961,14 @@ export function buildNeighborhoodWorld(
     root.add(propGroup);
 
     if (p.solid) {
+      const propH =
+        p.kind === 'dumpster'
+          ? 1.4
+          : p.kind === 'survivor_camp' || p.kind === 'street_sign' || p.kind === 'quarantine_sign'
+            ? 1.95
+            : p.kind === 'barrier' || p.kind === 'crate' || p.kind === 'worktable' || p.kind === 'sandbag'
+              ? 1.05
+              : 0.9;
       if (p.shape === 'rect') {
         colliders.boxes.push({
           x: p.x,
@@ -951,12 +976,16 @@ export function buildNeighborhoodWorld(
           w: p.colliderW,
           d: p.colliderD,
           rotationY: p.rotationY,
+          minY: baseY,
+          maxY: baseY + propH,
         });
       } else {
         colliders.circles.push({
           x: p.x,
           z: p.z,
           radius: p.colliderRadius,
+          minY: baseY,
+          maxY: baseY + propH,
         });
       }
     }
@@ -1060,6 +1089,8 @@ export function buildNeighborhoodWorld(
       x2: g.x2,
       z2: g.z2,
       halfThickness: 0.16,
+      minY: 0,
+      maxY: 2.35,
       active: true,
     };
     colliders.segments.push(segCollider);
@@ -1105,6 +1136,8 @@ export function buildNeighborhoodWorld(
       w: 0.92,
       d: 0.58,
       rotationY: c.rotationY,
+      minY: baseY,
+      maxY: baseY + 0.72,
     });
 
     interactables.push({
@@ -1145,6 +1178,13 @@ export function buildNeighborhoodWorld(
       maxZ: b.z + b.d * 0.5 - 0.12,
       height: floorY,
     });
+    colliders.ceilings?.push({
+      minX: b.x - b.w * 0.5 + 0.05,
+      maxX: b.x + b.w * 0.5 - 0.05,
+      minZ: b.z - b.d * 0.5 + 0.05,
+      maxZ: b.z + b.d * 0.5 - 0.05,
+      height: floorY + b.ceilingH - 0.14,
+    });
 
     if (b.archetype === 'shop') {
       colliders.safeZones?.push({
@@ -1155,15 +1195,19 @@ export function buildNeighborhoodWorld(
       });
     }
 
-    // Wall colliders
+    // Wall colliders (preserve sill vs full wall heights for accurate camera sightlines)
     for (const wall of b.walls) {
       if (wall.solid === false) continue;
+      const wMinY = floorY + (wall.y ?? 0);
+      const wMaxY = wMinY + (wall.h ?? b.ceilingH);
       colliders.boxes.push({
         x: b.x + wall.x,
         z: b.z + wall.z,
         w: wall.w,
         d: wall.d,
         rotationY: 0,
+        minY: wall.y === undefined ? 0 : wMinY,
+        maxY: wMaxY,
       });
     }
 
@@ -1210,12 +1254,15 @@ export function buildNeighborhoodWorld(
       root.add(fMesh);
 
       if (furn.solid) {
+        const furnH = furn.kind === 'shelf' ? 1.85 : furn.kind === 'counter' || furn.kind === 'kitchen_counter' ? 1.05 : 0.9;
         colliders.boxes.push({
           x: b.x + furn.x,
           z: b.z + furn.z,
           w: furn.w,
           d: furn.d,
           rotationY: furn.rotationY,
+          minY: floorY,
+          maxY: floorY + furnH,
         });
       }
 
@@ -1285,6 +1332,8 @@ export function buildNeighborhoodWorld(
         x2,
         z2,
         halfThickness: 0.12,
+        minY: floorY,
+        maxY: floorY + 2.25,
         active: true,
       };
       colliders.segments.push(segCollider);
@@ -1333,6 +1382,8 @@ export function buildNeighborhoodWorld(
           w: c.w,
           d: c.d,
           rotationY: c.rotationY,
+          minY: cy,
+          maxY: cy + 1.15,
         });
       }
 
@@ -1431,6 +1482,8 @@ export function buildNeighborhoodWorld(
             w: st.w,
             d: st.d,
             rotationY: st.rotationY,
+            minY: floorY,
+            maxY: floorY + 1.05,
           });
         }
 
@@ -1490,6 +1543,8 @@ export function buildNeighborhoodWorld(
         w: so.category === 'relay' ? 0.78 : 0.88,
         d: so.category === 'relay' ? 0.64 : 0.58,
         rotationY: so.rotationY,
+        minY: so.y,
+        maxY: so.y + 1.45,
       });
     }
 
@@ -1679,7 +1734,7 @@ export function buildNeighborhoodWorld(
       tz > map.bounds.minZ &&
       tz < map.bounds.maxZ
     ) {
-      colliders.circles.push({ x: tx, z: tz, radius: 0.34 * scale });
+      colliders.circles.push({ x: tx, z: tz, radius: 0.34 * scale, minY: ty, maxY: ty + 5.2 * scale });
     }
   }
 
@@ -1715,7 +1770,7 @@ export function buildNeighborhoodWorld(
       bz > map.bounds.minZ &&
       bz < map.bounds.maxZ
     ) {
-      colliders.circles.push({ x: bx, z: bz, radius: 0.72 * scale });
+      colliders.circles.push({ x: bx, z: bz, radius: 0.72 * scale, minY: by, maxY: by + 1.35 * scale });
     }
   }
 

@@ -14,7 +14,12 @@ import {
 } from '../game/responsiveLayout';
 import { WorldColliders } from './WorldBuilder';
 
-const EYE_HEIGHT = 1.68;
+const SHOULDER_ANCHOR_HEIGHT = 1.46;
+const THIRD_PERSON_DIST_OUTDOOR = 2.45;
+const THIRD_PERSON_DIST_INDOOR = 1.95;
+const THIRD_PERSON_RIGHT_OFFSET = 0.28;
+const THIRD_PERSON_MIN_DIST = 0.56;
+const THIRD_PERSON_WALL_PAD = 0.20;
 const PLAYER_RADIUS = 0.42;
 const WALK_SPEED = 4.5;
 const SPRINT_SPEED = 7.4;
@@ -39,6 +44,266 @@ export interface PlayerAnimContext {
   breathPhase: number;
 }
 
+function wrapAngleRad(angle: number): number {
+  let a = angle;
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+function dampAngleRad(current: number, target: number, lambda: number, dt: number): number {
+  const diff = wrapAngleRad(target - current);
+  return wrapAngleRad(current + diff * (1 - Math.exp(-lambda * Math.max(0, dt))));
+}
+
+function intersectRayBox3D(
+  ox: number,
+  oy: number,
+  oz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+  minZ: number,
+  maxZ: number,
+  maxDist: number
+): number | null {
+  let tMin = 0;
+  let tMax = maxDist;
+
+  if (Math.abs(dx) < 1e-6) {
+    if (ox < minX || ox > maxX) return null;
+  } else {
+    const inv = 1 / dx;
+    let t1 = (minX - ox) * inv;
+    let t2 = (maxX - ox) * inv;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return null;
+  }
+
+  if (Math.abs(dy) < 1e-6) {
+    if (oy < minY || oy > maxY) return null;
+  } else {
+    const inv = 1 / dy;
+    let t1 = (minY - oy) * inv;
+    let t2 = (maxY - oy) * inv;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return null;
+  }
+
+  if (Math.abs(dz) < 1e-6) {
+    if (oz < minZ || oz > maxZ) return null;
+  } else {
+    const inv = 1 / dz;
+    let t1 = (minZ - oz) * inv;
+    let t2 = (maxZ - oz) * inv;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return null;
+  }
+
+  return tMin <= tMax && tMax >= 0 ? tMin : null;
+}
+
+function intersectRayCylinder3D(
+  ox: number,
+  oy: number,
+  oz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  cx: number,
+  cz: number,
+  radius: number,
+  minY: number,
+  maxY: number,
+  maxDist: number
+): number | null {
+  const rx = ox - cx;
+  const rz = oz - cz;
+  const a = dx * dx + dz * dz;
+  if (a < 1e-6) {
+    if (rx * rx + rz * rz <= radius * radius && oy >= minY && oy <= maxY) {
+      return 0;
+    }
+    return null;
+  }
+  const b = 2 * (rx * dx + rz * dz);
+  const c = rx * rx + rz * rz - radius * radius;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const sqrtD = Math.sqrt(disc);
+  const inv2a = 0.5 / a;
+  const t1 = (-b - sqrtD) * inv2a;
+  const t2 = (-b + sqrtD) * inv2a;
+
+  if (t1 >= 0 && t1 <= maxDist) {
+    const hitY = oy + dy * t1;
+    if (hitY >= minY && hitY <= maxY) return t1;
+  }
+  if (t2 >= 0 && t2 <= maxDist && t1 < 0) {
+    const hitY = oy + dy * t2;
+    if (hitY >= minY && hitY <= maxY) return t2;
+  }
+  return null;
+}
+
+function raycastThirdPersonColliders(
+  ox: number,
+  oy: number,
+  oz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  maxDist: number,
+  pad: number,
+  colliders: WorldColliders
+): number {
+  let closest = maxDist;
+
+  // World outer bounds containment
+  if (dx < -1e-5) {
+    const t = (colliders.bounds.minX + pad - ox) / dx;
+    if (t >= 0 && t < closest) closest = t;
+  } else if (dx > 1e-5) {
+    const t = (colliders.bounds.maxX - pad - ox) / dx;
+    if (t >= 0 && t < closest) closest = t;
+  }
+  if (dz < -1e-5) {
+    const t = (colliders.bounds.minZ + pad - oz) / dz;
+    if (t >= 0 && t < closest) closest = t;
+  } else if (dz > 1e-5) {
+    const t = (colliders.bounds.maxZ - pad - oz) / dz;
+    if (t >= 0 && t < closest) closest = t;
+  }
+
+  // Boxes (buildings, walls, vehicles, furniture, crates)
+  for (let i = 0; i < colliders.boxes.length; i++) {
+    const b = colliders.boxes[i];
+    if (b.active === false || b.ignoreCamera) continue;
+    const minY = (b.minY ?? -2) - pad * 0.5;
+    const maxY = (b.maxY ?? 12) + pad * 0.5;
+    if (Math.abs(b.rotationY) < 0.001) {
+      const hw = b.w * 0.5 + pad;
+      const hd = b.d * 0.5 + pad;
+      const t = intersectRayBox3D(
+        ox,
+        oy,
+        oz,
+        dx,
+        dy,
+        dz,
+        b.x - hw,
+        b.x + hw,
+        minY,
+        maxY,
+        b.z - hd,
+        b.z + hd,
+        closest
+      );
+      if (t !== null && t < closest) closest = t;
+    } else {
+      const cos = Math.cos(b.rotationY);
+      const sin = Math.sin(b.rotationY);
+      const rx = ox - b.x;
+      const rz = oz - b.z;
+      const lox = rx * cos - rz * sin;
+      const loz = rx * sin + rz * cos;
+      const ldx = dx * cos - dz * sin;
+      const ldz = dx * sin + dz * cos;
+      const hw = b.w * 0.5 + pad;
+      const hd = b.d * 0.5 + pad;
+      const t = intersectRayBox3D(
+        lox,
+        oy,
+        loz,
+        ldx,
+        dy,
+        ldz,
+        -hw,
+        hw,
+        minY,
+        maxY,
+        -hd,
+        hd,
+        closest
+      );
+      if (t !== null && t < closest) closest = t;
+    }
+  }
+
+  // Vertical fence/door segments
+  for (let i = 0; i < colliders.segments.length; i++) {
+    const s = colliders.segments[i];
+    if (s.active === false || s.ignoreCamera) continue;
+    const vx = s.x2 - s.x1;
+    const vz = s.z2 - s.z1;
+    const len = Math.hypot(vx, vz);
+    if (len < 0.01) continue;
+    const ux = vx / len;
+    const uz = vz / len;
+    const cx = (s.x1 + s.x2) * 0.5;
+    const cz = (s.z1 + s.z2) * 0.5;
+    const rx = ox - cx;
+    const rz = oz - cz;
+    const lox = rx * ux + rz * uz;
+    const loz = -rx * uz + rz * ux;
+    const ldx = dx * ux + dz * uz;
+    const ldz = -dx * uz + dz * ux;
+    const hw = len * 0.5 + pad;
+    const hd = s.halfThickness + pad;
+    const minY = (s.minY ?? -2) - pad * 0.5;
+    const maxY = (s.maxY ?? 12) + pad * 0.5;
+    const t = intersectRayBox3D(lox, oy, loz, ldx, dy, ldz, -hw, hw, minY, maxY, -hd, hd, closest);
+    if (t !== null && t < closest) closest = t;
+  }
+
+  // Cylindrical props (trees, boulders, street lamps)
+  for (let i = 0; i < colliders.circles.length; i++) {
+    const c = colliders.circles[i];
+    if (c.ignoreCamera) continue;
+    const minY = (c.minY ?? -2) - pad * 0.5;
+    const maxY = (c.maxY ?? 12) + pad * 0.5;
+    const t = intersectRayCylinder3D(
+      ox,
+      oy,
+      oz,
+      dx,
+      dy,
+      dz,
+      c.x,
+      c.z,
+      c.radius + pad * 0.85,
+      minY,
+      maxY,
+      closest
+    );
+    if (t !== null && t < closest) closest = t;
+  }
+
+  return closest;
+}
+
 export class FirstPersonController {
   public position = new THREE.Vector3(0, 0, 0);
   public velocity = new THREE.Vector3(0, 0, 0);
@@ -47,6 +312,14 @@ export class FirstPersonController {
   public pitch = 0;
   private targetYaw = 0;
   private targetPitch = 0;
+  private characterYaw = 0;
+  private aimLockTimer = 0;
+
+  // Third-person camera smoothing state
+  private camAnchor = new THREE.Vector3(0, SHOULDER_ANCHOR_HEIGHT, 0);
+  private currentCameraDist = THIRD_PERSON_DIST_OUTDOOR;
+  private currentRightOffset = THIRD_PERSON_RIGHT_OFFSET;
+  private lastCameraDist = THIRD_PERSON_DIST_OUTDOOR;
 
   public health = 100;
   public maxHealth = 100;
@@ -87,6 +360,7 @@ export class FirstPersonController {
   private lowHpPhase = 0;
 
   private readonly _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  private readonly _aimDir = new THREE.Vector3(0, 0, -1);
   private readonly _animContext: PlayerAnimContext = {
     actualSpeed: 0,
     normalizedSpeed: 0,
@@ -120,15 +394,21 @@ export class FirstPersonController {
     z: number,
     yaw: number,
     colliders: WorldColliders,
-    pitch = -0.04
+    pitch = -0.14
   ): void {
     const floorY = this.getGroundHeightAt(x, z, colliders);
     this.position.set(x, floorY, z);
     this.velocity.set(0, 0, 0);
     this.yaw = yaw;
     this.targetYaw = yaw;
-    this.pitch = pitch;
-    this.targetPitch = pitch;
+    this.characterYaw = yaw;
+    this.aimLockTimer = 0;
+    this.pitch = clamp(pitch, -0.68, 0.56);
+    this.targetPitch = this.pitch;
+    this.camAnchor.set(x, floorY + SHOULDER_ANCHOR_HEIGHT, z);
+    this.currentCameraDist = THIRD_PERSON_DIST_OUTDOOR;
+    this.currentRightOffset = THIRD_PERSON_RIGHT_OFFSET;
+    this.lastCameraDist = THIRD_PERSON_DIST_OUTDOOR;
     this.health = 100;
     this.stamina = 100;
     this.isExhausted = false;
@@ -156,7 +436,29 @@ export class FirstPersonController {
     this.flinchRoll = 0;
     this.flinchPitch = 0;
     this.lowHpPhase = 0;
-    this.syncCamera(0.016, true);
+    this.syncThirdPersonCamera(0.016, true, colliders);
+  }
+
+  public getCharacterYaw(): number {
+    return this.characterYaw;
+  }
+
+  public notifyAimAction(durationSec = 1.25): void {
+    this.aimLockTimer = Math.max(this.aimLockTimer, durationSec);
+  }
+
+  public getCameraDistance(): number {
+    return this.lastCameraDist;
+  }
+
+  public getAimDirection(out = this._aimDir): THREE.Vector3 {
+    const cosPitch = Math.cos(this.pitch);
+    out.set(
+      -Math.sin(this.yaw) * cosPitch,
+      Math.sin(this.pitch),
+      -Math.cos(this.yaw) * cosPitch
+    );
+    return out;
   }
 
   public getAnimContext(): PlayerAnimContext {
@@ -180,13 +482,13 @@ export class FirstPersonController {
     if (this.prefersReducedMotion) return;
     const s = clamp(strength, 0.3, 1.4);
     const sign = Math.random() > 0.5 ? 1 : -1;
-    this.flinchRoll = sign * 0.042 * s;
-    this.flinchPitch = 0.022 * s;
+    this.flinchRoll = sign * 0.035 * s;
+    this.flinchPitch = 0.018 * s;
   }
 
   public addRecoilKick(pitchKick = 0.035): void {
     if (this.prefersReducedMotion) return;
-    this.flinchPitch = clamp(this.flinchPitch + pitchKick, -0.08, 0.09);
+    this.flinchPitch = clamp(this.flinchPitch + pitchKick * 0.72, -0.07, 0.08);
   }
 
   public spendStamina(amount: number): void {
@@ -222,11 +524,7 @@ export class FirstPersonController {
     const vh = typeof window !== 'undefined' ? window.innerHeight : 844;
     const touchRate = computeTouchLookRadiansPerPx(vw, vh, this.sensitivity);
     this.targetYaw -= clamped.dx * touchRate;
-    this.targetPitch = clamp(
-      this.targetPitch - clamped.dy * touchRate,
-      -Math.PI * 0.45,
-      Math.PI * 0.45
-    );
+    this.targetPitch = clamp(this.targetPitch - clamped.dy * touchRate, -0.68, 0.56);
   }
 
   public triggerJump(): void {
@@ -356,11 +654,7 @@ export class FirstPersonController {
 
     const baseRate = 0.0022 * this.sensitivity;
     this.targetYaw -= dx * baseRate;
-    this.targetPitch = clamp(
-      this.targetPitch - dy * baseRate,
-      -Math.PI * 0.45,
-      Math.PI * 0.45
-    );
+    this.targetPitch = clamp(this.targetPitch - dy * baseRate, -0.68, 0.56);
   };
 
   public handlePointerLockEvent = (): void => {
@@ -375,11 +669,14 @@ export class FirstPersonController {
     const safeDt = Math.max(0.0001, dt);
     const prevYaw = this.yaw;
 
-    // 1. Smooth camera look interpolation & angular velocity tracking
+    // 1. Smooth camera orbit look interpolation & angular velocity tracking
     this.yaw = THREE.MathUtils.damp(this.yaw, this.targetYaw, 26, dt);
     this.pitch = THREE.MathUtils.damp(this.pitch, this.targetPitch, 26, dt);
     const rawYawRate = clamp((this.yaw - prevYaw) / safeDt, -6.5, 6.5);
     this.yawRate = THREE.MathUtils.damp(this.yawRate, rawYawRate, 14, dt);
+    if (this.aimLockTimer > 0) {
+      this.aimLockTimer = Math.max(0, this.aimLockTimer - dt);
+    }
 
     // 2. Movement input in horizontal camera plane (WASD/Arrows + analog touch joystick)
     let forwardInput = this.touchMoveY;
@@ -423,7 +720,7 @@ export class FirstPersonController {
     const sinY = Math.sin(this.yaw);
     const cosY = Math.cos(this.yaw);
 
-    // Forward direction in Three.js (-sin(yaw), -cos(yaw)), Right is (cos(yaw), -sin(yaw))
+    // Camera-relative horizontal forward (-sin(yaw), -cos(yaw)), right (cos(yaw), -sin(yaw))
     const moveDirX = -sinY * fDir + cosY * rDir;
     const moveDirZ = -cosY * fDir - sinY * rDir;
 
@@ -462,7 +759,6 @@ export class FirstPersonController {
     // 4. Horizontal XZ Collision Resolution (2 passes for crisp corner sliding)
     this.resolveHorizontalCollisions(colliders);
 
-    // Measure actual ground displacement so blocked movement never slides or triggers fake bob/footsteps
     const actualMoved = Math.hypot(this.position.x - prevX, this.position.z - prevZ);
     const rawActualSpeed = actualMoved / safeDt;
     this.actualMoveSpeed = THREE.MathUtils.damp(this.actualMoveSpeed, rawActualSpeed, 18, dt);
@@ -470,7 +766,17 @@ export class FirstPersonController {
       this.actualMoveSpeed = 0;
     }
 
-    // Compute lateral velocity projection onto camera right vector for subtle strafe banking
+    // Smooth character body facing:
+    // - Align to camera aim when actively firing/interacting/reloading (aimLockTimer > 0)
+    // - Otherwise smoothly turn toward camera-relative travel direction while moving
+    if (this.aimLockTimer > 0) {
+      this.characterYaw = dampAngleRad(this.characterYaw, this.yaw, 16, dt);
+    } else if (hasInput && Math.hypot(moveDirX, moveDirZ) > 0.1) {
+      const moveYaw = Math.atan2(-moveDirX, -moveDirZ);
+      this.characterYaw = dampAngleRad(this.characterYaw, moveYaw, 11, dt);
+    }
+
+    // Lateral velocity projection onto camera right vector for subtle turn/strafe banking
     const rightVel = this.velocity.x * cosY - this.velocity.z * sinY;
     const targetStrafe = clamp(rightVel / WALK_SPEED, -1, 1);
     this.strafeFactor = THREE.MathUtils.damp(this.strafeFactor, targetStrafe, 12, dt);
@@ -489,13 +795,12 @@ export class FirstPersonController {
       this.velocity.y = 0;
       this.isGrounded = true;
     } else if (this.isGrounded && this.position.y - groundY <= 0.22 && this.velocity.y <= 0) {
-      // Smoothly step down sidewalk curbs without momentary falling
       this.position.y = THREE.MathUtils.damp(this.position.y, groundY, 24, dt);
     } else {
       this.isGrounded = false;
     }
 
-    // 6. Breathing, Velocity-Coupled Head-bob, Landing Cushion & Footsteps
+    // 6. Breathing, Velocity-Coupled Step Cycle, Landing Cushion & Footsteps
     const isRestingIdle = Boolean(options.isResting) && !hasInput;
     this.isRestingPose = isRestingIdle;
     const breathRate = isRestingIdle ? 1.5 : this.isExhausted ? 3.8 : 2.1;
@@ -507,7 +812,6 @@ export class FirstPersonController {
 
     const speedRatio = clamp(this.actualMoveSpeed / SPRINT_SPEED, 0, 1);
     if (this.isGrounded && this.actualMoveSpeed > 0.45) {
-      // Stride rate scales proportionally with true ground speed (zero sliding)
       const radsPerMeter = wantsSprint ? 1.88 : 2.15;
       this.walkCycle += actualMoved * radsPerMeter;
       this.stepAccum += actualMoved;
@@ -534,10 +838,10 @@ export class FirstPersonController {
 
     const targetStrafeRoll = this.prefersReducedMotion
       ? 0
-      : -this.strafeFactor * (0.011 + speedRatio * 0.008) - clamp(this.yawRate * 0.0035, -0.014, 0.014);
+      : -this.strafeFactor * (0.008 + speedRatio * 0.006) - clamp(this.yawRate * 0.0025, -0.01, 0.01);
     this.strafeRoll = THREE.MathUtils.damp(this.strafeRoll, targetStrafeRoll, 12, dt);
 
-    const targetRestOffset = isRestingIdle ? -0.42 : 0;
+    const targetRestOffset = isRestingIdle ? -0.34 : 0;
     this.restEyeOffset = THREE.MathUtils.damp(this.restEyeOffset, targetRestOffset, 10, dt);
 
     this.flinchRoll = THREE.MathUtils.damp(this.flinchRoll, 0, 14, dt);
@@ -548,28 +852,179 @@ export class FirstPersonController {
       this.lowHpPhase = 0;
     }
 
-    this.syncCamera(dt, false);
+    this.syncThirdPersonCamera(dt, false, colliders);
   }
 
-  private syncCamera(_dt: number, _instant: boolean): void {
+  public syncThirdPersonCamera(
+    dt: number,
+    instant: boolean,
+    colliders: WorldColliders
+  ): void {
+    const targetAnchorY =
+      this.position.y +
+      SHOULDER_ANCHOR_HEIGHT +
+      this.bobOffset * 0.4 +
+      this.landBobOffset * 0.55 +
+      this.restEyeOffset * 0.5;
+
+    if (instant) {
+      this.camAnchor.set(this.position.x, targetAnchorY, this.position.z);
+    } else {
+      this.camAnchor.x = THREE.MathUtils.damp(this.camAnchor.x, this.position.x, 20, dt);
+      this.camAnchor.y = THREE.MathUtils.damp(this.camAnchor.y, targetAnchorY, 16, dt);
+      this.camAnchor.z = THREE.MathUtils.damp(this.camAnchor.z, this.position.z, 20, dt);
+    }
+
     const cosY = Math.cos(this.yaw);
     const sinY = Math.sin(this.yaw);
-    this.camera.position.set(
-      this.position.x + cosY * this.bobSwayX,
-      this.position.y + EYE_HEIGHT + this.bobOffset + this.landBobOffset + this.restEyeOffset,
-      this.position.z - sinY * this.bobSwayX
+    const cosP = Math.cos(this.pitch);
+    const sinP = Math.sin(this.pitch);
+
+    // Aim direction vector from camera toward reticle
+    const aimX = -sinY * cosP;
+    const aimY = sinP;
+    const aimZ = -cosY * cosP;
+
+    // Right vector perpendicular to camera yaw
+    const rightX = cosY;
+    const rightZ = -sinY;
+
+    // 1. Check horizontal shoulder clearance so camera never pushes right through an adjacent wall
+    const shoulderClear = raycastThirdPersonColliders(
+      this.camAnchor.x,
+      this.camAnchor.y,
+      this.camAnchor.z,
+      rightX,
+      0,
+      rightZ,
+      THIRD_PERSON_RIGHT_OFFSET + 0.16,
+      0.06,
+      colliders
     );
+    const allowedRight = clamp(shoulderClear - 0.16, 0, THIRD_PERSON_RIGHT_OFFSET);
+    if (instant) {
+      this.currentRightOffset = allowedRight;
+    } else {
+      const rLambda = allowedRight < this.currentRightOffset ? 22 : 10;
+      this.currentRightOffset = THREE.MathUtils.damp(
+        this.currentRightOffset,
+        allowedRight,
+        rLambda,
+        dt
+      );
+    }
+
+    const sx = this.camAnchor.x + rightX * this.currentRightOffset;
+    const sy = this.camAnchor.y;
+    const sz = this.camAnchor.z + rightZ * this.currentRightOffset;
+
+    // Tighter base follow distance when inside buildings for comfortable corridor navigation
+    const isIndoors = this.isPointInsideBuilding(this.position.x, this.position.z, colliders);
+    const desiredDist = isIndoors ? THIRD_PERSON_DIST_INDOOR : THIRD_PERSON_DIST_OUTDOOR;
+
+    // 2. Raycast backward (-aimDir) from shoulder anchor against world geometry
+    const backX = -aimX;
+    const backY = -aimY;
+    const backZ = -aimZ;
+
+    const hitDist = raycastThirdPersonColliders(
+      sx,
+      sy,
+      sz,
+      backX,
+      backY,
+      backZ,
+      desiredDist + THIRD_PERSON_WALL_PAD,
+      0.06,
+      colliders
+    );
+
+    let targetDist = clamp(hitDist - THIRD_PERSON_WALL_PAD, THIRD_PERSON_MIN_DIST, desiredDist);
+
+    // 3. Respect ground/sidewalk floor and interior ceiling along the backward ray
+    const candX = sx + backX * targetDist;
+    const candZ = sz + backZ * targetDist;
+    const groundAtCam = this.getGroundHeightAt(candX, candZ, colliders) + 0.28;
+    const ceilAtCam = this.getCeilingHeightAt(candX, candZ, colliders);
+    const candY = sy + backY * targetDist;
+
+    if (candY < groundAtCam && backY < -1e-4) {
+      const distGround = (groundAtCam - sy) / backY;
+      targetDist = clamp(Math.min(targetDist, distGround), THIRD_PERSON_MIN_DIST, desiredDist);
+    }
+    if (ceilAtCam !== null && candY > ceilAtCam - 0.18 && backY > 1e-4) {
+      const distCeil = (ceilAtCam - 0.18 - sy) / backY;
+      targetDist = clamp(Math.min(targetDist, distCeil), THIRD_PERSON_MIN_DIST, desiredDist);
+    }
+
+    if (instant) {
+      this.currentCameraDist = targetDist;
+    } else {
+      const dLambda = targetDist < this.currentCameraDist ? 28 : 8;
+      this.currentCameraDist = THREE.MathUtils.damp(
+        this.currentCameraDist,
+        targetDist,
+        dLambda,
+        dt
+      );
+    }
+
+    let camX = sx + backX * this.currentCameraDist;
+    let camY = sy + backY * this.currentCameraDist;
+    let camZ = sz + backZ * this.currentCameraDist;
+
+    // Final hard floor/ceiling safety clamp at exact resolved camera coordinates
+    const finalGroundY = this.getGroundHeightAt(camX, camZ, colliders) + 0.28;
+    if (camY < finalGroundY) camY = finalGroundY;
+    const finalCeilY = this.getCeilingHeightAt(camX, camZ, colliders);
+    if (finalCeilY !== null && camY > finalCeilY - 0.18) {
+      camY = finalCeilY - 0.18;
+    }
+    camX = clamp(camX, colliders.bounds.minX + 0.2, colliders.bounds.maxX - 0.2);
+    camZ = clamp(camZ, colliders.bounds.minZ + 0.2, colliders.bounds.maxZ - 0.2);
+
+    this.camera.position.set(camX, camY, camZ);
+    this.lastCameraDist = Math.hypot(
+      camX - this.position.x,
+      camY - (this.position.y + SHOULDER_ANCHOR_HEIGHT),
+      camZ - this.position.z
+    );
+
     const lowHpSway =
       !this.prefersReducedMotion && this.health <= 32
-        ? Math.sin(this.lowHpPhase) * 0.0065 * (1 - this.health / 36)
+        ? Math.sin(this.lowHpPhase) * 0.0055 * (1 - this.health / 36)
         : 0;
     this._euler.set(
-      clamp(this.pitch + this.flinchPitch - this.landImpulse * 0.018, -Math.PI * 0.48, Math.PI * 0.48),
+      clamp(this.pitch + this.flinchPitch - this.landImpulse * 0.012, -0.72, 0.60),
       this.yaw,
-      this.flinchRoll + this.strafeRoll + lowHpSway,
+      this.flinchRoll + this.strafeRoll * 0.45 + lowHpSway,
       'YXZ'
     );
     this.camera.quaternion.setFromEuler(this._euler);
+  }
+
+  private isPointInsideBuilding(x: number, z: number, colliders: WorldColliders): boolean {
+    if (!colliders.floors) return false;
+    for (let i = 0; i < colliders.floors.length; i++) {
+      const fl = colliders.floors[i];
+      if (fl.active === false) continue;
+      if (x >= fl.minX && x <= fl.maxX && z >= fl.minZ && z <= fl.maxZ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private getCeilingHeightAt(x: number, z: number, colliders: WorldColliders): number | null {
+    if (!colliders.ceilings) return null;
+    for (let i = 0; i < colliders.ceilings.length; i++) {
+      const cl = colliders.ceilings[i];
+      if (cl.active === false) continue;
+      if (x >= cl.minX && x <= cl.maxX && z >= cl.minZ && z <= cl.maxZ) {
+        return cl.height;
+      }
+    }
+    return null;
   }
 
   private getGroundHeightAt(x: number, z: number, colliders: WorldColliders): number {

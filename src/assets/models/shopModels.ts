@@ -634,6 +634,16 @@ export function buildShopProgressionGroup(
   };
   colliders.floors.push(annexFloorZone);
 
+  const annexCeilingZone: FloorZone = {
+    minX: buildingX - 4.28,
+    maxX: buildingX + 4.28,
+    minZ: buildingZ - 7.68,
+    maxZ: buildingZ - 3.9,
+    height: floorY + 3.26,
+    active: false,
+  };
+  colliders.ceilings?.push(annexCeilingZone);
+
   const annexSafeZone: SafeZoneBounds = {
     minX: buildingX - 4.4,
     maxX: buildingX + 4.4,
@@ -953,6 +963,7 @@ export function buildShopProgressionGroup(
       annexNorthCollider.active = hasL3;
       annexShelfCollider.active = hasL3;
       annexFloorZone.active = hasL3;
+      annexCeilingZone.active = hasL3;
       annexSafeZone.active = hasL3;
 
       // Level 4+

@@ -230,6 +230,7 @@ export class ZombieManager {
   private muzzleFlashTimer = 0;
   private switchAnimTimer = 0;
   private weaponVisible = false;
+  private thirdPersonMode = false;
   private weaponBobTime = 0;
   private lastGroanTime = -99;
   private elapsedSec = 0;
@@ -634,15 +635,41 @@ export class ZombieManager {
   }
 
   private syncActiveViewmodelVisibility(): void {
+    const showFp = this.weaponVisible && !this.thirdPersonMode;
     const active = this.combat.getEquippedWeapon().id;
-    this.pipeProp.group.visible = this.weaponVisible && active === 'steel_pipe';
-    this.bladeProp.group.visible = this.weaponVisible && active === 'scrap_blade';
-    this.pistolProp.group.visible = this.weaponVisible && active === 'service_pistol';
+    this.pipeProp.group.visible = showFp && active === 'steel_pipe';
+    this.bladeProp.group.visible = showFp && active === 'scrap_blade';
+    this.pistolProp.group.visible = showFp && active === 'service_pistol';
   }
 
   public setFirstPersonWeaponVisible(visible: boolean): void {
     this.weaponVisible = visible;
     this.syncActiveViewmodelVisibility();
+  }
+
+  public setThirdPersonMode(enabled: boolean): void {
+    this.thirdPersonMode = enabled;
+    this.syncActiveViewmodelVisibility();
+  }
+
+  public getPlayerWeaponVisualState(): {
+    equippedWeaponId: WeaponId;
+    attackProgress: number;
+    isAttacking: boolean;
+    isReloading: boolean;
+    muzzleFlashVisible: boolean;
+  } {
+    const snap = this.combat.getSnapshot();
+    const dur = Math.max(0.06, this.attackAnimDuration);
+    const attackProgress =
+      this.attackAnimTimer > 0 ? Math.max(0, Math.min(1, 1 - this.attackAnimTimer / dur)) : 0;
+    return {
+      equippedWeaponId: snap.equippedWeaponId,
+      attackProgress,
+      isAttacking: this.attackAnimTimer > 0,
+      isReloading: snap.isReloading,
+      muzzleFlashVisible: this.muzzleFlashTimer > 0,
+    };
   }
 
   public selectWeapon(id: WeaponId): boolean {

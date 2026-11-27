@@ -92,6 +92,12 @@ export const ASSET_REGISTRY: Record<string, AssetManifestEntry> = {
     yOffset: 0.014,
     rotationY: Math.PI,
   },
+  'player.survivor': {
+    gltfUrl: '/src/assets/models/c8ab20b8b539e27cabe59928e7abff79.glb',
+    scale: 1.78,
+    yOffset: 0,
+    rotationY: Math.PI,
+  },
   'npc.customer': {},
   'npc.survivor': {},
   'npc.employee_shopkeeper': {},
