@@ -30,10 +30,18 @@ export const ASSET_REGISTRY: Record<string, AssetManifestEntry> = {
   'building.enterable.police': {},
   'building.enterable.clinic': {},
   'building.enterable.lab': {},
-  'vehicle.sedan': {},
-  'vehicle.taxi': {},
-  'vehicle.pickup': {},
-  'vehicle.van': {},
+  'vehicle.sedan': {
+    gltfUrl: '/src/assets/models/passenger_car_pack.glb',
+  },
+  'vehicle.taxi': {
+    gltfUrl: '/src/assets/models/passenger_car_pack.glb',
+  },
+  'vehicle.pickup': {
+    gltfUrl: '/src/assets/models/passenger_car_pack.glb',
+  },
+  'vehicle.van': {
+    gltfUrl: '/src/assets/models/passenger_car_pack.glb',
+  },
   'prop.street_lamp': {},
   'prop.street_sign': {},
   'prop.dumpster': {},

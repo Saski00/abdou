@@ -33,9 +33,16 @@ import {
   buildSurvivorCampModel,
   buildTrashClusterModel,
   buildUrbanBuildingModel,
-  buildVehicleModel,
   buildWoodFenceSegment,
 } from '../assets/models/proceduralModels';
+import {
+  VEHICLE_PACK_GLB_URL,
+  VehiclePackModelId,
+  buildVehiclePackCache,
+  disposeVehiclePackCache,
+  instantiatePackVehicle,
+  selectVehiclePackModel,
+} from '../assets/models/vehicleGlbAdapter';
 import {
   TerrainFlatZone,
   createGrassTuftGeometry,
@@ -741,14 +748,31 @@ export function buildNeighborhoodWorld(
     }
   }
 
-  // 5. Abandoned Vehicles
+  // 5. Abandoned Vehicles (loaded from passenger_car_pack.glb without primitive fallback)
+  let worldDisposed = false;
+  localDisposables.push({
+    dispose: () => {
+      worldDisposed = true;
+    },
+  });
+
+  const vehicleAnchors: {
+    id: string;
+    modelId: VehiclePackModelId;
+    anchor: THREE.Group;
+  }[] = [];
+  const usedVehicleModelIds = new Set<VehiclePackModelId>();
+
   for (const v of map.vehicles) {
-    const group = assets.instantiateAsset(v.assetId, () =>
-      buildVehicleModel(v.kind, v.colorHex, mats)
-    );
-    group.position.set(v.x, 0, v.z);
-    group.rotation.y = v.rotationY;
-    root.add(group);
+    const anchor = new THREE.Group();
+    anchor.name = v.id;
+    anchor.position.set(v.x, 0, v.z);
+    anchor.rotation.y = v.rotationY;
+    root.add(anchor);
+
+    const modelId = selectVehiclePackModel(v.id, v.kind);
+    usedVehicleModelIds.add(modelId);
+    vehicleAnchors.push({ id: v.id, modelId, anchor });
 
     const len = v.kind === 'van' ? 4.7 : v.kind === 'pickup' ? 4.5 : 4.2;
     const wid = v.kind === 'van' ? 2.05 : 1.9;
@@ -778,6 +802,33 @@ export function buildNeighborhoodWorld(
         defaultLoot: vSpec.loot ? { ...vSpec.loot } : undefined,
       });
     }
+  }
+
+  if (vehicleAnchors.length > 0) {
+    void assets.loadExternalGltfAsset(VEHICLE_PACK_GLB_URL).then((loaded) => {
+      if (worldDisposed || !loaded) {
+        if (!loaded) {
+          console.error(
+            `WorldBuilder: Failed to load vehicle GLB pack "${VEHICLE_PACK_GLB_URL}": ${assets.getLastLoadError(VEHICLE_PACK_GLB_URL) ?? 'unknown error'}`
+          );
+        }
+        return;
+      }
+      const packCache = buildVehiclePackCache(loaded.scene.clone(true), usedVehicleModelIds);
+      localDisposables.push({
+        dispose: () => disposeVehiclePackCache(packCache),
+      });
+      for (const item of vehicleAnchors) {
+        const instance = instantiatePackVehicle(packCache, item.modelId);
+        if (instance) {
+          item.anchor.add(instance);
+        } else {
+          console.error(
+            `WorldBuilder: Vehicle model "${item.modelId}" not found in "${VEHICLE_PACK_GLB_URL}" for "${item.id}"`
+          );
+        }
+      }
+    });
   }
 
   // 6. Street Lamps + lightweight light pools
