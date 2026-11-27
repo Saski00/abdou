@@ -262,7 +262,7 @@ export class Game3DEngine {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 0.98;
     this.renderer.setPixelRatio(
       this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 1.75)
     );
@@ -293,14 +293,14 @@ export class Game3DEngine {
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = 0.45;
+    this.scene.environmentIntensity = 0.28;
     pmrem.dispose();
 
     // Low-cost Atmospheric Lighting Rig
-    this.hemiLight = new THREE.HemisphereLight(0x7c92b0, 0x24211e, 0.78);
+    this.hemiLight = new THREE.HemisphereLight(0x546373, 0x1d1a18, 0.46);
     this.scene.add(this.hemiLight);
 
-    this.sunLight = new THREE.DirectionalLight(0xffdcb8, 1.35);
+    this.sunLight = new THREE.DirectionalLight(0xd1cbc0, 1.05);
     this.sunLight.position.set(28, 34, 22);
     this.sunLight.castShadow = !this.isSoftwareGl && this.settings.shadowsEnabled;
     this.sunLight.shadow.mapSize.set(1024, 1024);
@@ -317,7 +317,7 @@ export class Game3DEngine {
     this.scene.add(this.sunLight.target);
 
     // Player Flashlight mounted to camera (shadowless for low-end GPU speed)
-    this.flashlight = new THREE.SpotLight(0xfff1d6, 18, 28, Math.PI * 0.2, 0.55, 1.6);
+    this.flashlight = new THREE.SpotLight(0xf5e8ce, 22, 32, Math.PI * 0.18, 0.62, 1.55);
     this.flashlightTarget = new THREE.Object3D();
     this.flashlightTarget.position.set(0, -0.05, -10);
     this.camera.add(this.flashlight);
@@ -2417,9 +2417,9 @@ export class Game3DEngine {
     if (this.settings.flashlightOn && (powerFlicker > 0.05 || this.flashlightFlickerTimer > 0)) {
       const dip =
         Math.sin(this.elapsedTime * 34) * Math.cos(this.elapsedTime * 19) > 0.25 ? 0.58 : 0.94;
-      this.flashlight.intensity = 18 * dip;
+      this.flashlight.intensity = 22 * dip;
     } else {
-      this.flashlight.intensity = 18;
+      this.flashlight.intensity = 22;
     }
 
     // Compute smooth psychological tension level (0..1) from danger, health, darkness, and isolation

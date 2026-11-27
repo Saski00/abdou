@@ -8,7 +8,7 @@ import {
   InteriorMaterialPalette,
   buildFurnitureModel,
 } from './interiorBuildings';
-import { MaterialPalette } from './proceduralModels';
+import { MaterialPalette, createFramedSignAssembly } from './proceduralModels';
 import { ResourceMaterialPalette, buildResourceModel } from './resourceModels';
 import {
   applyTriplanarUVs,
@@ -422,10 +422,25 @@ export function buildShopProgressionGroup(
     return col;
   };
 
-  // --- Shared glowing accent material for upgraded marquee & open sign ---
-  const neonAmberMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
-  const neonMintMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
-  const coolFridgeMat = new THREE.MeshBasicMaterial({ color: 0xbae6fd });
+  // --- Shared muted practical accent material for upgraded marquee & open sign ---
+  const neonAmberMat = new THREE.MeshStandardMaterial({
+    color: 0x997028,
+    emissive: 0x6e4d14,
+    emissiveIntensity: 0.35,
+    roughness: 0.45,
+  });
+  const neonMintMat = new THREE.MeshStandardMaterial({
+    color: 0x355e4c,
+    emissive: 0x1c3d2f,
+    emissiveIntensity: 0.3,
+    roughness: 0.48,
+  });
+  const coolFridgeMat = new THREE.MeshStandardMaterial({
+    color: 0x6c8291,
+    emissive: 0x2e414d,
+    emissiveIntensity: 0.25,
+    roughness: 0.38,
+  });
   localDisposables.push(neonAmberMat, neonMintMat, coolFridgeMat);
 
   // 0. Level 1-2 North Wall Archway Plug (sealed at Level 1-2, opens into North Annex at Level 3+)
@@ -703,16 +718,9 @@ export function buildShopProgressionGroup(
   );
   tableRunner.position.set(-0.2, 0.79, -5.85);
 
-  const hubCrownBoard = new THREE.Mesh(
-    new THREE.BoxGeometry(4.4, 0.52, 0.24),
-    mats.shopSign
-  );
+  const hubCrownBoard = createFramedSignAssembly(4.56, 0.62, 0.22, mats.shopSign, intMats.brassHandle);
   hubCrownBoard.position.set(0, 4.25, 4.18);
-  const hubCrownBorder = new THREE.Mesh(
-    new THREE.BoxGeometry(4.56, 0.62, 0.18),
-    intMats.brassHandle
-  );
-  hubCrownBorder.position.set(0, 4.25, 4.14);
+  const hubCrownBorder = new THREE.Group();
 
   const lanternLeft = new THREE.Mesh(
     new THREE.SphereGeometry(0.14, 10, 8),

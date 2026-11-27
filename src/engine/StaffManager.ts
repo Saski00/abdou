@@ -173,7 +173,7 @@ export class StaffManager {
         v.rig,
         survName,
         t.gameMessages.staff.wildSurvivorBadge,
-        '#38bdf8'
+        '#8596a8'
       );
     }
     for (const v of this.employeeViews) {
@@ -360,7 +360,7 @@ export class StaffManager {
       v.group.rotation.y = s.yaw;
       if (v.rig) {
         if (v.rig.labelSprite) {
-          v.rig.labelSprite.visible = dist < 13.5;
+          v.rig.labelSprite.visible = dist < 5.5;
         }
         const isFar = distSq > 30 * 30;
         if (isFar && ((this.lodFrameCount + i) & 1) !== 0) {
@@ -390,7 +390,7 @@ export class StaffManager {
         const dz = playerZ - a.z;
         const distSq = dx * dx + dz * dz;
         if (v.rig.labelSprite) {
-          v.rig.labelSprite.visible = distSq < 15.0 * 15.0;
+          v.rig.labelSprite.visible = distSq < 5.5 * 5.5;
         }
         const isFar = distSq > 30 * 30 && a.swingTimer <= 0 && a.hitFlashTimer <= 0;
         if (isFar && ((this.lodFrameCount + i) & 1) !== 0) {

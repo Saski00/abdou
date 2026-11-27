@@ -173,6 +173,7 @@ function createSignboardTexture(
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
+  const rand = seededRand(opts.text.length * 131 + w * 7 + h);
 
   ctx.fillStyle = opts.bg;
   ctx.fillRect(0, 0, w, h);
@@ -181,11 +182,23 @@ function createSignboardTexture(
   ctx.lineWidth = Math.max(4, Math.round(h * 0.055));
   ctx.strokeRect(6, 6, w - 12, h - 12);
 
-  // Grime & water-streak weathering along bottom and corners
+  // Subtle vertical rain/rust drip streaks from top bezel
+  for (let i = 0; i < 16; i++) {
+    const sx = rand() * w;
+    const sw = 2 + rand() * 8;
+    const sh = h * (0.28 + rand() * 0.65);
+    const drip = ctx.createLinearGradient(sx, 0, sx, sh);
+    drip.addColorStop(0, 'rgba(20, 14, 10, 0.38)');
+    drip.addColorStop(1, 'rgba(20, 14, 10, 0)');
+    ctx.fillStyle = drip;
+    ctx.fillRect(sx, 0, sw, sh);
+  }
+
+  // Grime & soot weathering along top/bottom edges
   const grime = ctx.createLinearGradient(0, 0, 0, h);
-  grime.addColorStop(0, 'rgba(0,0,0,0.08)');
-  grime.addColorStop(0.65, 'rgba(0,0,0,0)');
-  grime.addColorStop(1, 'rgba(0,0,0,0.34)');
+  grime.addColorStop(0, 'rgba(8,9,11,0.28)');
+  grime.addColorStop(0.5, 'rgba(0,0,0,0.06)');
+  grime.addColorStop(1, 'rgba(8,9,10,0.48)');
   ctx.fillStyle = grime;
   ctx.fillRect(0, 0, w, h);
 
@@ -194,12 +207,20 @@ function createSignboardTexture(
   ctx.textBaseline = 'middle';
   const mainY = opts.subText ? h * 0.41 : h * 0.52;
   ctx.font = `700 ${opts.fontSize ?? Math.round(h * 0.44)}px "Barlow Condensed", sans-serif`;
-  ctx.fillText(opts.text, w * 0.5, mainY, w - 36);
+  ctx.fillText(opts.text, w * 0.5, mainY, w - 38);
 
   if (opts.subText) {
     ctx.fillStyle = opts.subColor ?? opts.textColor;
     ctx.font = `600 ${Math.round(h * 0.21)}px "Barlow Condensed", sans-serif`;
-    ctx.fillText(opts.subText, w * 0.5, h * 0.76, w - 36);
+    ctx.fillText(opts.subText, w * 0.5, h * 0.76, w - 38);
+  }
+
+  // Chipped paint / oxidation flecks across lettering & frame
+  for (let i = 0; i < 42; i++) {
+    const cx = rand() * w;
+    const cy = rand() * h;
+    ctx.fillStyle = rand() > 0.45 ? 'rgba(18, 17, 16, 0.26)' : 'rgba(62, 36, 22, 0.22)';
+    ctx.fillRect(cx, cy, 2 + rand() * 7, 1 + rand() * 3);
   }
 
   const tex = finalizeTexture(canvas, 1, 1, maxAnisotropy, true);
@@ -382,10 +403,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
   const wasteland = finalizeTexture(wst.color, 18, 18, maxAnisotropy, true);
   const wastelandNormal = createNormalFromHeightCanvas(wst.height, 18, 18, maxAnisotropy, 1.8);
 
-  // 4. Weathered Brick Wall (mortar recess + aged brick color + soot gradient)
+  // 4. Weathered Brick Wall (mortar recess + soot-muted masonry)
   const brk = makeCanvasPair(256);
   const randB = seededRand(404);
-  brk.cctx.fillStyle = '#292220'; // dark recessed mortar
+  brk.cctx.fillStyle = '#211d1c'; // dark recessed mortar
   brk.cctx.fillRect(0, 0, 256, 256);
   brk.hctx.fillStyle = 'rgb(48,48,48)'; // recessed mortar height
   brk.hctx.fillRect(0, 0, 256, 256);
@@ -399,10 +420,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     for (let col = -1; col < 9; col++) {
       const bx = col * bw + offset;
       const by = row * bh;
-      const tone = (randB() - 0.5) * 18;
-      const r = Math.round(76 + tone);
-      const g = Math.round(48 + tone * 0.65);
-      const b = Math.round(41 + tone * 0.55);
+      const tone = (randB() - 0.5) * 16;
+      const r = Math.round(64 + tone);
+      const g = Math.round(45 + tone * 0.72);
+      const b = Math.round(40 + tone * 0.65);
       brk.cctx.fillStyle = `rgb(${r},${g},${b})`;
       brk.cctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
 
@@ -410,15 +431,15 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
       brk.hctx.fillStyle = `rgb(${hVal},${hVal},${hVal})`;
       brk.hctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
 
-      const rVal = Math.round(215 + (randB() - 0.5) * 26);
+      const rVal = Math.round(220 + (randB() - 0.5) * 24);
       brk.rctx.fillStyle = `rgb(${rVal},${rVal},${rVal})`;
       brk.rctx.fillRect(bx + 1.5, by + 1.5, bw - 3, bh - 3);
     }
   }
   const bGrad = brk.cctx.createLinearGradient(0, 0, 0, 256);
-  bGrad.addColorStop(0, 'rgba(10,10,12,0.32)');
-  bGrad.addColorStop(0.45, 'rgba(0,0,0,0)');
-  bGrad.addColorStop(1, 'rgba(8,10,8,0.52)');
+  bGrad.addColorStop(0, 'rgba(8,8,10,0.38)');
+  bGrad.addColorStop(0.45, 'rgba(0,0,0,0.06)');
+  bGrad.addColorStop(1, 'rgba(6,8,6,0.58)');
   brk.cctx.fillStyle = bGrad;
   brk.cctx.fillRect(0, 0, 256, 256);
   const brickWall = finalizeTexture(brk.color, 2, 2, maxAnisotropy, true);
@@ -646,41 +667,50 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
   // 10. LAST SHOP Signboard Texture
   const shopSign = createSignboardTexture(
     {
-      bg: '#1c1917',
-      border: '#d97706',
+      bg: '#151312',
+      border: '#8c5922',
       text: 'LAST SHOP',
-      textColor: '#fbbf24',
+      textColor: '#cfc2a3',
       subText: 'SAFE TRADE & SUPPLIES',
-      subColor: '#fde68a',
+      subColor: '#a39883',
       fontSize: 58,
     },
     maxAnisotropy
   );
 
-  // 11. Striped Shop Awning
+  // 11. Weathered Striped Shop Awning (faded dirty burgundy & soot charcoal canvas)
   const awCanvas = document.createElement('canvas');
   awCanvas.width = 256;
   awCanvas.height = 128;
   const awctx = awCanvas.getContext('2d')!;
+  const randAw = seededRand(1011);
   const stripeCount = 8;
   const swPx = 256 / stripeCount;
   for (let i = 0; i < stripeCount; i++) {
-    awctx.fillStyle = i % 2 === 0 ? '#8c2f11' : '#262321';
+    awctx.fillStyle = i % 2 === 0 ? '#4d221c' : '#1b1918';
     awctx.fillRect(i * swPx, 0, swPx + 1, 128);
   }
-  awctx.fillStyle = 'rgba(0,0,0,0.28)';
-  awctx.fillRect(0, 92, 256, 36);
+  for (let i = 0; i < 65; i++) {
+    awctx.fillStyle = randAw() > 0.5 ? 'rgba(14,16,12,0.22)' : 'rgba(92,86,74,0.08)';
+    awctx.fillRect(randAw() * 256, randAw() * 128, 3 + randAw() * 12, 3 + randAw() * 10);
+  }
+  const awGrad = awctx.createLinearGradient(0, 0, 0, 128);
+  awGrad.addColorStop(0, 'rgba(0,0,0,0.18)');
+  awGrad.addColorStop(0.7, 'rgba(0,0,0,0.06)');
+  awGrad.addColorStop(1, 'rgba(0,0,0,0.44)');
+  awctx.fillStyle = awGrad;
+  awctx.fillRect(0, 0, 256, 128);
   const awningStripe = finalizeTexture(awCanvas, 2, 1, maxAnisotropy, true);
 
   // 12. Landmark Building & Street Signage
   const signValeStore = createSignboardTexture(
     {
-      bg: '#2c1718',
-      border: '#991b1b',
+      bg: '#1e1415',
+      border: '#692424',
       text: 'VALE CORNER STORE',
-      textColor: '#fca5a5',
+      textColor: '#bfa19b',
       subText: 'DISPENSARY · SECTOR B',
-      subColor: '#cbd5e1',
+      subColor: '#969da6',
       fontSize: 44,
     },
     maxAnisotropy
@@ -688,12 +718,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signDepot04 = createSignboardTexture(
     {
-      bg: '#1f242c',
-      border: '#64748b',
+      bg: '#181b21',
+      border: '#4e5866',
       text: 'DEPOT 04',
-      textColor: '#cbd5e1',
+      textColor: '#b3bac4',
       subText: 'FREIGHT & CONTINGENCY',
-      subColor: '#94a3b8',
+      subColor: '#818a96',
       fontSize: 52,
     },
     maxAnisotropy
@@ -701,12 +731,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signStarlightDiner = createSignboardTexture(
     {
-      bg: '#172536',
-      border: '#b91c1c',
+      bg: '#161e29',
+      border: '#732929',
       text: 'STARLIGHT DINER',
-      textColor: '#fde68a',
+      textColor: '#c4b795',
       subText: 'EVACUATION STAGING',
-      subColor: '#93c5fd',
+      subColor: '#8a9fb8',
       fontSize: 46,
     },
     maxAnisotropy
@@ -714,12 +744,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signRedlineAuto = createSignboardTexture(
     {
-      bg: '#231c18',
-      border: '#c2410c',
+      bg: '#1d1714',
+      border: '#7d411c',
       text: 'REDLINE AUTO',
-      textColor: '#fdba74',
+      textColor: '#bfa080',
       subText: 'SERVICE & PARTS',
-      subColor: '#cbd5e1',
+      subColor: '#969da6',
       fontSize: 50,
     },
     maxAnisotropy
@@ -727,12 +757,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signMercerFlats = createSignboardTexture(
     {
-      bg: '#1c1f24',
-      border: '#475569',
+      bg: '#17191d',
+      border: '#454e59',
       text: 'MERCER FLATS',
-      textColor: '#cbd5e1',
+      textColor: '#adb5c0',
       subText: 'RESIDENTIAL BLOCK',
-      subColor: '#94a3b8',
+      subColor: '#7d8591',
       fontSize: 46,
     },
     maxAnisotropy
@@ -740,10 +770,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signMainBlvd = createSignboardTexture(
     {
-      bg: '#143828',
-      border: '#d1d5db',
+      bg: '#14261d',
+      border: '#9ba3ab',
       text: 'MAIN BLVD',
-      textColor: '#f8fafc',
+      textColor: '#cbd1d6',
       width: 256,
       height: 64,
       fontSize: 34,
@@ -753,10 +783,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signCentralAve = createSignboardTexture(
     {
-      bg: '#143828',
-      border: '#d1d5db',
+      bg: '#14261d',
+      border: '#9ba3ab',
       text: 'CENTRAL AVE',
-      textColor: '#f8fafc',
+      textColor: '#cbd1d6',
       width: 256,
       height: 64,
       fontSize: 32,
@@ -766,12 +796,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signQuarantine = createSignboardTexture(
     {
-      bg: '#422006',
-      border: '#eab308',
+      bg: '#2b1c0b',
+      border: '#8c6b1a',
       text: 'QUARANTINE ZONE',
-      textColor: '#facc15',
+      textColor: '#c2a94a',
       subText: 'NORTH ROADBLOCK · STAY CLEAR',
-      subColor: '#fde047',
+      subColor: '#b5a055',
       width: 384,
       height: 128,
       fontSize: 36,
@@ -781,12 +811,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signPolicePrecinct = createSignboardTexture(
     {
-      bg: '#132136',
-      border: '#3b82f6',
+      bg: '#121a26',
+      border: '#324c73',
       text: 'POLICE PRECINCT 04',
-      textColor: '#dbeafe',
+      textColor: '#aebbd1',
       subText: 'DISPATCH & EVIDENCE',
-      subColor: '#93c5fd',
+      subColor: '#7f93b0',
       fontSize: 42,
     },
     maxAnisotropy
@@ -794,12 +824,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signFieldClinic = createSignboardTexture(
     {
-      bg: '#142a2e',
-      border: '#06b6d4',
+      bg: '#142124',
+      border: '#2c6670',
       text: 'MERCY FIELD CLINIC',
-      textColor: '#e0f2fe',
+      textColor: '#b2c7cc',
       subText: 'TRIAGE & MEDICAL BAY',
-      subColor: '#67e8f9',
+      subColor: '#789fa6',
       fontSize: 42,
     },
     maxAnisotropy
@@ -807,12 +837,12 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signResearchLab = createSignboardTexture(
     {
-      bg: '#1b1b24',
-      border: '#f59e0b',
+      bg: '#17171d',
+      border: '#855a1c',
       text: 'V4 CONTAINMENT LAB',
-      textColor: '#fde68a',
+      textColor: '#c4b189',
       subText: 'RESTRICTED RESEARCH SECTOR',
-      subColor: '#fca5a5',
+      subColor: '#a87d7d',
       fontSize: 42,
     },
     maxAnisotropy
@@ -820,10 +850,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signDistrictNorth = createSignboardTexture(
     {
-      bg: '#172536',
-      border: '#eab308',
+      bg: '#161e29',
+      border: '#856c24',
       text: '<- SHOP / MERCER  |  AUTO / LAB ->',
-      textColor: '#fde68a',
+      textColor: '#bfb288',
       width: 384,
       height: 64,
       fontSize: 22,
@@ -833,10 +863,10 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
 
   const signDistrictCross = createSignboardTexture(
     {
-      bg: '#1c1917',
-      border: '#38bdf8',
+      bg: '#171514',
+      border: '#3c6e85',
       text: '<- ROADBLOCK  |  POLICE / CLINIC ->',
-      textColor: '#bae6fd',
+      textColor: '#9eb6c2',
       width: 384,
       height: 64,
       fontSize: 22,
@@ -844,14 +874,14 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     maxAnisotropy
   );
 
-  // Hazard caution tape / barrier texture
+  // Scuffed faded hazard caution barrier texture
   const hzCanvas = document.createElement('canvas');
   hzCanvas.width = 256;
   hzCanvas.height = 64;
   const hzctx = hzCanvas.getContext('2d')!;
-  hzctx.fillStyle = '#c46d08';
+  hzctx.fillStyle = '#7a511c';
   hzctx.fillRect(0, 0, 256, 64);
-  hzctx.fillStyle = '#18181b';
+  hzctx.fillStyle = '#141518';
   for (let x = -64; x < 320; x += 48) {
     hzctx.beginPath();
     hzctx.moveTo(x, 64);
@@ -860,6 +890,11 @@ export function createProceduralTextureSet(maxAnisotropy: number): ProceduralTex
     hzctx.lineTo(x + 32, 0);
     hzctx.closePath();
     hzctx.fill();
+  }
+  const randHz = seededRand(1212);
+  for (let i = 0; i < 40; i++) {
+    hzctx.fillStyle = 'rgba(20, 20, 22, 0.32)';
+    hzctx.fillRect(randHz() * 256, randHz() * 64, 3 + randHz() * 10, 2 + randHz() * 6);
   }
   const hazardStripe = finalizeTexture(hzCanvas, 2, 1, maxAnisotropy, true);
 

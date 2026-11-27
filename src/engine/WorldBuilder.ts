@@ -734,10 +734,10 @@ export function buildNeighborhoodWorld(
 
     // Warm sanctuary PointLight on Last Shop porch (no shadow cast for low-end speed)
     if (b.style === 'last_shop') {
-      const porchLight = new THREE.PointLight(0xf59e0b, 16, 16, 1.8);
+      const porchLight = new THREE.PointLight(0xd99b52, 12, 15, 1.8);
       porchLight.position.set(b.x, SIDEWALK_HEIGHT + 2.75, b.z + b.d * 0.5 + 1.1);
       root.add(porchLight);
-      flickerLights.push({ light: porchLight, baseIntensity: 16, seed: 1.7 });
+      flickerLights.push({ light: porchLight, baseIntensity: 12, seed: 1.7 });
     }
   }
 
@@ -812,10 +812,10 @@ export function buildNeighborhoodWorld(
       root.add(pool);
 
       if (l.pointLight) {
-        const pt = new THREE.PointLight(0xfbbf24, 15, 16, 1.8);
+        const pt = new THREE.PointLight(0xd99b52, 12, 15, 1.8);
         pt.position.set(l.x + forwardX, SIDEWALK_HEIGHT + 4.8, l.z + forwardZ);
         root.add(pt);
-        const handle = { light: pt, baseIntensity: 15, seed: i * 2.3 + 0.5 };
+        const handle = { light: pt, baseIntensity: 12, seed: i * 2.3 + 0.5 };
         flickerLights.push(handle);
         streetLampLights.push(handle);
       }
@@ -1118,10 +1118,10 @@ export function buildNeighborhoodWorld(
 
     // Porch sanctuary light outside Last Shop
     if (b.exteriorStyle === 'last_shop') {
-      const porchLight = new THREE.PointLight(0xf59e0b, 16, 16, 1.8);
+      const porchLight = new THREE.PointLight(0xd99b52, 12, 15, 1.8);
       porchLight.position.set(b.x, SIDEWALK_HEIGHT + 2.65, b.z + b.d * 0.5 + 1.1);
       root.add(porchLight);
-      const handle = { light: porchLight, baseIntensity: 16, seed: 1.7 };
+      const handle = { light: porchLight, baseIntensity: 12, seed: 1.7 };
       flickerLights.push(handle);
       porchLights.push(handle);
     }
@@ -1671,8 +1671,8 @@ export function buildNeighborhoodWorld(
   // Instanced Wild Grass & Scrub Tufts (single draw call across tree roots, lots, curb borders & hills)
   const grassGeo = createGrassTuftGeometry();
   const grassMat = new THREE.MeshStandardMaterial({
-    color: 0x455235,
-    roughness: 0.94,
+    color: 0x333b29,
+    roughness: 0.96,
     metalness: 0.0,
     side: THREE.DoubleSide,
   });

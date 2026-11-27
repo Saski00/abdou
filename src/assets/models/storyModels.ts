@@ -13,10 +13,10 @@ export function buildStoryObjectModel(
   const group = new THREE.Group();
 
   const indicatorMat = new THREE.MeshStandardMaterial({
-    color: category === 'relay' ? 0x38bdf8 : category === 'radio' ? 0x34d399 : 0xfbbf24,
-    emissive: category === 'relay' ? 0x0284c7 : category === 'radio' ? 0x059669 : 0xd97706,
-    emissiveIntensity: 0.9,
-    roughness: 0.3,
+    color: category === 'relay' ? 0x3b6e85 : category === 'radio' ? 0x3d6652 : 0x7a5c28,
+    emissive: category === 'relay' ? 0x1a3b4a : category === 'radio' ? 0x1c382b : 0x453110,
+    emissiveIntensity: 0.25,
+    roughness: 0.45,
   });
 
   if (category === 'radio') {

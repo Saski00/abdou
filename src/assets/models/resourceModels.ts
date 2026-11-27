@@ -23,51 +23,51 @@ export interface ResourceMaterialPalette {
 
 export function createResourceMaterialPalette(): ResourceMaterialPalette {
   const tinMetal = new THREE.MeshStandardMaterial({
-    color: 0xb8c0c8,
-    roughness: 0.34,
-    metalness: 0.78,
+    color: 0x8f979e,
+    roughness: 0.44,
+    metalness: 0.72,
   });
   const canLabelRed = new THREE.MeshStandardMaterial({
-    color: 0xa6342a,
-    roughness: 0.72,
-    metalness: 0.05,
+    color: 0x6b2c27,
+    roughness: 0.8,
+    metalness: 0.04,
   });
   const canLabelAmber = new THREE.MeshStandardMaterial({
-    color: 0xc27c24,
-    roughness: 0.72,
-    metalness: 0.05,
+    color: 0x7a5425,
+    roughness: 0.8,
+    metalness: 0.04,
   });
   const waterPlastic = new THREE.MeshStandardMaterial({
-    color: 0x5cc4f5,
-    roughness: 0.16,
-    metalness: 0.08,
+    color: 0x566873,
+    roughness: 0.36,
+    metalness: 0.04,
     transparent: true,
-    opacity: 0.84,
+    opacity: 0.72,
   });
   const waterCap = new THREE.MeshStandardMaterial({
-    color: 0x1d4ed8,
-    roughness: 0.45,
-    metalness: 0.05,
+    color: 0x243340,
+    roughness: 0.64,
+    metalness: 0.04,
   });
   const medCaseWhite = new THREE.MeshStandardMaterial({
-    color: 0xe5e7eb,
-    roughness: 0.48,
-    metalness: 0.06,
+    color: 0x9ea4aa,
+    roughness: 0.65,
+    metalness: 0.04,
   });
   const steelPipe = new THREE.MeshStandardMaterial({
-    color: 0x64748b,
-    roughness: 0.42,
-    metalness: 0.82,
+    color: 0x4d555e,
+    roughness: 0.56,
+    metalness: 0.74,
   });
   const toolRed = new THREE.MeshStandardMaterial({
-    color: 0x8f2924,
-    roughness: 0.52,
-    metalness: 0.42,
+    color: 0x592421,
+    roughness: 0.66,
+    metalness: 0.34,
   });
   const caseOlive = new THREE.MeshStandardMaterial({
-    color: 0x3b4938,
-    roughness: 0.68,
-    metalness: 0.28,
+    color: 0x2d352a,
+    roughness: 0.76,
+    metalness: 0.24,
   });
 
   const all = [
@@ -539,13 +539,13 @@ export function buildKeyPickupModel(
 
     const stripe = new THREE.Mesh(
       new THREE.BoxGeometry(0.282, 0.024, 0.048),
-      mats.beaconRed
+      mats.hydrantRed
     );
     stripe.position.set(0, 0.014, -0.052);
 
     const chip = new THREE.Mesh(
       createBeveledBoxGeometry(0.065, 0.025, 0.05, 0.004, 0.008),
-      mats.beaconCyan
+      mats.barrierHazard
     );
     chip.position.set(-0.065, 0.014, 0.03);
 
@@ -553,14 +553,14 @@ export function buildKeyPickupModel(
   } else {
     const tag = new THREE.Mesh(
       createBeveledBoxGeometry(0.16, 0.022, 0.095, 0.005, 0.025),
-      mats.beaconAmber
+      mats.wood
     );
     tag.position.set(-0.095, 0.015, 0);
     tag.rotation.y = 0.3;
 
     const bow = new THREE.Mesh(
       new THREE.TorusGeometry(0.046, 0.014, 6, 12),
-      mats.beaconAmber
+      mats.barrierHazard
     );
     bow.rotation.x = Math.PI * 0.5;
     bow.position.set(0.02, 0.016, 0);

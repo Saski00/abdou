@@ -58,77 +58,77 @@ interface CustomerVisualSpec {
 const CUSTOMER_APPEARANCE_BY_ID: Record<string, CustomerVisualSpec> = {
   mara: {
     bodyType: 'slim',
-    skinHex: 0xd9aa8b,
-    shirtHex: 0xcbd5e1,
-    jacketHex: 0x356883,
-    pantsHex: 0x262d38,
-    bootHex: 0x29211b,
+    skinHex: 0xc2967a,
+    shirtHex: 0x9aa2ab,
+    jacketHex: 0x2b4554,
+    pantsHex: 0x21262e,
+    bootHex: 0x1f1915,
     hairStyle: 'ponytail_bun',
-    hairHex: 0x5c3424,
+    hairHex: 0x45271a,
     headwear: 'none',
     headwearHex: 0x292524,
     packKind: 'courier',
-    packHex: 0x57534e,
+    packHex: 0x45413d,
     hasHoodieCollar: false,
   },
   cole: {
     bodyType: 'stocky',
-    skinHex: 0xc28a68,
-    shirtHex: 0x94a3b8,
-    jacketHex: 0x9a4b14,
-    pantsHex: 0x22262e,
-    bootHex: 0x1f1b18,
+    skinHex: 0xad7b5d,
+    shirtHex: 0x7c8691,
+    jacketHex: 0x63391e,
+    pantsHex: 0x1e2128,
+    bootHex: 0x1b1715,
     hairStyle: 'short_crop',
-    hairHex: 0x26211e,
+    hairHex: 0x221d1b,
     headwear: 'beanie',
-    headwearHex: 0x4b3b2c,
+    headwearHex: 0x3b2f24,
     packKind: 'backpack',
-    packHex: 0x44403c,
+    packHex: 0x393632,
     hasHoodieCollar: false,
   },
   elena: {
     bodyType: 'slim',
-    skinHex: 0xe0b99e,
-    shirtHex: 0xd6d3d1,
-    jacketHex: 0x456347,
-    pantsHex: 0x29303b,
-    bootHex: 0x36271d,
+    skinHex: 0xc7a38a,
+    shirtHex: 0xa6a3a0,
+    jacketHex: 0x344636,
+    pantsHex: 0x232830,
+    bootHex: 0x2b1f18,
     hairStyle: 'long_layered',
-    hairHex: 0x3b261c,
+    hairHex: 0x36231a,
     headwear: 'none',
     headwearHex: 0x292524,
     packKind: 'courier',
-    packHex: 0x3f4e43,
+    packHex: 0x333e36,
     hasHoodieCollar: true,
   },
   jax: {
     bodyType: 'athletic',
-    skinHex: 0x976548,
-    shirtHex: 0xb4b8be,
-    jacketHex: 0x7a4435,
-    pantsHex: 0x1f242c,
-    bootHex: 0x1a1715,
+    skinHex: 0x875a40,
+    shirtHex: 0x8e9298,
+    jacketHex: 0x52342b,
+    pantsHex: 0x1c2026,
+    bootHex: 0x171513,
     hairStyle: 'short_crop',
     hairHex: 0x181615,
     headwear: 'cap',
-    headwearHex: 0x2d3238,
+    headwearHex: 0x262a2e,
     packKind: 'backpack',
-    packHex: 0x674c38,
+    packHex: 0x4f3c2d,
     hasHoodieCollar: false,
   },
   nora: {
     bodyType: 'slim',
-    skinHex: 0xcfa080,
-    shirtHex: 0xc2c8d0,
-    jacketHex: 0x475569,
-    pantsHex: 0x232830,
-    bootHex: 0x241d19,
+    skinHex: 0xb88e72,
+    shirtHex: 0x989ea6,
+    jacketHex: 0x37414e,
+    pantsHex: 0x1e2329,
+    bootHex: 0x1f1916,
     hairStyle: 'side_part',
-    hairHex: 0x1f1a18,
+    hairHex: 0x1d1816,
     headwear: 'hood',
-    headwearHex: 0x3b4859,
+    headwearHex: 0x2d3743,
     packKind: 'courier',
-    packHex: 0x334155,
+    packHex: 0x2a3441,
     hasHoodieCollar: true,
   },
 };
@@ -227,11 +227,11 @@ export function buildProceduralCustomerModel(
     vertexColors: true,
   });
   const scleraMat = new THREE.MeshStandardMaterial({
-    color: 0xe2e8f0,
-    roughness: 0.35,
+    color: 0xa8a399,
+    roughness: 0.42,
   });
   const irisMat = new THREE.MeshStandardMaterial({
-    color: 0x1e1b18,
+    color: 0x191614,
     roughness: 0.25,
   });
   const shadowMat = new THREE.MeshBasicMaterial({
@@ -241,18 +241,18 @@ export function buildProceduralCustomerModel(
     depthWrite: false,
   });
   const statusMat = new THREE.MeshBasicMaterial({
-    color: 0xf59e0b,
+    color: 0x807257,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.0,
   });
 
   const shadowMesh = new THREE.Mesh(geos.shadowDisc, shadowMat);
   shadowMesh.position.y = 0.024;
   root.add(shadowMesh);
 
-  // Hip height at 0.84m so boot soles touch y = 0.0 cleanly
+  // Hip height at 0.91m so boot soles touch y = 0.0 cleanly (adult ~1.76m stature)
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.y = 0.84;
+  bodyPivot.position.y = 0.91;
   root.add(bodyPivot);
 
   const pelvisMesh = new THREE.Mesh(geos.pelvis, pantsMat);
@@ -271,7 +271,7 @@ export function buildProceduralCustomerModel(
   leftLegPivot.add(leftThigh);
 
   const leftKneePivot = new THREE.Group();
-  leftKneePivot.position.set(0, -0.39, 0);
+  leftKneePivot.position.set(0, -0.42, 0);
   const leftShin = new THREE.Mesh(geos.shinBoot, pantsMat);
   leftShin.castShadow = true;
   leftShin.receiveShadow = true;
@@ -287,7 +287,7 @@ export function buildProceduralCustomerModel(
   rightLegPivot.add(rightThigh);
 
   const rightKneePivot = new THREE.Group();
-  rightKneePivot.position.set(0, -0.39, 0);
+  rightKneePivot.position.set(0, -0.42, 0);
   const rightShin = new THREE.Mesh(geos.shinBoot, pantsMat);
   rightShin.castShadow = true;
   rightShin.receiveShadow = true;
@@ -337,7 +337,7 @@ export function buildProceduralCustomerModel(
 
   // Sculpted Head, Eyes, Brows, Hair & Optional Headwear
   const headPivot = new THREE.Group();
-  headPivot.position.set(0, 0.53, 0);
+  headPivot.position.set(0, 0.55, 0);
 
   const headGeo =
     spec.bodyType === 'slim'
@@ -350,15 +350,15 @@ export function buildProceduralCustomerModel(
   headMesh.receiveShadow = true;
   headPivot.add(headMesh);
 
-  const eyeX = spec.bodyType === 'slim' ? 0.033 : 0.036;
-  const eyeZ = -0.095;
+  const eyeX = spec.bodyType === 'slim' ? 0.031 : 0.034;
+  const eyeZ = -0.090;
   for (const sx of [-1, 1]) {
     const sclera = new THREE.Mesh(geos.eyeSclera, scleraMat);
-    sclera.position.set(sx * eyeX, 0.142, eyeZ);
+    sclera.position.set(sx * eyeX, 0.136, eyeZ);
     const iris = new THREE.Mesh(geos.eyeIris, irisMat);
-    iris.position.set(sx * eyeX, 0.142, eyeZ - 0.005);
+    iris.position.set(sx * eyeX, 0.136, eyeZ - 0.004);
     const brow = new THREE.Mesh(geos.eyebrow, hairMat);
-    brow.position.set(sx * eyeX, 0.162, eyeZ - 0.004);
+    brow.position.set(sx * eyeX, 0.155, eyeZ - 0.004);
     brow.rotation.z = sx * -0.06;
     headPivot.add(sclera, iris, brow);
   }
@@ -387,40 +387,40 @@ export function buildProceduralCustomerModel(
   const shoulderX = spec.bodyType === 'slim' ? 0.195 : spec.bodyType === 'stocky' ? 0.232 : 0.214;
 
   const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-shoulderX, 0.45, 0);
+  leftArmPivot.position.set(-shoulderX, 0.46, 0);
   const leftUpper = new THREE.Mesh(geos.upperArm, jacketMat);
   leftUpper.castShadow = true;
   leftArmPivot.add(leftUpper);
 
   const leftForearmPivot = new THREE.Group();
-  leftForearmPivot.position.set(0, -0.26, 0);
+  leftForearmPivot.position.set(0, -0.27, 0);
   const leftForearm = new THREE.Mesh(geos.forearm, jacketMat);
   leftForearm.castShadow = true;
   const leftHand = new THREE.Mesh(geos.handHuman, skinMat);
-  leftHand.position.set(0, -0.235, 0);
+  leftHand.position.set(0, -0.245, 0);
   leftForearmPivot.add(leftForearm, leftHand);
   leftArmPivot.add(leftForearmPivot);
   spinePivot.add(leftArmPivot);
 
   const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(shoulderX, 0.45, 0);
+  rightArmPivot.position.set(shoulderX, 0.46, 0);
   const rightUpper = new THREE.Mesh(geos.upperArm, jacketMat);
   rightUpper.castShadow = true;
   rightArmPivot.add(rightUpper);
 
   const rightForearmPivot = new THREE.Group();
-  rightForearmPivot.position.set(0, -0.26, 0);
+  rightForearmPivot.position.set(0, -0.27, 0);
   const rightForearm = new THREE.Mesh(geos.forearm, jacketMat);
   rightForearm.castShadow = true;
   const rightHand = new THREE.Mesh(geos.handHuman, skinMat);
-  rightHand.position.set(0, -0.235, 0);
+  rightHand.position.set(0, -0.245, 0);
   rightForearmPivot.add(rightForearm, rightHand);
   rightArmPivot.add(rightForearmPivot);
   spinePivot.add(rightArmPivot);
 
-  // Subtle floating state marker above head (visible while browsing/purchasing)
+  // Keep statusMarker on rig for compatibility, permanently hidden for grounded horror realism
   const statusMarker = new THREE.Mesh(geos.statusMarker, statusMat);
-  statusMarker.position.set(0, 1.9, 0);
+  statusMarker.position.set(0, 2.0, 0);
   statusMarker.visible = false;
   root.add(statusMarker);
 
@@ -475,25 +475,8 @@ export function animateCustomerRig(
   yawRate = 0,
   distSq = 0
 ): void {
-  // Subtle state marker cue inside/around shop
-  if (state === 'browsing') {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0xf59e0b);
-    rig.statusMarker.position.y = 1.9 + Math.sin(walkCycle * 1.6) * 0.03;
-    rig.statusMarker.rotation.y = walkCycle * 0.7;
-  } else if (state === 'going_to_checkout' || state === 'purchasing') {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0x34d399);
-    rig.statusMarker.position.y = 1.9 + Math.sin(walkCycle * 2.2) * 0.035;
-    rig.statusMarker.rotation.y = walkCycle * 1.1;
-  } else if (state === 'leaving' && hasPurchase) {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0x94a3b8);
-    rig.statusMarker.position.y = 1.89;
-    rig.statusMarker.rotation.y = walkCycle * 0.4;
-  } else {
-    rig.statusMarker.visible = false;
-  }
+  // Hide arcade floating diamonds permanently
+  rig.statusMarker.visible = false;
 
   const isFarLod = distSq > 30 * 30;
   const rawSpeed = actualSpeed ?? (isMoving ? 1.8 : 0);
@@ -517,7 +500,7 @@ export function animateCustomerRig(
   const turnLean = Math.max(-0.16, Math.min(0.16, rig.animData.smoothedYawRate * 0.06));
   const turnHead = Math.max(-0.28, Math.min(0.28, rig.animData.smoothedYawRate * 0.095));
 
-  let tBodyY = 0.84;
+  let tBodyY = 0.91;
   let tBodyRx = 0.015;
   let tBodyRz = 0;
   let tSpineRx = 0.015;
@@ -536,7 +519,7 @@ export function animateCustomerRig(
   let blend = 10;
 
   if (animState === 'purchasing') {
-    tBodyY = 0.84 + (isFarLod ? 0 : Math.sin(ph * 1.1) * 0.005);
+    tBodyY = 0.91 + (isFarLod ? 0 : Math.sin(ph * 1.1) * 0.005);
     tBodyRx = 0.03;
     tBodyRz = turnLean * 0.35;
     tSpineRx = 0.055;
@@ -554,7 +537,7 @@ export function animateCustomerRig(
     blend = 11;
   } else if (animState === 'browsing') {
     const breath = isFarLod ? 0 : Math.sin(ph * 1.2) * 0.007;
-    tBodyY = 0.84 + breath;
+    tBodyY = 0.91 + breath;
     tBodyRx = 0.02;
     tBodyRz = turnLean * 0.3;
     tSpineRx = 0.045;
@@ -578,7 +561,7 @@ export function animateCustomerRig(
     const stride = s * 0.45 * Math.min(1.06, speedRatio + 0.15);
     const hipDip = Math.abs(s) * 0.021;
 
-    tBodyY = 0.84 - hipDip;
+    tBodyY = 0.91 - hipDip;
     tBodyRx = 0.03;
     tBodyRz = c * 0.024 + turnLean;
     tSpineRx = isCarrying ? 0.03 : 0.04;
@@ -605,7 +588,7 @@ export function animateCustomerRig(
   } else {
     // Stationary idle
     const breath = isFarLod ? 0 : Math.sin(ph * 1.2) * 0.008;
-    tBodyY = 0.84 + breath;
+    tBodyY = 0.91 + breath;
     tBodyRx = 0.015;
     tBodyRz = turnLean * 0.35;
     tSpineRx = 0.015;

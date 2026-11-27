@@ -293,24 +293,24 @@ export const NEIGHBORHOOD_MAP: NeighborhoodMapData = {
 
   vehicles: [
     // Abandoned taxi in central intersection
-    { id: 'v_taxi', assetId: 'vehicle.taxi', kind: 'taxi', x: 2.2, z: -1.8, rotationY: 0.45, colorHex: 0xb48224 },
+    { id: 'v_taxi', assetId: 'vehicle.taxi', kind: 'taxi', x: 2.2, z: -1.8, rotationY: 0.45, colorHex: 0x7a5c24 },
     // Wrecked sedan along Main Blvd west
-    { id: 'v_sedan1', assetId: 'vehicle.sedan', kind: 'sedan', x: -24.5, z: 3.2, rotationY: -1.48, colorHex: 0x475569 },
+    { id: 'v_sedan1', assetId: 'vehicle.sedan', kind: 'sedan', x: -24.5, z: 3.2, rotationY: -1.48, colorHex: 0x3b4552 },
     // Pickup angled on Main Blvd east
-    { id: 'v_pickup1', assetId: 'vehicle.pickup', kind: 'pickup', x: 14.2, z: -3.2, rotationY: 1.92, colorHex: 0x5c3a2e },
+    { id: 'v_pickup1', assetId: 'vehicle.pickup', kind: 'pickup', x: 14.2, z: -3.2, rotationY: 1.92, colorHex: 0x473026 },
     // Delivery van near pharmacy
-    { id: 'v_van1', assetId: 'vehicle.van', kind: 'van', x: 26.5, z: 2.8, rotationY: -1.62, colorHex: 0x64748b },
+    { id: 'v_van1', assetId: 'vehicle.van', kind: 'van', x: 26.5, z: 2.8, rotationY: -1.62, colorHex: 0x4f5a66 },
     // Wrecked sedan outside Redline Auto
-    { id: 'v_garage1', assetId: 'vehicle.sedan', kind: 'sedan', x: 13.5, z: 5.8, rotationY: 1.52, colorHex: 0x7f1d1d },
+    { id: 'v_garage1', assetId: 'vehicle.sedan', kind: 'sedan', x: 13.5, z: 5.8, rotationY: 1.52, colorHex: 0x522121 },
     // North Central Ave pileup
-    { id: 'v_north1', assetId: 'vehicle.pickup', kind: 'pickup', x: -2.4, z: -18.5, rotationY: 0.18, colorHex: 0x3f4d43 },
+    { id: 'v_north1', assetId: 'vehicle.pickup', kind: 'pickup', x: -2.4, z: -18.5, rotationY: 0.18, colorHex: 0x323d35 },
     // South Central Ave
-    { id: 'v_south1', assetId: 'vehicle.taxi', kind: 'taxi', x: 2.6, z: 19.5, rotationY: 3.02, colorHex: 0x9c7222 },
+    { id: 'v_south1', assetId: 'vehicle.taxi', kind: 'taxi', x: 2.6, z: 19.5, rotationY: 3.02, colorHex: 0x6e5222 },
     // Phase 14 District Vehicles
-    { id: 'v_evac_van', assetId: 'vehicle.van', kind: 'van', x: -29.0, z: -43.5, rotationY: 0.35, colorHex: 0x52606d },
-    { id: 'v_police_car', assetId: 'vehicle.sedan', kind: 'sedan', x: -33.5, z: 43.2, rotationY: 0.08, colorHex: 0x1e293b },
-    { id: 'v_clinic_amb', assetId: 'vehicle.van', kind: 'van', x: 11.5, z: 43.4, rotationY: -0.06, colorHex: 0xd1d5db },
-    { id: 'v_mil_truck', assetId: 'vehicle.pickup', kind: 'pickup', x: 3.4, z: -33.2, rotationY: -1.35, colorHex: 0x365314 },
+    { id: 'v_evac_van', assetId: 'vehicle.van', kind: 'van', x: -29.0, z: -43.5, rotationY: 0.35, colorHex: 0x424c57 },
+    { id: 'v_police_car', assetId: 'vehicle.sedan', kind: 'sedan', x: -33.5, z: 43.2, rotationY: 0.08, colorHex: 0x1a222e },
+    { id: 'v_clinic_amb', assetId: 'vehicle.van', kind: 'van', x: 11.5, z: 43.4, rotationY: -0.06, colorHex: 0x8c9296 },
+    { id: 'v_mil_truck', assetId: 'vehicle.pickup', kind: 'pickup', x: 3.4, z: -33.2, rotationY: -1.35, colorHex: 0x2d3d1c },
   ],
 
   lamps: [

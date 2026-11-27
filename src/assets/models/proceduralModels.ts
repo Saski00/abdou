@@ -137,214 +137,214 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
     metalness: 0.32,
   });
   const warmWindow = new THREE.MeshStandardMaterial({
-    color: 0xf59e0b,
-    emissive: 0xd97706,
-    emissiveIntensity: 1.15,
-    roughness: 0.25,
+    color: 0x8c5b22,
+    emissive: 0x6e4314,
+    emissiveIntensity: 0.25,
+    roughness: 0.42,
     metalness: 0.1,
   });
   const shopSign = new THREE.MeshStandardMaterial({
     map: textures.shopSign,
-    emissive: 0xb45309,
+    emissive: 0x6b471b,
     emissiveMap: textures.shopSign,
-    emissiveIntensity: 0.45,
-    roughness: 0.48,
-    metalness: 0.15,
+    emissiveIntensity: 0.12,
+    roughness: 0.72,
+    metalness: 0.12,
   });
   const awning = new THREE.MeshStandardMaterial({
     map: textures.awningStripe,
-    roughness: 0.88,
-    metalness: 0.04,
+    roughness: 0.92,
+    metalness: 0.02,
   });
   const lampMetal = new THREE.MeshStandardMaterial({
-    color: 0x353c45,
-    roughness: 0.44,
-    metalness: 0.76,
+    color: 0x2f353d,
+    roughness: 0.52,
+    metalness: 0.7,
   });
   const lampBulbLit = new THREE.MeshStandardMaterial({
-    color: 0xfef3c7,
-    emissive: 0xf59e0b,
-    emissiveIntensity: 2.2,
-    roughness: 0.2,
+    color: 0xe6d5b2,
+    emissive: 0xb87624,
+    emissiveIntensity: 1.1,
+    roughness: 0.3,
   });
   const streetLampBulb = new THREE.MeshStandardMaterial({
-    color: 0xfef3c7,
-    emissive: 0xf59e0b,
-    emissiveIntensity: 2.2,
-    roughness: 0.2,
+    color: 0xe6d5b2,
+    emissive: 0xb87624,
+    emissiveIntensity: 1.1,
+    roughness: 0.3,
   });
   const lampBulbDead = new THREE.MeshStandardMaterial({
-    color: 0x2f3b49,
-    roughness: 0.42,
+    color: 0x2b3440,
+    roughness: 0.48,
     metalness: 0.2,
   });
   const trashBag = new THREE.MeshStandardMaterial({
-    color: 0x171b20,
-    roughness: 0.36,
-    metalness: 0.08,
+    color: 0x15181c,
+    roughness: 0.44,
+    metalness: 0.06,
   });
   const foliage = new THREE.MeshStandardMaterial({
-    color: 0x2d3d29,
-    roughness: 0.92,
+    color: 0x242c20,
+    roughness: 0.95,
     metalness: 0.0,
   });
   const hydrantRed = new THREE.MeshStandardMaterial({
-    color: 0x762323,
-    roughness: 0.58,
-    metalness: 0.34,
+    color: 0x572220,
+    roughness: 0.72,
+    metalness: 0.26,
   });
   const barrierHazard = new THREE.MeshStandardMaterial({
-    color: 0xb26d18,
-    roughness: 0.78,
-    metalness: 0.1,
+    color: 0x785326,
+    roughness: 0.85,
+    metalness: 0.08,
   });
   const signValeStore = new THREE.MeshStandardMaterial({
     map: textures.signValeStore,
-    emissive: 0xffffff,
+    emissive: 0x998888,
     emissiveMap: textures.signValeStore,
-    emissiveIntensity: 0.36,
-    roughness: 0.65,
-    metalness: 0.1,
-  });
-  const signDepot04 = new THREE.MeshStandardMaterial({
-    map: textures.signDepot04,
-    emissive: 0xe2e8f0,
-    emissiveMap: textures.signDepot04,
-    emissiveIntensity: 0.28,
-    roughness: 0.7,
-    metalness: 0.15,
-  });
-  const signStarlightDiner = new THREE.MeshStandardMaterial({
-    map: textures.signStarlightDiner,
-    emissive: 0xffffff,
-    emissiveMap: textures.signStarlightDiner,
-    emissiveIntensity: 0.48,
-    roughness: 0.55,
-    metalness: 0.12,
-  });
-  const signRedlineAuto = new THREE.MeshStandardMaterial({
-    map: textures.signRedlineAuto,
-    emissive: 0xffffff,
-    emissiveMap: textures.signRedlineAuto,
-    emissiveIntensity: 0.38,
-    roughness: 0.65,
-    metalness: 0.15,
-  });
-  const signMercerFlats = new THREE.MeshStandardMaterial({
-    map: textures.signMercerFlats,
-    emissive: 0xcbd5e1,
-    emissiveMap: textures.signMercerFlats,
-    emissiveIntensity: 0.25,
+    emissiveIntensity: 0.08,
     roughness: 0.78,
     metalness: 0.08,
   });
+  const signDepot04 = new THREE.MeshStandardMaterial({
+    map: textures.signDepot04,
+    emissive: 0x8b95a3,
+    emissiveMap: textures.signDepot04,
+    emissiveIntensity: 0.06,
+    roughness: 0.82,
+    metalness: 0.12,
+  });
+  const signStarlightDiner = new THREE.MeshStandardMaterial({
+    map: textures.signStarlightDiner,
+    emissive: 0xa69b84,
+    emissiveMap: textures.signStarlightDiner,
+    emissiveIntensity: 0.12,
+    roughness: 0.72,
+    metalness: 0.1,
+  });
+  const signRedlineAuto = new THREE.MeshStandardMaterial({
+    map: textures.signRedlineAuto,
+    emissive: 0x998470,
+    emissiveMap: textures.signRedlineAuto,
+    emissiveIntensity: 0.08,
+    roughness: 0.78,
+    metalness: 0.12,
+  });
+  const signMercerFlats = new THREE.MeshStandardMaterial({
+    map: textures.signMercerFlats,
+    emissive: 0x88919e,
+    emissiveMap: textures.signMercerFlats,
+    emissiveIntensity: 0.05,
+    roughness: 0.85,
+    metalness: 0.06,
+  });
   const signMainBlvd = new THREE.MeshStandardMaterial({
     map: textures.signMainBlvd,
-    emissive: 0xd1fae5,
+    emissive: 0x85998d,
     emissiveMap: textures.signMainBlvd,
-    emissiveIntensity: 0.26,
-    roughness: 0.45,
-    metalness: 0.25,
+    emissiveIntensity: 0.05,
+    roughness: 0.65,
+    metalness: 0.2,
   });
   const signCentralAve = new THREE.MeshStandardMaterial({
     map: textures.signCentralAve,
-    emissive: 0xd1fae5,
+    emissive: 0x85998d,
     emissiveMap: textures.signCentralAve,
-    emissiveIntensity: 0.26,
-    roughness: 0.45,
-    metalness: 0.25,
+    emissiveIntensity: 0.05,
+    roughness: 0.65,
+    metalness: 0.2,
   });
   const signQuarantine = new THREE.MeshStandardMaterial({
     map: textures.signQuarantine,
-    emissive: 0xfef08a,
+    emissive: 0x998844,
     emissiveMap: textures.signQuarantine,
-    emissiveIntensity: 0.42,
-    roughness: 0.52,
-    metalness: 0.2,
+    emissiveIntensity: 0.08,
+    roughness: 0.74,
+    metalness: 0.16,
   });
   const signPolicePrecinct = new THREE.MeshStandardMaterial({
     map: textures.signPolicePrecinct,
-    emissive: 0xbfdbfe,
+    emissive: 0x6e829e,
     emissiveMap: textures.signPolicePrecinct,
-    emissiveIntensity: 0.48,
-    roughness: 0.52,
-    metalness: 0.18,
+    emissiveIntensity: 0.1,
+    roughness: 0.72,
+    metalness: 0.15,
   });
   const signFieldClinic = new THREE.MeshStandardMaterial({
     map: textures.signFieldClinic,
-    emissive: 0xa5f3fc,
+    emissive: 0x6c9096,
     emissiveMap: textures.signFieldClinic,
-    emissiveIntensity: 0.48,
-    roughness: 0.5,
-    metalness: 0.14,
+    emissiveIntensity: 0.1,
+    roughness: 0.7,
+    metalness: 0.12,
   });
   const signResearchLab = new THREE.MeshStandardMaterial({
     map: textures.signResearchLab,
-    emissive: 0xfde68a,
+    emissive: 0x99845c,
     emissiveMap: textures.signResearchLab,
-    emissiveIntensity: 0.5,
-    roughness: 0.48,
-    metalness: 0.22,
+    emissiveIntensity: 0.1,
+    roughness: 0.7,
+    metalness: 0.18,
   });
   const signDistrictNorth = new THREE.MeshStandardMaterial({
     map: textures.signDistrictNorth,
-    emissive: 0xfef08a,
+    emissive: 0x8f8256,
     emissiveMap: textures.signDistrictNorth,
-    emissiveIntensity: 0.34,
-    roughness: 0.45,
-    metalness: 0.2,
+    emissiveIntensity: 0.06,
+    roughness: 0.68,
+    metalness: 0.18,
   });
   const signDistrictCross = new THREE.MeshStandardMaterial({
     map: textures.signDistrictCross,
-    emissive: 0xbae6fd,
+    emissive: 0x6c8491,
     emissiveMap: textures.signDistrictCross,
-    emissiveIntensity: 0.34,
-    roughness: 0.45,
-    metalness: 0.2,
+    emissiveIntensity: 0.06,
+    roughness: 0.68,
+    metalness: 0.18,
   });
   const beaconBlue = new THREE.MeshStandardMaterial({
-    color: 0x3b82f6,
-    emissive: 0x2563eb,
-    emissiveIntensity: 2.4,
-    roughness: 0.2,
+    color: 0x264b80,
+    emissive: 0x1a3863,
+    emissiveIntensity: 0.45,
+    roughness: 0.35,
   });
   const beaconCyan = new THREE.MeshStandardMaterial({
-    color: 0x22d3ee,
-    emissive: 0x06b6d4,
-    emissiveIntensity: 2.0,
-    roughness: 0.22,
+    color: 0x266c78,
+    emissive: 0x1c515c,
+    emissiveIntensity: 0.4,
+    roughness: 0.38,
   });
   const beaconRed = new THREE.MeshStandardMaterial({
-    color: 0xf87171,
-    emissive: 0xdc2626,
-    emissiveIntensity: 2.2,
-    roughness: 0.22,
+    color: 0x732626,
+    emissive: 0x541818,
+    emissiveIntensity: 0.45,
+    roughness: 0.38,
   });
   const beaconAmber = new THREE.MeshStandardMaterial({
-    color: 0xfbbf24,
-    emissive: 0xd97706,
-    emissiveIntensity: 2.1,
-    roughness: 0.22,
+    color: 0x875c1f,
+    emissive: 0x634112,
+    emissiveIntensity: 0.45,
+    roughness: 0.38,
   });
   const hazardStripe = new THREE.MeshStandardMaterial({
     map: textures.hazardStripe,
-    roughness: 0.75,
-    metalness: 0.1,
+    roughness: 0.84,
+    metalness: 0.08,
   });
   const safetyOrange = new THREE.MeshStandardMaterial({
-    color: 0xd95f18,
-    roughness: 0.52,
-    metalness: 0.06,
+    color: 0x6b3a20,
+    roughness: 0.88,
+    metalness: 0.04,
   });
   const tarpBlue = new THREE.MeshStandardMaterial({
-    color: 0x2b4560,
-    roughness: 0.88,
+    color: 0x243342,
+    roughness: 0.92,
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
   const sandbag = new THREE.MeshStandardMaterial({
-    color: 0x6b5f4b,
-    roughness: 0.94,
+    color: 0x594f40,
+    roughness: 0.96,
     metalness: 0.0,
   });
   const bloodStain = new THREE.MeshStandardMaterial({
@@ -468,6 +468,42 @@ export function createMaterialPalette(textures: ProceduralTextureSet): MaterialP
   };
 }
 
+/**
+ * Creates a beveled signboard housing with a dedicated [0..1] UV PlaneGeometry face
+ * so ClampToEdge sign textures never crop or tile via triplanar world-meter UVs.
+ */
+export function createFramedSignAssembly(
+  w: number,
+  h: number,
+  depth: number,
+  signMat: THREE.Material,
+  frameMat: THREE.Material,
+  doubleSided = false
+): THREE.Group {
+  const holder = new THREE.Group();
+  const backing = new THREE.Mesh(
+    createBeveledBoxGeometry(w, h, depth, Math.min(0.028, depth * 0.28), Math.min(0.02, h * 0.06)),
+    frameMat
+  );
+  backing.castShadow = true;
+  holder.add(backing);
+
+  const faceW = Math.max(0.1, w - Math.min(0.14, w * 0.05));
+  const faceH = Math.max(0.08, h - Math.min(0.12, h * 0.1));
+  const frontPlane = new THREE.Mesh(new THREE.PlaneGeometry(faceW, faceH), signMat);
+  frontPlane.position.z = depth * 0.5 + 0.004;
+  holder.add(frontPlane);
+
+  if (doubleSided) {
+    const backPlane = new THREE.Mesh(new THREE.PlaneGeometry(faceW, faceH), signMat);
+    backPlane.position.z = -depth * 0.5 - 0.004;
+    backPlane.rotation.y = Math.PI;
+    holder.add(backPlane);
+  }
+
+  return holder;
+}
+
 export interface BuildingBuildOptions {
   w: number;
   h: number;
@@ -523,10 +559,7 @@ export function buildLastShopModel(
   awningMesh.castShadow = true;
   group.add(awningMesh);
 
-  const signMesh = new THREE.Mesh(
-    createBeveledBoxGeometry(5.6, 1.25, 0.22, 0.03, 0.02),
-    mats.shopSign
-  );
+  const signMesh = createFramedSignAssembly(5.6, 1.25, 0.22, mats.shopSign, mats.darkTrim);
   signMesh.position.set(0, 4.1, frontZ + 0.16);
   group.add(signMesh);
 
@@ -787,10 +820,7 @@ export function buildUrbanBuildingModel(
 
   // 7. Landmark Fascia Signboards
   if (style === 'apartment' && w < 14) {
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(4.8, 1.0, 0.18, 0.025, 0.02),
-      mats.signMercerFlats
-    );
+    const sign = createFramedSignAssembly(4.8, 1.0, 0.18, mats.signMercerFlats, mats.darkTrim);
     sign.position.set(0, 3.35, d * 0.5 + 0.14);
     group.add(sign);
   }
@@ -809,10 +839,13 @@ export function buildVehicleModel(
 ): THREE.Group {
   const group = new THREE.Group();
 
+  const weatheredTint = new THREE.Color(colorHex).multiplyScalar(0.76);
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: colorHex,
-    roughness: 0.56,
-    metalness: 0.42,
+    color: weatheredTint,
+    normalMap: mats.concrete.normalMap,
+    normalScale: new THREE.Vector2(0.18, 0.18),
+    roughness: 0.76,
+    metalness: 0.24,
   });
 
   const length = kind === 'van' ? 4.5 : kind === 'pickup' ? 4.35 : 4.05;
@@ -1417,32 +1450,20 @@ export function buildStreetSignpostModel(mats: MaterialPalette): THREE.Group {
   finial.position.y = 3.32;
   group.add(pole, finial);
 
-  const bladeMain = new THREE.Mesh(
-    createBeveledBoxGeometry(1.15, 0.28, 0.05, 0.01, 0.015),
-    mats.signMainBlvd
-  );
+  const bladeMain = createFramedSignAssembly(1.15, 0.28, 0.05, mats.signMainBlvd, mats.darkTrim, true);
   bladeMain.position.set(0.32, 3.05, 0);
   group.add(bladeMain);
 
-  const bladeCentral = new THREE.Mesh(
-    createBeveledBoxGeometry(1.15, 0.28, 0.05, 0.01, 0.015),
-    mats.signCentralAve
-  );
+  const bladeCentral = createFramedSignAssembly(1.15, 0.28, 0.05, mats.signCentralAve, mats.darkTrim, true);
   bladeCentral.position.set(0, 2.75, 0.32);
   bladeCentral.rotation.y = Math.PI * 0.5;
   group.add(bladeCentral);
 
-  const bladeDirEW = new THREE.Mesh(
-    createBeveledBoxGeometry(1.65, 0.28, 0.05, 0.01, 0.015),
-    mats.signDistrictNorth
-  );
+  const bladeDirEW = createFramedSignAssembly(1.65, 0.28, 0.05, mats.signDistrictNorth, mats.darkTrim, true);
   bladeDirEW.position.set(0, 2.38, 0);
   group.add(bladeDirEW);
 
-  const bladeDirNS = new THREE.Mesh(
-    createBeveledBoxGeometry(1.65, 0.28, 0.05, 0.01, 0.015),
-    mats.signDistrictCross
-  );
+  const bladeDirNS = createFramedSignAssembly(1.65, 0.28, 0.05, mats.signDistrictCross, mats.darkTrim, true);
   bladeDirNS.position.set(0, 2.06, 0);
   bladeDirNS.rotation.y = Math.PI * 0.5;
   group.add(bladeDirNS);
@@ -1579,12 +1600,8 @@ export function buildQuarantineSignModel(mats: MaterialPalette): THREE.Group {
   }
   group.add(new THREE.Mesh(mergeParts(postParts, false), mats.darkTrim));
 
-  const board = new THREE.Mesh(
-    createBeveledBoxGeometry(1.75, 0.64, 0.07, 0.015, 0.02),
-    mats.signQuarantine
-  );
+  const board = createFramedSignAssembly(1.75, 0.64, 0.07, mats.signQuarantine, mats.darkTrim, true);
   board.position.set(0, 1.56, 0);
-  board.castShadow = true;
   const bar = new THREE.Mesh(
     createBeveledBoxGeometry(1.78, 0.16, 0.06, 0.01, 0.015),
     mats.hazardStripe

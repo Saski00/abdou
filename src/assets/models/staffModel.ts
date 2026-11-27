@@ -83,14 +83,14 @@ interface SurvivorVisualSpec {
 const SURVIVOR_VISUAL_SPECS: Record<string, SurvivorVisualSpec> = {
   surv_maya: {
     bodyType: 'slim',
-    skinHex: 0xd9ab8c,
-    shirtHex: 0xd6d3d1,
-    jacketHex: 0x92400e,
-    pantsHex: 0x262d38,
+    skinHex: 0xc2967a,
+    shirtHex: 0x9e9c9a,
+    jacketHex: 0x6b3a19,
+    pantsHex: 0x21262e,
     hairStyle: 'ponytail_bun',
     hairHex: 0x45271a,
     headwear: 'none',
-    headwearHex: 0x451a03,
+    headwearHex: 0x2e2116,
     rolledSleeves: true,
     legBandage: false,
     defaultApron: true,
@@ -100,14 +100,14 @@ const SURVIVOR_VISUAL_SPECS: Record<string, SurvivorVisualSpec> = {
   },
   surv_soren: {
     bodyType: 'athletic',
-    skinHex: 0xc5906f,
-    shirtHex: 0x64748b,
-    jacketHex: 0x3f4c5e,
-    pantsHex: 0x1e2633,
+    skinHex: 0xb08063,
+    shirtHex: 0x525d6b,
+    jacketHex: 0x313a46,
+    pantsHex: 0x1b212a,
     hairStyle: 'short_crop',
     hairHex: 0x241e1a,
     headwear: 'none',
-    headwearHex: 0x0f172a,
+    headwearHex: 0x11161f,
     rolledSleeves: false,
     legBandage: true,
     defaultApron: false,
@@ -117,14 +117,14 @@ const SURVIVOR_VISUAL_SPECS: Record<string, SurvivorVisualSpec> = {
   },
   surv_dante: {
     bodyType: 'stocky',
-    skinHex: 0x9c6b4d,
-    shirtHex: 0x854d27,
-    jacketHex: 0x57534e,
-    pantsHex: 0x21242b,
+    skinHex: 0x8b6046,
+    shirtHex: 0x664026,
+    jacketHex: 0x45423f,
+    pantsHex: 0x1e2025,
     hairStyle: 'short_crop',
     hairHex: 0x181513,
     headwear: 'beanie',
-    headwearHex: 0x1e3a34,
+    headwearHex: 0x1b2e2a,
     rolledSleeves: true,
     legBandage: false,
     defaultApron: false,
@@ -134,14 +134,14 @@ const SURVIVOR_VISUAL_SPECS: Record<string, SurvivorVisualSpec> = {
   },
   surv_kira: {
     bodyType: 'slim',
-    skinHex: 0xd0a182,
-    shirtHex: 0x94a3b8,
-    jacketHex: 0x3b4d37,
-    pantsHex: 0x1f2726,
+    skinHex: 0xba8f73,
+    shirtHex: 0x76818e,
+    jacketHex: 0x313d2e,
+    pantsHex: 0x1c2221,
     hairStyle: 'messy',
     hairHex: 0x1d1917,
     headwear: 'hood',
-    headwearHex: 0x2f3e2d,
+    headwearHex: 0x263125,
     rolledSleeves: false,
     legBandage: false,
     defaultApron: false,
@@ -151,14 +151,14 @@ const SURVIVOR_VISUAL_SPECS: Record<string, SurvivorVisualSpec> = {
   },
   surv_toby: {
     bodyType: 'athletic',
-    skinHex: 0xcfa080,
-    shirtHex: 0xb45309,
-    jacketHex: 0x374151,
-    pantsHex: 0x1f2937,
+    skinHex: 0xb88d71,
+    shirtHex: 0x73421a,
+    jacketHex: 0x2e353f,
+    pantsHex: 0x1c222b,
     hairStyle: 'side_part',
-    hairHex: 0x4b3526,
+    hairHex: 0x453123,
     headwear: 'cap',
-    headwearHex: 0x292524,
+    headwearHex: 0x242120,
     rolledSleeves: false,
     legBandage: false,
     defaultApron: false,
@@ -210,32 +210,32 @@ function createNameTagTexture(
 
   const canvas = document.createElement('canvas');
   canvas.width = 256;
-  canvas.height = 72;
+  canvas.height = 68;
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = 'rgba(11, 15, 23, 0.86)';
+    ctx.fillStyle = 'rgba(9, 11, 15, 0.72)';
     ctx.beginPath();
-    ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 12);
+    ctx.roundRect(10, 8, canvas.width - 20, canvas.height - 16, 6);
     ctx.fill();
 
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 12);
+    ctx.roundRect(10, 8, canvas.width - 20, canvas.height - 16, 6);
     ctx.stroke();
 
     ctx.direction = /[\u0600-\u06FF]/.test(`${title} ${subtitle}`) ? 'rtl' : 'ltr';
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 24px Cairo, system-ui, sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = 'bold 21px Cairo, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(title, canvas.width / 2, 29);
+    ctx.fillText(title, canvas.width / 2, 27);
 
     ctx.fillStyle = accentColor;
-    ctx.font = '600 17px Cairo, system-ui, sans-serif';
-    ctx.fillText(subtitle, canvas.width / 2, 51);
+    ctx.font = '600 15px Cairo, system-ui, sans-serif';
+    ctx.fillText(subtitle, canvas.width / 2, 48);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -306,22 +306,22 @@ export function buildProceduralStaffModel(
     vertexColors: true,
   });
   const apronMat = new THREE.MeshStandardMaterial({
-    color: 0xd6cec2,
-    roughness: 0.9,
+    color: 0x948c80,
+    roughness: 0.92,
     metalness: 0.02,
     vertexColors: true,
     bumpMap: geos.textures.fabricBump,
     bumpScale: 0.007,
   });
   const tacMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    roughness: 0.72,
-    metalness: 0.18,
+    color: 0x1b2129,
+    roughness: 0.78,
+    metalness: 0.14,
     vertexColors: true,
   });
   const bandageMat = new THREE.MeshStandardMaterial({
-    color: 0xe2ddd5,
-    roughness: 0.92,
+    color: 0x9e978b,
+    roughness: 0.94,
     metalness: 0.02,
     vertexColors: true,
   });
@@ -333,22 +333,22 @@ export function buildProceduralStaffModel(
   });
   const capMat = new THREE.MeshStandardMaterial({
     color: capHex,
-    roughness: 0.86,
-    metalness: 0.05,
+    roughness: 0.88,
+    metalness: 0.04,
     vertexColors: true,
   });
   const batonMat = new THREE.MeshStandardMaterial({
-    color: 0x334155,
-    roughness: 0.38,
-    metalness: 0.76,
+    color: 0x2a313b,
+    roughness: 0.44,
+    metalness: 0.68,
     vertexColors: true,
   });
   const scleraMat = new THREE.MeshStandardMaterial({
-    color: 0xe2e8f0,
-    roughness: 0.35,
+    color: 0xa8a399,
+    roughness: 0.42,
   });
   const irisMat = new THREE.MeshStandardMaterial({
-    color: 0x1e1b18,
+    color: 0x191614,
     roughness: 0.25,
   });
   const shadowMat = new THREE.MeshBasicMaterial({
@@ -358,18 +358,18 @@ export function buildProceduralStaffModel(
     depthWrite: false,
   });
   const statusMat = new THREE.MeshBasicMaterial({
-    color: options.kind === 'survivor' ? 0x38bdf8 : 0x34d399,
+    color: 0x8596a8,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.0,
   });
 
   const shadowMesh = new THREE.Mesh(geos.shadowDisc, shadowMat);
   shadowMesh.position.y = 0.024;
   root.add(shadowMesh);
 
-  // Pelvis at 0.84m so boot soles rest flush at y = 0.0
+  // Pelvis at 0.91m so boot soles rest flush at y = 0.0 (adult ~1.76m stature)
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.y = 0.84;
+  bodyPivot.position.y = 0.91;
   root.add(bodyPivot);
 
   const pelvisMesh = new THREE.Mesh(geos.pelvis, pantsMat);
@@ -388,7 +388,7 @@ export function buildProceduralStaffModel(
   leftLegPivot.add(leftThigh);
 
   const leftKneePivot = new THREE.Group();
-  leftKneePivot.position.set(0, -0.39, 0);
+  leftKneePivot.position.set(0, -0.42, 0);
   const leftShin = new THREE.Mesh(geos.shinBoot, pantsMat);
   leftShin.castShadow = true;
   leftShin.receiveShadow = true;
@@ -409,7 +409,7 @@ export function buildProceduralStaffModel(
   }
 
   const rightKneePivot = new THREE.Group();
-  rightKneePivot.position.set(0, -0.39, 0);
+  rightKneePivot.position.set(0, -0.42, 0);
   const rightShin = new THREE.Mesh(geos.shinBoot, pantsMat);
   rightShin.castShadow = true;
   rightShin.receiveShadow = true;
@@ -481,7 +481,7 @@ export function buildProceduralStaffModel(
 
   // Sculpted Head, Eyes, Brows, Hair & Optional Headwear
   const headPivot = new THREE.Group();
-  headPivot.position.set(0, 0.53, 0);
+  headPivot.position.set(0, 0.55, 0);
 
   const headGeo =
     spec.bodyType === 'slim'
@@ -494,15 +494,15 @@ export function buildProceduralStaffModel(
   headMesh.receiveShadow = true;
   headPivot.add(headMesh);
 
-  const eyeX = spec.bodyType === 'slim' ? 0.033 : 0.036;
-  const eyeZ = -0.095;
+  const eyeX = spec.bodyType === 'slim' ? 0.031 : 0.034;
+  const eyeZ = -0.090;
   for (const sx of [-1, 1]) {
     const sclera = new THREE.Mesh(geos.eyeSclera, scleraMat);
-    sclera.position.set(sx * eyeX, 0.142, eyeZ);
+    sclera.position.set(sx * eyeX, 0.136, eyeZ);
     const iris = new THREE.Mesh(geos.eyeIris, irisMat);
-    iris.position.set(sx * eyeX, 0.142, eyeZ - 0.005);
+    iris.position.set(sx * eyeX, 0.136, eyeZ - 0.004);
     const brow = new THREE.Mesh(geos.eyebrow, hairMat);
-    brow.position.set(sx * eyeX, 0.162, eyeZ - 0.004);
+    brow.position.set(sx * eyeX, 0.155, eyeZ - 0.004);
     brow.rotation.z = sx * -0.06;
     headPivot.add(sclera, iris, brow);
   }
@@ -533,58 +533,60 @@ export function buildProceduralStaffModel(
   const forearmMat = spec.rolledSleeves ? skinMat : vestMat;
 
   const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-shoulderX, 0.45, 0);
+  leftArmPivot.position.set(-shoulderX, 0.46, 0);
   const leftUpper = new THREE.Mesh(geos.upperArm, vestMat);
   leftUpper.castShadow = true;
   leftArmPivot.add(leftUpper);
 
   const leftForearmPivot = new THREE.Group();
-  leftForearmPivot.position.set(0, -0.26, 0);
+  leftForearmPivot.position.set(0, -0.27, 0);
   const leftForearm = new THREE.Mesh(forearmGeo, forearmMat);
   leftForearm.castShadow = true;
   const leftHand = new THREE.Mesh(geos.handHuman, skinMat);
-  leftHand.position.set(0, -0.235, 0);
+  leftHand.position.set(0, -0.245, 0);
   leftForearmPivot.add(leftForearm, leftHand);
   leftArmPivot.add(leftForearmPivot);
   spinePivot.add(leftArmPivot);
 
   const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(shoulderX, 0.45, 0);
+  rightArmPivot.position.set(shoulderX, 0.46, 0);
   const rightUpper = new THREE.Mesh(geos.upperArm, vestMat);
   rightUpper.castShadow = true;
   rightArmPivot.add(rightUpper);
 
   const rightForearmPivot = new THREE.Group();
-  rightForearmPivot.position.set(0, -0.26, 0);
+  rightForearmPivot.position.set(0, -0.27, 0);
   const rightForearm = new THREE.Mesh(forearmGeo, forearmMat);
   rightForearm.castShadow = true;
   const rightHand = new THREE.Mesh(geos.handHuman, skinMat);
-  rightHand.position.set(0, -0.235, 0);
+  rightHand.position.set(0, -0.245, 0);
   rightForearmPivot.add(rightForearm, rightHand);
 
   // Guard tactical baton gripped cleanly inside right hand
   const batonMesh = new THREE.Mesh(geos.baton, batonMat);
-  batonMesh.position.set(0, -0.285, -0.022);
+  batonMesh.position.set(0, -0.295, -0.022);
   batonMesh.visible = options.profession === 'guard';
   rightForearmPivot.add(batonMesh);
 
   rightArmPivot.add(rightForearmPivot);
   spinePivot.add(rightArmPivot);
 
+  // Keep statusMarker on rig for compatibility, permanently hidden for grounded horror realism
   const statusMarker = new THREE.Mesh(geos.statusMarker, statusMat);
-  statusMarker.position.set(0, 1.9, 0);
+  statusMarker.position.set(0, 2.0, 0);
+  statusMarker.visible = false;
   root.add(statusMarker);
 
   const accentColor =
     options.kind === 'survivor'
-      ? '#38bdf8'
+      ? '#8596a8'
       : options.profession === 'guard'
-        ? '#60a5fa'
+        ? '#7d8ea3'
         : options.profession === 'shopkeeper'
-          ? '#fbbf24'
+          ? '#a18862'
           : options.profession === 'storage_worker'
-            ? '#2dd4bf'
-            : '#a3e635';
+            ? '#6b8580'
+            : '#7c8a68';
 
   const labelTex = createNameTagTexture(options.name, options.subtitle, accentColor);
   let labelMat: THREE.SpriteMaterial | null = null;
@@ -596,8 +598,9 @@ export function buildProceduralStaffModel(
       depthWrite: false,
     });
     labelSprite = new THREE.Sprite(labelMat);
-    labelSprite.position.set(0, 2.26, 0);
-    labelSprite.scale.set(1.22, 0.34, 1);
+    labelSprite.position.set(0, 2.34, 0);
+    labelSprite.scale.set(1.04, 0.28, 1);
+    labelSprite.visible = false;
     root.add(labelSprite);
   }
 
@@ -690,12 +693,12 @@ export function updateStaffRigProfessionVisuals(
 
   const accentColor =
     profession === 'guard'
-      ? '#60a5fa'
+      ? '#7d8ea3'
       : profession === 'shopkeeper'
-        ? '#fbbf24'
+        ? '#a18862'
         : profession === 'storage_worker'
-          ? '#2dd4bf'
-          : '#a3e635';
+          ? '#6b8580'
+          : '#7c8a68';
 
   updateStaffRigNameTag(rig, name, profT.shortLabel, accentColor);
 }
@@ -733,29 +736,13 @@ export function animateStaffRig(
   } = options;
 
   if (hitFlashTimer > 0) {
-    rig.vestMat.emissive.setHex(0x7f1d1d);
+    rig.vestMat.emissive.setHex(0x3b0f0f);
   } else {
     rig.vestMat.emissive.setHex(0x000000);
   }
 
-  // Subtle role marker color
-  if (status === 'survivor') {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0x38bdf8);
-  } else if (status === 'unpaid') {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0xf43f5e);
-  } else if (status === 'engaging') {
-    rig.statusMarker.visible = true;
-    rig.statusMat.color.setHex(0xf97316);
-  } else {
-    rig.statusMarker.visible = false;
-  }
-
-  if (rig.statusMarker.visible) {
-    rig.statusMarker.position.y = 1.9 + Math.sin(walkCycle * 1.5) * 0.03;
-    rig.statusMarker.rotation.y = walkCycle * 0.7;
-  }
+  // Hide arcade floating diamonds permanently
+  rig.statusMarker.visible = false;
 
   const isFarLod = distSq > 30 * 30;
   const rawSpeed = actualSpeed ?? (isMoving ? (status === 'engaging' ? 2.8 : 2.0) : 0);
@@ -795,7 +782,7 @@ export function animateStaffRig(
   const turnHead = Math.max(-0.3, Math.min(0.3, rig.animData.smoothedYawRate * 0.1));
   const hasBaton = rig.batonMesh.visible;
 
-  let tBodyY = 0.84;
+  let tBodyY = 0.91;
   let tBodyRx = 0.015;
   let tBodyRz = 0;
   let tSpineRx = 0.02;
@@ -829,7 +816,7 @@ export function animateStaffRig(
       strike = 1 - k * k * (3 - 2 * k);
     }
 
-    tBodyY = 0.84 - strike * 0.035;
+    tBodyY = 0.91 - strike * 0.035;
     tBodyRx = 0.02 - windup * 0.08 + strike * 0.14;
     tBodyRz = windup * 0.05 - strike * 0.08;
     tSpineRx = 0.04 - windup * 0.12 + strike * 0.18;
@@ -846,7 +833,7 @@ export function animateStaffRig(
     blend = 22;
   } else if (animState === 'hit_reaction') {
     const flinch = Math.min(1, hitFlashTimer / 0.16);
-    tBodyY = 0.84 - flinch * 0.03;
+    tBodyY = 0.91 - flinch * 0.03;
     tBodyRx = -0.14 * flinch;
     tBodyRz = 0.08 * flinch;
     tSpineRx = -0.14 * flinch;
@@ -864,7 +851,7 @@ export function animateStaffRig(
     blend = 20;
   } else if (animState === 'unpaid') {
     const breath = isFarLod ? 0 : Math.sin(ph * 1.1) * 0.006;
-    tBodyY = 0.84 + breath;
+    tBodyY = 0.91 + breath;
     tBodyRx = -0.01;
     tBodyRz = Math.sin(ph * 0.5) * 0.025;
     tSpineRx = 0.01;
@@ -882,7 +869,7 @@ export function animateStaffRig(
     blend = 9;
   } else if (animState === 'recovering') {
     const breath = isFarLod ? 0 : Math.sin(ph * 2.1) * 0.012;
-    tBodyY = 0.81 + breath;
+    tBodyY = 0.88 + breath;
     tBodyRx = 0.12;
     tSpineRx = 0.18;
     tHeadRx = -0.08;
@@ -899,7 +886,7 @@ export function animateStaffRig(
   } else if (animState === 'talking') {
     const breath = isFarLod ? 0 : Math.sin(ph * 1.2) * 0.007;
     const gesture = isFarLod ? 0 : Math.sin(ph * 1.85);
-    tBodyY = 0.84 + breath;
+    tBodyY = 0.91 + breath;
     tBodyRx = 0.02;
     tBodyRz = Math.sin(ph * 0.55) * 0.02;
     tSpineRx = 0.03;
@@ -924,7 +911,7 @@ export function animateStaffRig(
     const stride = s * (isRun ? 0.62 : 0.46) * Math.min(1.08, speedRatio + 0.15);
     const hipDip = Math.abs(s) * (isRun ? 0.032 : 0.02);
 
-    tBodyY = 0.84 - hipDip;
+    tBodyY = 0.91 - hipDip;
     tBodyRx = isRun ? 0.09 : 0.03;
     tBodyRz = c * (isRun ? 0.038 : 0.024) + turnLean;
     tSpineRx = isRun ? 0.09 : 0.035;
@@ -956,7 +943,7 @@ export function animateStaffRig(
     const isGuardReady = animState === 'engaging' || (hasBaton && animState === 'patrolling');
     const isSurvivor = status === 'survivor';
 
-    tBodyY = 0.84 + breath;
+    tBodyY = 0.91 + breath;
     tBodyRx = isGuardReady ? 0.04 : 0.015;
     tBodyRz = turnLean * 0.4;
     tSpineRx = isWorking ? 0.055 : isGuardReady ? 0.05 : 0.02;

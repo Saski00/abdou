@@ -304,7 +304,8 @@ function createSculptedHeadGeometry(opts: {
   gauntFactor: number; // 0 = healthy human, 1 = hollow undead
 }): THREE.BufferGeometry {
   const { widthScale, jawScale, gauntFactor } = opts;
-  const head = new THREE.SphereGeometry(0.108, 18, 14);
+  const r = 0.103;
+  const head = new THREE.SphereGeometry(r, 18, 14);
   const pos = head.attributes.position;
 
   for (let i = 0; i < pos.count; i++) {
@@ -312,52 +313,52 @@ function createSculptedHeadGeometry(opts: {
     let y = pos.getY(i);
     let z = pos.getZ(i);
 
-    const ny = y / 0.108; // -1 bottom to +1 crown
-    const nx = x / 0.108;
-    const nz = z / 0.108; // -1 front face (-Z), +1 occiput (+Z)
+    const ny = y / r; // -1 bottom to +1 crown
+    const nx = x / r;
+    const nz = z / r; // -1 front face (-Z), +1 occiput (+Z)
 
     // Cranium elongation & slight back-of-head occiput depth
-    y *= 1.18;
+    y *= 1.16;
     z *= nz > 0 ? 1.08 : 0.98;
     x *= widthScale;
 
     // Taper lower half into jawline & chin
     if (ny < 0.08) {
       const lowerT = THREE.MathUtils.clamp((0.08 - ny) / 1.08, 0, 1);
-      const jawNarrow = THREE.MathUtils.lerp(1.0, 0.58 * jawScale, Math.pow(lowerT, 1.15));
+      const jawNarrow = THREE.MathUtils.lerp(1.0, 0.56 * jawScale, Math.pow(lowerT, 1.15));
       x *= jawNarrow;
       // Forward chin projection at front-bottom
       if (nz < -0.2) {
         const chinFactor = Math.exp(-Math.pow((ny + 0.62) * 3.1, 2)) * (-nz);
-        z -= chinFactor * (0.018 + (1 - gauntFactor) * 0.008);
+        z -= chinFactor * (0.017 + (1 - gauntFactor) * 0.007);
       }
-      // Flatter sides near jaw/cheek
-      if (gauntFactor > 0.1 && Math.abs(nx) > 0.45 && nz < 0.1) {
-        x *= 1 - gauntFactor * 0.16 * Math.exp(-Math.pow((ny + 0.25) * 2.6, 2));
+      // Hollow sunken cheeks near jaw/cheek
+      if (gauntFactor > 0.1 && Math.abs(nx) > 0.42 && nz < 0.12) {
+        x *= 1 - gauntFactor * 0.2 * Math.exp(-Math.pow((ny + 0.24) * 2.5, 2));
       }
     }
 
     // Brow ridge protrusion across upper front face
     if (nz < -0.28 && ny > 0.08 && ny < 0.44) {
       const brow = Math.exp(-Math.pow((ny - 0.24) * 5.2, 2)) * Math.max(0, -nz - 0.25);
-      z -= brow * (0.015 + gauntFactor * 0.014);
+      z -= brow * (0.014 + gauntFactor * 0.016);
     }
 
-    // Orbital eye hollows
-    if (nz < -0.4 && ny > -0.1 && ny < 0.22) {
+    // Deep orbital eye hollows
+    if (nz < -0.38 && ny > -0.1 && ny < 0.22) {
       const eyeMask =
         (Math.exp(-Math.pow((nx + 0.34) * 4.4, 2)) + Math.exp(-Math.pow((nx - 0.34) * 4.4, 2))) *
         Math.exp(-Math.pow((ny - 0.05) * 6.0, 2));
-      z += eyeMask * (0.014 + gauntFactor * 0.016);
+      z += eyeMask * (0.015 + gauntFactor * 0.022);
     }
 
-    // Cheekbones (slight lift below eyes)
+    // Cheekbones (sharper ridge below sunken eyes)
     if (nz < -0.2 && ny > -0.34 && ny < -0.02) {
       const cheekMask =
         (Math.exp(-Math.pow((nx + 0.52) * 3.6, 2)) + Math.exp(-Math.pow((nx - 0.52) * 3.6, 2))) *
         Math.exp(-Math.pow((ny + 0.14) * 5.0, 2));
       x *= 1 + cheekMask * 0.08;
-      z -= cheekMask * 0.009;
+      z -= cheekMask * 0.01;
     }
 
     // Subtle facial flattening at front so features sit naturally
@@ -369,29 +370,29 @@ function createSculptedHeadGeometry(opts: {
     if (nz < -0.58 && ny > -0.24 && ny < 0.15) {
       const noseW = Math.exp(-Math.pow(nx * 6.8, 2));
       const noseH = Math.exp(-Math.pow((ny + 0.07) * 4.2, 2));
-      z -= noseW * noseH * (gauntFactor > 0.5 ? 0.012 : 0.022);
+      z -= noseW * noseH * (gauntFactor > 0.5 ? 0.011 : 0.021);
     }
 
-    // Shift head so neck socket starts near y = 0.02 and crown reaches ~0.245
-    pos.setXYZ(i, x, y + 0.125, z);
+    // Shift head so neck socket starts near y = 0.02 and crown reaches ~0.238
+    pos.setXYZ(i, x, y + 0.12, z);
   }
 
   head.computeVertexNormals();
   applyTriplanarUVs(head, 3.0);
 
   // Subtle ears sculpted symmetrically on ±X
-  const earGeoL = new THREE.SphereGeometry(0.024, 7, 6);
-  earGeoL.scale(0.45, 1.35, 0.8);
+  const earGeoL = new THREE.SphereGeometry(0.022, 7, 6);
+  earGeoL.scale(0.42, 1.35, 0.78);
   earGeoL.rotateY(0.18);
-  earGeoL.translate(-0.104 * widthScale, 0.122, 0.012);
+  earGeoL.translate(-0.099 * widthScale, 0.118, 0.012);
 
-  const earGeoR = new THREE.SphereGeometry(0.024, 7, 6);
-  earGeoR.scale(0.45, 1.35, 0.8);
+  const earGeoR = new THREE.SphereGeometry(0.022, 7, 6);
+  earGeoR.scale(0.42, 1.35, 0.78);
   earGeoR.rotateY(-0.18);
-  earGeoR.translate(0.104 * widthScale, 0.122, 0.012);
+  earGeoR.translate(0.099 * widthScale, 0.118, 0.012);
 
   // Neck column connecting head smoothly into clavicle
-  const neckGeo = new THREE.CylinderGeometry(0.048 * jawScale, 0.056, 0.075, 10);
+  const neckGeo = new THREE.CylinderGeometry(0.045 * jawScale, 0.054, 0.078, 10);
   neckGeo.translate(0, 0.015, 0.01);
 
   const combined = mergeCharacterParts([head, earGeoL, earGeoR, neckGeo], true, 3.0);
@@ -512,69 +513,83 @@ function createTaperedLimbSegment(
 }
 
 /**
- * Sculpts a human or clawed hand (wrist at y=0, fingertips at y~-0.11, palm inward/forward).
+ * Sculpts a human or gnarled clawed hand with 4 articulated fingers + thumb (wrist at y=0).
  */
 function createSculptedHandGeometry(clawed: boolean): THREE.BufferGeometry {
-  const palm = new THREE.SphereGeometry(0.034, 8, 7);
-  palm.scale(0.62, 1.25, 0.96);
-  palm.translate(0, -0.038, -0.004);
+  const palm = new THREE.SphereGeometry(0.028, 8, 7);
+  palm.scale(0.56, 1.24, 0.96);
+  palm.translate(0, -0.036, -0.004);
 
-  const fingers = new THREE.SphereGeometry(0.028, 8, 6);
-  fingers.scale(0.54, clawed ? 1.65 : 1.15, 0.88);
-  fingers.rotateX(clawed ? -0.45 : -0.22);
-  fingers.translate(0, clawed ? -0.085 : -0.078, clawed ? -0.022 : -0.012);
+  const parts: THREE.BufferGeometry[] = [palm];
+  const fingerZOffsets = [-0.021, -0.007, 0.007, 0.02];
+  const fingerLengths = clawed ? [0.046, 0.052, 0.048, 0.039] : [0.034, 0.038, 0.035, 0.028];
+  const fingerRadii = clawed ? [0.0054, 0.0058, 0.0055, 0.0048] : [0.0062, 0.0066, 0.0062, 0.0054];
 
-  const thumb = new THREE.CapsuleGeometry(0.0095, clawed ? 0.034 : 0.026, 3, 6);
-  thumb.rotateX(-0.55);
-  thumb.rotateZ(0.25);
-  thumb.translate(0, -0.042, -0.032);
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.CapsuleGeometry(fingerRadii[i], fingerLengths[i], 3, 5);
+    const curl = clawed ? -0.46 - (i % 2) * 0.14 : -0.24 - i * 0.03;
+    f.rotateZ(curl);
+    f.rotateX((i - 1.5) * (clawed ? 0.09 : 0.04));
+    f.translate(
+      clawed ? -0.009 : -0.005,
+      -0.068 - fingerLengths[i] * 0.36,
+      fingerZOffsets[i]
+    );
+    parts.push(f);
+  }
 
-  const merged = mergeCharacterParts([palm, fingers, thumb], true, 4.0);
-  applyAnatomicalVertexAO(merged, (_x, y) => (y < -0.07 ? 0.84 : 0.96));
+  const thumb = new THREE.CapsuleGeometry(clawed ? 0.0068 : 0.0078, clawed ? 0.034 : 0.026, 3, 6);
+  thumb.rotateX(-0.58);
+  thumb.rotateZ(0.28);
+  thumb.translate(-0.004, -0.044, -0.031);
+  parts.push(thumb);
+
+  const merged = mergeCharacterParts(parts, true, 4.0);
+  applyAnatomicalVertexAO(merged, (_x, y) => (y < -0.065 ? 0.8 : 0.96));
   return merged;
 }
 
 /**
- * Sculpts a shin + ankle + anatomical boot with toe cap and heel welt (knee at y=0, sole at y=-0.44).
+ * Sculpts a shin + ankle + anatomical boot with toe cap and heel welt (knee at y=0, sole at y=-0.48).
  */
 function createShinWithBootGeometry(calfScale = 1.0): THREE.BufferGeometry {
   const shinProfile = [
     new THREE.Vector2(0.001, 0.02),
-    new THREE.Vector2(0.062 * calfScale, 0.0),
-    new THREE.Vector2(0.068 * calfScale, -0.12),
-    new THREE.Vector2(0.056 * calfScale, -0.24),
-    new THREE.Vector2(0.046 * calfScale, -0.33),
-    new THREE.Vector2(0.001, -0.35),
+    new THREE.Vector2(0.061 * calfScale, 0.0),
+    new THREE.Vector2(0.066 * calfScale, -0.14),
+    new THREE.Vector2(0.053 * calfScale, -0.28),
+    new THREE.Vector2(0.044 * calfScale, -0.37),
+    new THREE.Vector2(0.001, -0.39),
   ];
   const shin = new THREE.LatheGeometry(shinProfile, 10);
-  shin.scale(0.95, 1, 1.06);
+  shin.scale(0.94, 1, 1.05);
 
   // Boot ankle collar
-  const bootShaft = new THREE.CylinderGeometry(0.052 * calfScale, 0.054 * calfScale, 0.10, 10);
-  bootShaft.translate(0, -0.34, 0.002);
+  const bootShaft = new THREE.CylinderGeometry(0.05 * calfScale, 0.052 * calfScale, 0.11, 10);
+  bootShaft.translate(0, -0.375, 0.002);
 
   // Contoured foot/toebox via ExtrudeGeometry profile in YZ plane
   const footShape = new THREE.Shape();
-  footShape.moveTo(0.055, -0.44); // heel bottom (+Z)
-  footShape.lineTo(-0.145, -0.44); // toe bottom (-Z)
-  footShape.quadraticCurveTo(-0.165, -0.425, -0.155, -0.395); // rounded toe bumper
-  footShape.quadraticCurveTo(-0.105, -0.378, -0.042, -0.365); // instep slope
-  footShape.lineTo(0.048, -0.365); // heel back
+  footShape.moveTo(0.056, -0.48); // heel bottom (+Z)
+  footShape.lineTo(-0.146, -0.48); // toe bottom (-Z)
+  footShape.quadraticCurveTo(-0.166, -0.465, -0.156, -0.435); // rounded toe bumper
+  footShape.quadraticCurveTo(-0.106, -0.418, -0.042, -0.405); // instep slope
+  footShape.lineTo(0.048, -0.405); // heel back
   footShape.closePath();
 
   const bootFoot = new THREE.ExtrudeGeometry(footShape, {
-    depth: 0.088 * calfScale,
+    depth: 0.086 * calfScale,
     bevelEnabled: true,
-    bevelThickness: 0.014,
-    bevelSize: 0.014,
+    bevelThickness: 0.013,
+    bevelSize: 0.013,
     bevelSegments: 2,
     curveSegments: 4,
   });
   bootFoot.rotateY(Math.PI * 0.5);
-  bootFoot.translate(-0.044 * calfScale, 0, 0);
+  bootFoot.translate(-0.043 * calfScale, 0, 0);
 
   const merged = mergeCharacterParts([shin, bootShaft, bootFoot], true, 2.5);
-  applyAnatomicalVertexAO(merged, (_x, y) => (y < -0.415 ? 0.72 : y < -0.33 ? 0.86 : 0.98));
+  applyAnatomicalVertexAO(merged, (_x, y) => (y < -0.455 ? 0.72 : y < -0.36 ? 0.86 : 0.98));
   return merged;
 }
 
@@ -939,28 +954,38 @@ export function createHumanoidSharedGeometries(): HumanoidSharedGeometries {
     hunchForward: 0.012,
   });
 
-  const upperArm = createTaperedLimbSegment(0.056, 0.050, 0.044, 0.27, 1.02, 10);
-  const forearm = createTaperedLimbSegment(0.046, 0.041, 0.032, 0.24, 0.98, 10);
-  const forearmRolled = createTaperedLimbSegment(0.050, 0.040, 0.032, 0.24, 0.98, 10);
+  const upperArm = createTaperedLimbSegment(0.054, 0.048, 0.042, 0.28, 1.02, 10);
+  const forearm = createTaperedLimbSegment(0.044, 0.039, 0.030, 0.25, 0.98, 10);
+  const forearmRolled = createTaperedLimbSegment(0.048, 0.038, 0.030, 0.25, 0.98, 10);
   const handHuman = createSculptedHandGeometry(false);
 
-  const thigh = createTaperedLimbSegment(0.086, 0.078, 0.059, 0.41, 1.05, 10);
+  const thigh = createTaperedLimbSegment(0.086, 0.078, 0.058, 0.435, 1.05, 10);
   const shinBoot = createShinWithBootGeometry(1.0);
 
   const bandageTop = new THREE.CylinderGeometry(0.072, 0.068, 0.14, 10, 1, true);
-  bandageTop.translate(0, -0.24, 0);
+  bandageTop.translate(0, -0.25, 0);
   const legBandage = applyAnatomicalVertexAO(mergeCharacterParts([bandageTop], true, 3.0), () => 0.96);
 
   const hairShortCrop = createHairStyleGeometry('short_crop');
+  hairShortCrop.scale(0.955, 0.965, 0.955);
   const hairMessy = createHairStyleGeometry('messy');
+  hairMessy.scale(0.955, 0.965, 0.955);
   const hairLongLayered = createHairStyleGeometry('long_layered');
+  hairLongLayered.scale(0.955, 0.965, 0.955);
   const hairPonytailBun = createHairStyleGeometry('ponytail_bun');
+  hairPonytailBun.scale(0.955, 0.965, 0.955);
   const hairSidePart = createHairStyleGeometry('side_part');
+  hairSidePart.scale(0.955, 0.965, 0.955);
   const hairStubble = createHairStyleGeometry('bald_stubble');
+  hairStubble.scale(0.955, 0.965, 0.955);
 
   const { cap: headwearCap, visor: headwearCapVisor } = createCapAndVisorGeometry();
+  headwearCap.scale(0.955, 0.96, 0.955);
+  headwearCapVisor.scale(0.955, 0.96, 0.955);
   const headwearBeanie = createBeanieGeometry();
+  headwearBeanie.scale(0.955, 0.96, 0.955);
   const headwearHood = createHoodGeometry();
+  headwearHood.scale(0.955, 0.96, 0.955);
 
   const jacketOpen = createOpenJacketGeometry();
   const tacticalVest = createTacticalVestGeometry();
@@ -1101,129 +1126,179 @@ export function createZombieAnatomyGeometries(): ZombieAnatomyGeometries {
   const headBrute = createSculptedHeadGeometry({ widthScale: 1.14, jawScale: 1.18, gauntFactor: 0.65 });
 
   const eyeSocket = new THREE.SphereGeometry(0.023, 8, 6);
-  eyeSocket.scale(1.15, 0.85, 0.55);
-  const eyeGlow = new THREE.SphereGeometry(0.0105, 7, 5);
-  eyeGlow.scale(1, 0.85, 0.65);
+  eyeSocket.scale(1.12, 0.86, 0.58);
+  const eyeGlow = new THREE.SphereGeometry(0.0088, 7, 5);
+  eyeGlow.scale(1, 0.84, 0.62);
 
-  // Slack jagged undead jaw/teeth hint
-  const jawTeeth = new THREE.CylinderGeometry(0.028, 0.022, 0.024, 7, 1, false, -Math.PI * 0.38, Math.PI * 0.76);
-  jawTeeth.rotateY(Math.PI);
+  // Slack asymmetric undead jaw with crooked jagged teeth wedges
+  const toothParts: THREE.BufferGeometry[] = [];
+  const toothOffsets = [-0.017, -0.009, 0.0, 0.009, 0.017];
+  const toothHeights = [0.011, 0.014, 0.01, 0.015, 0.011];
+  for (let i = 0; i < toothOffsets.length; i++) {
+    const tTop = new THREE.ConeGeometry(0.0036, toothHeights[i], 4);
+    tTop.rotateX(Math.PI);
+    tTop.rotateZ((i - 2) * 0.11);
+    tTop.translate(toothOffsets[i], 0.006, -0.002 + Math.abs(i - 2) * 0.0015);
+    toothParts.push(tTop);
+    if (i !== 2) {
+      const tBot = new THREE.ConeGeometry(0.0032, toothHeights[i] * 0.85, 4);
+      tBot.rotateZ((2 - i) * 0.12);
+      tBot.translate(toothOffsets[i] * 0.92, -0.009, -0.001 + Math.abs(i - 2) * 0.0015);
+      toothParts.push(tBot);
+    }
+  }
+  const jawTeeth = applyAnatomicalVertexAO(mergeCharacterParts(toothParts, true, 4.0), () => 0.82);
 
-  const pelvis = new THREE.SphereGeometry(0.132, 10, 7);
-  pelvis.scale(1.14, 0.64, 0.82);
+  const pelvis = new THREE.SphereGeometry(0.128, 10, 7);
+  pelvis.scale(1.12, 0.64, 0.80);
   pelvis.translate(0, 0.015, 0);
   applyTriplanarUVs(pelvis, 2.0);
-  applyAnatomicalVertexAO(pelvis, () => 0.84);
+  applyAnatomicalVertexAO(pelvis, () => 0.82);
 
   const torsoWalker = createSculptedTorsoGeometry({
-    shoulderHalfW: 0.19,
-    waistHalfW: 0.14,
-    chestDepth: 0.134,
-    hunchForward: 0.055,
+    shoulderHalfW: 0.184,
+    waistHalfW: 0.132,
+    chestDepth: 0.128,
+    hunchForward: 0.062,
   });
   const torsoRunner = createSculptedTorsoGeometry({
-    shoulderHalfW: 0.168,
-    waistHalfW: 0.118,
-    chestDepth: 0.122,
-    hunchForward: 0.088,
+    shoulderHalfW: 0.162,
+    waistHalfW: 0.112,
+    chestDepth: 0.118,
+    hunchForward: 0.095,
   });
   const torsoBrute = createSculptedTorsoGeometry({
-    shoulderHalfW: 0.242,
-    waistHalfW: 0.184,
-    chestDepth: 0.172,
-    hunchForward: 0.078,
+    shoulderHalfW: 0.238,
+    waistHalfW: 0.178,
+    chestDepth: 0.168,
+    hunchForward: 0.084,
   });
 
-  // Asymmetric torn coat strips for Walker
-  const coatBack = new THREE.CylinderGeometry(0.194, 0.182, 0.44, 12, 2, false, -Math.PI * 0.65, Math.PI * 1.3);
-  coatBack.scale(1.1, 1, 0.78);
+  // Irregular asymmetric torn coat strips for Walker (zero neat cones)
+  const coatBack = new THREE.CylinderGeometry(0.188, 0.174, 0.44, 12, 2, false, -Math.PI * 0.62, Math.PI * 1.24);
+  coatBack.scale(1.08, 1, 0.78);
   coatBack.rotateY(Math.PI);
   coatBack.translate(0, 0.24, -0.01);
-  const ragTailL = new THREE.ConeGeometry(0.055, 0.19, 5);
-  ragTailL.rotateX(Math.PI);
-  ragTailL.translate(-0.12, -0.03, 0.02);
-  const ragTailR = new THREE.ConeGeometry(0.048, 0.15, 5);
-  ragTailR.rotateX(Math.PI);
-  ragTailR.translate(0.11, -0.01, -0.04);
+
+  const ragRand = seededRand(29);
+  const coatParts: THREE.BufferGeometry[] = [coatBack];
+  const flapSpecs: [number, number, number, number, number][] = [
+    [-0.135, 0.01, 0.04, 0.065, 0.20],
+    [-0.06, -0.02, 0.11, 0.055, 0.17],
+    [0.04, 0.0, 0.12, 0.06, 0.22],
+    [0.13, -0.01, 0.02, 0.052, 0.15],
+    [0.11, 0.03, -0.07, 0.048, 0.16],
+  ];
+  for (const [fx, fy, fz, fw, fh] of flapSpecs) {
+    const stripShape = new THREE.Shape();
+    stripShape.moveTo(-fw * 0.5, fh * 0.5);
+    stripShape.lineTo(fw * 0.48, fh * 0.44);
+    stripShape.lineTo(fw * (0.28 + ragRand() * 0.2), -fh * 0.38);
+    stripShape.lineTo(-fw * 0.12, -fh * 0.55);
+    stripShape.lineTo(-fw * 0.46, -fh * 0.22);
+    stripShape.closePath();
+    const strip = new THREE.ExtrudeGeometry(stripShape, {
+      depth: 0.01,
+      bevelEnabled: false,
+    });
+    strip.rotateY(Math.atan2(fx, fz));
+    strip.rotateX((ragRand() - 0.5) * 0.16);
+    strip.translate(fx, fy, fz);
+    coatParts.push(strip);
+  }
   const tatteredCoatWalker = applyAnatomicalVertexAO(
-    mergeCharacterParts([coatBack, ragTailL, ragTailR], true, 2.0),
-    (_x, y) => (y < 0.04 ? 0.68 : 0.94)
+    mergeCharacterParts(coatParts, true, 2.0),
+    (_x, y) => (y < 0.04 ? 0.64 : 0.92)
   );
 
   // Shredded feral torso straps for Runner
   const strap1 = createTubePathGeometry(
     [
-      new THREE.Vector3(-0.12, 0.45, -0.08),
-      new THREE.Vector3(-0.02, 0.26, -0.145),
-      new THREE.Vector3(0.09, 0.06, -0.11),
-    ],
-    0.022,
-    8,
-    5
-  );
-  const strap2 = createTubePathGeometry(
-    [
-      new THREE.Vector3(0.14, 0.36, 0.08),
-      new THREE.Vector3(0.02, 0.20, 0.125),
-      new THREE.Vector3(-0.11, 0.04, 0.09),
+      new THREE.Vector3(-0.115, 0.45, -0.08),
+      new THREE.Vector3(-0.02, 0.26, -0.14),
+      new THREE.Vector3(0.085, 0.06, -0.108),
     ],
     0.02,
     8,
     5
   );
+  const strap2 = createTubePathGeometry(
+    [
+      new THREE.Vector3(0.135, 0.36, 0.08),
+      new THREE.Vector3(0.02, 0.20, 0.12),
+      new THREE.Vector3(-0.105, 0.04, 0.088),
+    ],
+    0.018,
+    8,
+    5
+  );
   const tatteredRagsRunner = applyAnatomicalVertexAO(
     mergeCharacterParts([strap1, strap2], true, 2.2),
-    () => 0.8
+    () => 0.78
   );
 
   // Heavy torn riot armor/vest & asymmetric swollen shoulder guard for Brute
   const bruteVest = createTacticalVestGeometry();
-  bruteVest.scale(1.22, 1.05, 1.15);
-  const swollenPad = new THREE.SphereGeometry(0.096, 10, 7);
-  swollenPad.scale(1.05, 0.85, 1.1);
-  swollenPad.translate(0.245, 0.455, -0.015);
+  bruteVest.scale(1.2, 1.04, 1.14);
+  const swollenPad = new THREE.SphereGeometry(0.094, 10, 7);
+  swollenPad.scale(1.04, 0.85, 1.08);
+  swollenPad.translate(0.24, 0.455, -0.015);
   const riotVestBrute = applyAnatomicalVertexAO(
     mergeCharacterParts([bruteVest, swollenPad], true, 2.0),
-    () => 0.86
+    () => 0.84
   );
 
-  // Exposed curved rib wound patch
+  // Organic torn chest gash + irregular fractured rib bones (no neat torus rings)
   const ribParts: THREE.BufferGeometry[] = [];
-  for (let r = 0; r < 4; r++) {
-    const rib = new THREE.TorusGeometry(0.055, 0.0085, 5, 8, Math.PI * 0.68);
-    rib.rotateX(Math.PI * 0.5);
-    rib.rotateZ(-0.22);
-    rib.translate(0.035, 0.22 + r * 0.038, -0.118);
-    ribParts.push(rib);
-  }
-  const ribWound = applyAnatomicalVertexAO(mergeCharacterParts(ribParts, true, 3.5), () => 0.86);
+  const gash = new THREE.SphereGeometry(0.056, 8, 6);
+  gash.scale(0.95, 1.35, 0.26);
+  gash.rotateZ(-0.24);
+  gash.translate(0.032, 0.275, -0.115);
+  ribParts.push(gash);
 
-  const upperArm = createTaperedLimbSegment(0.052, 0.044, 0.038, 0.27, 1.0, 9);
-  const forearmBase = createTaperedLimbSegment(0.042, 0.036, 0.029, 0.25, 0.96, 9);
+  const fracOffsets: [number, number, number, number][] = [
+    [0.018, 0.225, 0.048, -0.26],
+    [0.028, 0.258, 0.056, -0.18],
+    [0.036, 0.292, 0.050, -0.29],
+    [0.044, 0.324, 0.038, -0.12],
+  ];
+  for (const [rx, ry, len, rotZ] of fracOffsets) {
+    const boneFrac = new THREE.CapsuleGeometry(0.0052, len, 3, 5);
+    boneFrac.rotateZ(Math.PI * 0.5 + rotZ);
+    boneFrac.rotateY(0.28);
+    boneFrac.translate(rx, ry, -0.124);
+    ribParts.push(boneFrac);
+  }
+  const ribWound = applyAnatomicalVertexAO(mergeCharacterParts(ribParts, true, 3.5), (_x, _y, z) =>
+    z < -0.122 ? 0.94 : 0.58
+  );
+
+  const upperArm = createTaperedLimbSegment(0.050, 0.042, 0.036, 0.28, 1.0, 9);
+  const forearmBase = createTaperedLimbSegment(0.040, 0.034, 0.027, 0.26, 0.96, 9);
   const clawHand = createSculptedHandGeometry(true);
-  clawHand.translate(0, -0.245, 0);
+  clawHand.translate(0, -0.255, 0);
   const forearmClawed = mergeCharacterParts([forearmBase, clawHand], true, 2.5);
 
-  const upperArmBrute = createTaperedLimbSegment(0.078, 0.072, 0.058, 0.29, 1.05, 10);
-  const forearmBruteBase = createTaperedLimbSegment(0.064, 0.058, 0.044, 0.27, 1.02, 10);
+  const upperArmBrute = createTaperedLimbSegment(0.076, 0.070, 0.056, 0.295, 1.05, 10);
+  const forearmBruteBase = createTaperedLimbSegment(0.062, 0.056, 0.042, 0.275, 1.02, 10);
   const clawBrute = createSculptedHandGeometry(true);
-  clawBrute.scale(1.32, 1.25, 1.32);
-  clawBrute.translate(0, -0.265, 0);
+  clawBrute.scale(1.3, 1.24, 1.3);
+  clawBrute.translate(0, -0.27, 0);
   const forearmBrute = mergeCharacterParts([forearmBruteBase, clawBrute], true, 2.5);
 
-  const thigh = createTaperedLimbSegment(0.080, 0.070, 0.054, 0.41, 1.04, 9);
+  const thigh = createTaperedLimbSegment(0.078, 0.068, 0.052, 0.435, 1.04, 9);
   const shinTatteredBoot = createShinWithBootGeometry(0.95);
-  const thighBrute = createTaperedLimbSegment(0.104, 0.092, 0.072, 0.41, 1.08, 10);
+  const thighBrute = createTaperedLimbSegment(0.102, 0.090, 0.070, 0.435, 1.08, 10);
   const shinBruteBoot = createShinWithBootGeometry(1.18);
 
   // Sparse patchy hair tufts for undead realism
-  const patch1 = new THREE.SphereGeometry(0.065, 8, 6);
-  patch1.scale(1.1, 0.35, 1.2);
-  patch1.translate(-0.04, 0.228, 0.035);
-  const patch2 = new THREE.SphereGeometry(0.055, 7, 5);
-  patch2.scale(0.9, 0.32, 1.0);
-  patch2.translate(0.055, 0.212, 0.05);
-  const sparseHair = applyAnatomicalVertexAO(mergeCharacterParts([patch1, patch2], true, 3.0), () => 0.75);
+  const patch1 = new THREE.SphereGeometry(0.062, 8, 6);
+  patch1.scale(1.06, 0.34, 1.15);
+  patch1.translate(-0.038, 0.222, 0.032);
+  const patch2 = new THREE.SphereGeometry(0.052, 7, 5);
+  patch2.scale(0.88, 0.3, 0.96);
+  patch2.translate(0.05, 0.208, 0.046);
+  const sparseHair = applyAnatomicalVertexAO(mergeCharacterParts([patch1, patch2], true, 3.0), () => 0.72);
 
   const shadowDisc = new THREE.CircleGeometry(0.42, 18);
   shadowDisc.rotateX(-Math.PI * 0.5);

@@ -148,9 +148,9 @@ export class ParticleVfxManager {
         Math.sin(ang) * spd,
         6.8,
         0.32 + Math.random() * 0.22,
-        isBlood ? (crit ? 0.85 : 0.58) : 0.45,
-        isBlood ? 0.08 : 0.43,
-        isBlood ? 0.08 : 0.4
+        isBlood ? (crit ? 0.42 : 0.3) : 0.34,
+        isBlood ? 0.05 : 0.33,
+        isBlood ? 0.05 : 0.31
       );
     }
   }

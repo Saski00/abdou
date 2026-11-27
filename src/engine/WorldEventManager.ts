@@ -30,7 +30,7 @@ export class WorldEventManager {
   private crateGeo: THREE.BoxGeometry;
   private crateLidGeo: THREE.BoxGeometry;
   private rodGeo: THREE.CylinderGeometry;
-  private tipGeo: THREE.OctahedronGeometry;
+  private tipGeo: THREE.CylinderGeometry;
   private ringGeo: THREE.RingGeometry;
   private crateMat: THREE.MeshStandardMaterial;
   private rodMat: THREE.MeshStandardMaterial;
@@ -60,35 +60,35 @@ export class WorldEventManager {
     scene.add(this.root);
     this.sharedGeos = createStaffSharedGeometries();
 
-    // 1. Pooled Crate + Distress Beacon assembly
+    // 1. Pooled Crate + Grounded Field Transceiver / Lantern Housing (zero floating arcade gems/rings)
     this.crateGeo = new THREE.BoxGeometry(0.76, 0.52, 0.58);
     this.crateLidGeo = new THREE.BoxGeometry(0.8, 0.09, 0.62);
-    this.rodGeo = new THREE.CylinderGeometry(0.035, 0.045, 1.12, 8);
-    this.tipGeo = new THREE.OctahedronGeometry(0.14, 0);
-    this.ringGeo = new THREE.RingGeometry(0.55, 0.72, 24);
+    this.rodGeo = new THREE.CylinderGeometry(0.024, 0.032, 0.94, 8);
+    this.tipGeo = new THREE.CylinderGeometry(0.075, 0.085, 0.14, 10);
+    this.ringGeo = new THREE.RingGeometry(0.55, 0.72, 16);
     this.ringGeo.rotateX(-Math.PI * 0.5);
 
     this.crateMat = new THREE.MeshStandardMaterial({
-      color: 0x78553a,
-      roughness: 0.88,
-      metalness: 0.12,
+      color: 0x544030,
+      roughness: 0.92,
+      metalness: 0.08,
     });
     this.rodMat = new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      roughness: 0.45,
-      metalness: 0.68,
+      color: 0x2f353d,
+      roughness: 0.68,
+      metalness: 0.55,
     });
     this.tipMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x38bdf8,
-      emissiveIntensity: 1.6,
-      roughness: 0.25,
-      metalness: 0.35,
+      color: 0x807257,
+      emissive: 0x52452f,
+      emissiveIntensity: 0.35,
+      roughness: 0.38,
+      metalness: 0.2,
     });
     this.ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
+      color: 0x475569,
       transparent: true,
-      opacity: 0.52,
+      opacity: 0.0,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -103,14 +103,16 @@ export class WorldEventManager {
     this.crateMesh.add(lid);
 
     this.beaconRod = new THREE.Mesh(this.rodGeo, this.rodMat);
-    this.beaconRod.position.y = 0.56;
+    this.beaconRod.position.y = 0.47;
     this.beaconRod.castShadow = true;
 
     this.beaconTip = new THREE.Mesh(this.tipGeo, this.tipMat);
-    this.beaconTip.position.y = 1.18;
+    this.beaconTip.position.y = 0.62;
+    this.beaconTip.castShadow = true;
 
     this.ringMesh = new THREE.Mesh(this.ringGeo, this.ringMat);
     this.ringMesh.position.y = 0.035;
+    this.ringMesh.visible = false;
 
     this.propGroup.add(this.crateMesh, this.beaconRod, this.beaconTip, this.ringMesh);
     this.propGroup.visible = false;
@@ -140,31 +142,31 @@ export class WorldEventManager {
     // 3. Pooled Shadow Silhouette Apparition (single merged organic humanoid figure, no shadows)
     const silHead = this.sharedGeos.headHuman.clone();
     silHead.scale(0.95, 1.06, 0.95);
-    silHead.translate(0, 1.41, 0);
+    silHead.translate(0, 1.50, 0);
     const silTorso = this.sharedGeos.torsoSlim.clone();
-    silTorso.translate(0, 0.88, 0);
+    silTorso.translate(0, 0.95, 0);
     const silPelvis = this.sharedGeos.pelvis.clone();
-    silPelvis.translate(0, 0.84, 0);
+    silPelvis.translate(0, 0.91, 0);
     const silArmL = this.sharedGeos.upperArm.clone();
     silArmL.rotateZ(-0.08);
-    silArmL.translate(-0.195, 1.33, 0);
+    silArmL.translate(-0.195, 1.41, 0);
     const silForeL = this.sharedGeos.forearm.clone();
     silForeL.rotateX(0.14);
-    silForeL.translate(-0.217, 1.06, 0);
+    silForeL.translate(-0.217, 1.13, 0);
     const silArmR = this.sharedGeos.upperArm.clone();
     silArmR.rotateZ(0.08);
-    silArmR.translate(0.195, 1.33, 0);
+    silArmR.translate(0.195, 1.41, 0);
     const silForeR = this.sharedGeos.forearm.clone();
     silForeR.rotateX(0.14);
-    silForeR.translate(0.217, 1.06, 0);
+    silForeR.translate(0.217, 1.13, 0);
     const silThighL = this.sharedGeos.thigh.clone();
-    silThighL.translate(-0.095, 0.84, 0);
+    silThighL.translate(-0.095, 0.91, 0);
     const silShinL = this.sharedGeos.shinBoot.clone();
-    silShinL.translate(-0.095, 0.44, 0);
+    silShinL.translate(-0.095, 0.49, 0);
     const silThighR = this.sharedGeos.thigh.clone();
-    silThighR.translate(0.095, 0.84, 0);
+    silThighR.translate(0.095, 0.91, 0);
     const silShinR = this.sharedGeos.shinBoot.clone();
-    silShinR.translate(0.095, 0.44, 0);
+    silShinR.translate(0.095, 0.49, 0);
     this.silhouetteGeo = mergeCharacterParts(
       [
         silHead,
@@ -182,7 +184,7 @@ export class WorldEventManager {
       false
     );
     this.silhouetteMat = new THREE.MeshBasicMaterial({
-      color: 0x06090f,
+      color: 0x05070c,
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -297,15 +299,15 @@ export class WorldEventManager {
       this.crateMesh.visible = !isBeacon;
       this.beaconRod.visible = isBeacon;
       this.beaconTip.visible = true;
-      this.beaconTip.position.y = isBeacon ? 1.18 : 0.72 + Math.sin(elapsedTime * 3.1) * 0.05;
-      this.beaconTip.rotation.y = elapsedTime * 1.9;
-      this.tipMat.color.setHex(isBeacon ? 0x38bdf8 : 0xf59e0b);
-      this.tipMat.emissive.setHex(isBeacon ? 0x38bdf8 : 0xf59e0b);
+      // Rest physically on top of the mast or crate lid (no spinning floating diamond)
+      this.beaconTip.position.y = isBeacon ? 0.98 : 0.62;
+      this.beaconTip.rotation.y = 0.25;
+      this.tipMat.color.setHex(isBeacon ? 0x5c6b78 : 0x7a684b);
+      this.tipMat.emissive.setHex(isBeacon ? 0x3b4d5e : 0x523f25);
       this.tipMat.emissiveIntensity = isBeacon
-        ? 1.1 + 0.9 * (0.5 + 0.5 * Math.sin(elapsedTime * 6.0))
-        : 1.15;
-      this.ringMat.color.setHex(isBeacon ? 0x38bdf8 : 0xf59e0b);
-      this.ringMat.opacity = 0.28 + 0.24 * (0.5 + 0.5 * Math.sin(elapsedTime * 3.4));
+        ? 0.22 + 0.28 * (0.5 + 0.5 * Math.sin(elapsedTime * 3.5))
+        : 0.22;
+      this.ringMesh.visible = false;
       return;
     }
 
@@ -333,12 +335,12 @@ export class WorldEventManager {
         activeNpc.rig,
         title.length > 22 ? `${title.slice(0, 20)}…` : title,
         badge,
-        isTrader ? '#fbbf24' : '#38bdf8'
+        isTrader ? '#9c8763' : '#8596a8'
       );
     }
 
     if (activeNpc.rig.labelSprite) {
-      activeNpc.rig.labelSprite.visible = dist < 16;
+      activeNpc.rig.labelSprite.visible = dist < 5.5;
     }
 
     animateStaffRig(activeNpc.rig, {

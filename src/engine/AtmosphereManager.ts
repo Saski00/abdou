@@ -19,102 +19,102 @@ interface SkyStop {
 const SKY_STOPS: SkyStop[] = [
   {
     hour: 0.0,
-    zenith: 0x070b14,
-    horizon: 0x101724,
-    sunColor: 0x7c92b0,
-    sunIntensity: 0.25,
-    hemiSky: 0x2a3b54,
-    hemiGround: 0x161412,
-    hemiIntensity: 0.48,
-    envIntensity: 0.22,
+    zenith: 0x04070c,
+    horizon: 0x0a0f18,
+    sunColor: 0x5c6e85,
+    sunIntensity: 0.22,
+    hemiSky: 0x1b2638,
+    hemiGround: 0x0f0e0d,
+    hemiIntensity: 0.2,
+    envIntensity: 0.12,
   },
   {
     hour: 5.0,
-    zenith: 0x101829,
-    horizon: 0x2a2f44,
-    sunColor: 0x9aa6c4,
-    sunIntensity: 0.28,
-    hemiSky: 0x3f4c69,
-    hemiGround: 0x1c1917,
-    hemiIntensity: 0.52,
-    envIntensity: 0.25,
+    zenith: 0x0a101a,
+    horizon: 0x1a202c,
+    sunColor: 0x738199,
+    sunIntensity: 0.24,
+    hemiSky: 0x263142,
+    hemiGround: 0x121110,
+    hemiIntensity: 0.25,
+    envIntensity: 0.14,
   },
   {
     hour: 6.25,
-    zenith: 0x3b5276,
-    horizon: 0xc98462,
-    sunColor: 0xffb884,
-    sunIntensity: 0.82,
-    hemiSky: 0x8294b2,
-    hemiGround: 0x302721,
-    hemiIntensity: 0.68,
-    envIntensity: 0.38,
+    zenith: 0x29323e,
+    horizon: 0x524844,
+    sunColor: 0xa88c79,
+    sunIntensity: 0.64,
+    hemiSky: 0x4b5663,
+    hemiGround: 0x1f1b18,
+    hemiIntensity: 0.38,
+    envIntensity: 0.22,
   },
   {
     hour: 8.5,
-    zenith: 0x5c80a6,
-    horizon: 0xa6b9ca,
-    sunColor: 0xfff0d8,
-    sunIntensity: 1.48,
-    hemiSky: 0x9cb7d2,
-    hemiGround: 0x3e372f,
-    hemiIntensity: 0.86,
-    envIntensity: 0.54,
+    zenith: 0x3b4652,
+    horizon: 0x5e656d,
+    sunColor: 0xc9c4ba,
+    sunIntensity: 1.08,
+    hemiSky: 0x5c6672,
+    hemiGround: 0x24211e,
+    hemiIntensity: 0.48,
+    envIntensity: 0.3,
   },
   {
     hour: 12.5,
-    zenith: 0x557aa0,
-    horizon: 0xb4c2ce,
-    sunColor: 0xfff5e4,
-    sunIntensity: 1.62,
-    hemiSky: 0xa7bfd6,
-    hemiGround: 0x423a32,
-    hemiIntensity: 0.88,
-    envIntensity: 0.56,
+    zenith: 0x384452,
+    horizon: 0x6a727a,
+    sunColor: 0xd6d2c9,
+    sunIntensity: 1.15,
+    hemiSky: 0x636f7c,
+    hemiGround: 0x262320,
+    hemiIntensity: 0.48,
+    envIntensity: 0.3,
   },
   {
     hour: 16.5,
-    zenith: 0x507096,
-    horizon: 0xb9b8bd,
-    sunColor: 0xffe4be,
-    sunIntensity: 1.36,
-    hemiSky: 0x95abc4,
-    hemiGround: 0x39312a,
-    hemiIntensity: 0.8,
-    envIntensity: 0.48,
+    zenith: 0x2f3a47,
+    horizon: 0x5e6268,
+    sunColor: 0xc4b8a6,
+    sunIntensity: 0.94,
+    hemiSky: 0x545e6b,
+    hemiGround: 0x201d1a,
+    hemiIntensity: 0.42,
+    envIntensity: 0.24,
   },
   {
     hour: 18.0,
-    zenith: 0x2d3a5b,
-    horizon: 0xd47846,
-    sunColor: 0xff924c,
-    sunIntensity: 0.94,
-    hemiSky: 0x84728e,
-    hemiGround: 0x2e221b,
-    hemiIntensity: 0.64,
-    envIntensity: 0.36,
+    zenith: 0x1d2430,
+    horizon: 0x523c34,
+    sunColor: 0xa67a5e,
+    sunIntensity: 0.62,
+    hemiSky: 0x424754,
+    hemiGround: 0x191513,
+    hemiIntensity: 0.32,
+    envIntensity: 0.18,
   },
   {
     hour: 19.25,
-    zenith: 0x131b2e,
-    horizon: 0x2b3146,
-    sunColor: 0x8796b2,
-    sunIntensity: 0.34,
-    hemiSky: 0x3d4b66,
-    hemiGround: 0x1a1716,
-    hemiIntensity: 0.52,
-    envIntensity: 0.25,
+    zenith: 0x090e17,
+    horizon: 0x161c26,
+    sunColor: 0x647287,
+    sunIntensity: 0.26,
+    hemiSky: 0x222c3c,
+    hemiGround: 0x11100f,
+    hemiIntensity: 0.22,
+    envIntensity: 0.13,
   },
   {
     hour: 24.0,
-    zenith: 0x070b14,
-    horizon: 0x101724,
-    sunColor: 0x7c92b0,
-    sunIntensity: 0.25,
-    hemiSky: 0x2a3b54,
-    hemiGround: 0x161412,
-    hemiIntensity: 0.48,
-    envIntensity: 0.22,
+    zenith: 0x04070c,
+    horizon: 0x0a0f18,
+    sunColor: 0x5c6e85,
+    sunIntensity: 0.22,
+    hemiSky: 0x1b2638,
+    hemiGround: 0x0f0e0d,
+    hemiIntensity: 0.2,
+    envIntensity: 0.12,
   },
 ];
 
@@ -132,15 +132,15 @@ const _hemiGndB = new THREE.Color();
 const _overcastZenith = new THREE.Color();
 const _overcastHorizon = new THREE.Color();
 const _fogColor = new THREE.Color();
-const _lampOffColor = new THREE.Color(0x475569);
-const _lampOnColor = new THREE.Color(0xfef3c7);
-const _winOffColor = new THREE.Color(0x16202c);
-const _winOnColor = new THREE.Color(0xf59e0b);
-const _shaftDayColor = new THREE.Color(0xdbeafe);
-const _shaftSunsetColor = new THREE.Color(0xffb570);
-const _shaftNightColor = new THREE.Color(0x6485ad);
+const _lampOffColor = new THREE.Color(0x374151);
+const _lampOnColor = new THREE.Color(0xe6d2ac);
+const _winOffColor = new THREE.Color(0x10161e);
+const _winOnColor = new THREE.Color(0x8c5b22);
+const _shaftDayColor = new THREE.Color(0x9fb0bf);
+const _shaftSunsetColor = new THREE.Color(0xa68367);
+const _shaftNightColor = new THREE.Color(0x475c75);
 const _sunDirScratch = new THREE.Vector3(0.4, 0.6, 0.2);
-const _sunGlowScratch = new THREE.Color(0xffb870);
+const _sunGlowScratch = new THREE.Color(0xb89c84);
 
 const RAIN_COUNT = 320;
 const RAIN_BOX_W = 24;
@@ -194,6 +194,7 @@ export class AtmosphereManager {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
+      toneMapped: true,
       uniforms: {
         uZenith: { value: new THREE.Color(0x557aa0) },
         uHorizon: { value: new THREE.Color(0xb4c2ce) },
@@ -266,6 +267,8 @@ export class AtmosphereManager {
           }
 
           gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }
       `,
     });
@@ -428,12 +431,12 @@ export class AtmosphereManager {
     // Dynamic Fog Density (day clearer than night, rain & fog noticeably thicken distance haze)
     const perfBoost =
       lightingQuality === 'performance' || graphicsQuality === 'low' ? 0.0028 : 0;
-    const baseFog = THREE.MathUtils.lerp(0.0175, 0.0105, time.daylightFactor);
+    const baseFog = THREE.MathUtils.lerp(0.0225, 0.0145, time.daylightFactor);
     this.fog.density =
       baseFog +
       perfBoost +
-      weather.rainIntensity * 0.0085 +
-      weather.fogIntensity * 0.0285;
+      weather.rainIntensity * 0.009 +
+      weather.fogIntensity * 0.029;
 
     // 3. Sun / Moon Position & Directional Lighting
     const sunAngle = (time.timeOfDay - 0.25) * Math.PI * 2;
@@ -448,25 +451,25 @@ export class AtmosphereManager {
       _sunGlowScratch.copy(_sunColA);
     } else {
       _sunDirScratch.set(-sunX, -sunY, -26).normalize();
-      _sunGlowScratch.setHex(0x6e88aa);
+      _sunGlowScratch.setHex(0x52657d);
     }
     (this.skyMat.uniforms.uSunDir.value as THREE.Vector3).copy(_sunDirScratch);
     (this.skyMat.uniforms.uSunGlow.value as THREE.Color).copy(_sunGlowScratch);
 
     this.sunDisc.position.set(playerX + sunX, sunY, playerZ + sunZ);
-    const sunVisible = sinA > -0.06 && overcastStrength < 0.92;
+    const sunVisible = sinA > -0.06 && overcastStrength < 0.85;
     this.sunDisc.visible = sunVisible;
     this.sunDiscMat.opacity =
-      Math.max(0, Math.min(1, (sinA + 0.05) * 3.5)) * (1 - overcastStrength * 0.85);
+      Math.max(0, Math.min(0.42, (sinA + 0.05) * 1.8)) * (1 - overcastStrength * 0.9);
     this.sunDiscMat.color.copy(_sunColA);
 
     const moonX = -sunX;
     const moonY = -sunY;
     const moonZ = -26;
     this.moonDisc.position.set(playerX + moonX, moonY, playerZ + moonZ);
-    this.moonDisc.visible = -sinA > -0.04 && overcastStrength < 0.92;
+    this.moonDisc.visible = -sinA > -0.04 && overcastStrength < 0.88;
     this.moonDiscMat.opacity =
-      Math.max(0, Math.min(0.8, (-sinA + 0.04) * 3.0)) * (1 - overcastStrength * 0.85);
+      Math.max(0, Math.min(0.48, (-sinA + 0.04) * 2.2)) * (1 - overcastStrength * 0.88);
 
     // Directional light smoothly tracks sun during day and high cool moon arc at night
     if (sinA >= 0.05) {
@@ -495,8 +498,8 @@ export class AtmosphereManager {
     const lampFactor = time.lampFactor;
     const lampDip = this.powerFlickerTimer > 0 ? 1 - powerSurge * 0.62 : 1;
     this.materials.streetLampBulb.color.copy(_lampOffColor).lerp(_lampOnColor, lampFactor * lampDip);
-    this.materials.streetLampBulb.emissiveIntensity = lampFactor * 2.35 * lampDip;
-    this.world.streetLampPoolMat.opacity = lampFactor * 0.92 * lampDip;
+    this.materials.streetLampBulb.emissiveIntensity = lampFactor * 1.15 * lampDip;
+    this.world.streetLampPoolMat.opacity = lampFactor * 0.65 * lampDip;
 
     const lampCullRadius = graphicsQuality === 'low' ? 22 : graphicsQuality === 'medium' ? 32 : 44;
     const lampCullSq = lampCullRadius * lampCullRadius;
@@ -523,9 +526,9 @@ export class AtmosphereManager {
     // 5. Porch Lantern, City Windows & Enterable Building Interiors
     const nightGlow = time.nightFactor;
     this.materials.warmWindow.color.copy(_winOffColor).lerp(_winOnColor, nightGlow);
-    this.materials.warmWindow.emissiveIntensity = 0.08 + nightGlow * 1.15;
-    this.materials.shopSign.emissiveIntensity = 0.16 + nightGlow * 0.55;
-    this.materials.lampBulbLit.emissiveIntensity = 0.45 + Math.max(lampFactor, 0.2) * 1.95;
+    this.materials.warmWindow.emissiveIntensity = 0.04 + nightGlow * 0.36;
+    this.materials.shopSign.emissiveIntensity = 0.04 + nightGlow * 0.14;
+    this.materials.lampBulbLit.emissiveIntensity = 0.35 + Math.max(lampFactor, 0.15) * 0.85;
 
     for (const pl of this.world.porchLights) {
       const flicker =

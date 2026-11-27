@@ -4,6 +4,7 @@ import { CreditsModal } from './components/CreditsModal';
 import { EndingModal } from './components/EndingModal';
 import { GameCanvas, TouchEngineBridge } from './components/GameCanvas';
 import { GameOverModal } from './components/GameOverModal';
+import { GraphicsBenchmarkView } from './components/GraphicsBenchmarkView';
 import { HudOverlay } from './components/HudOverlay';
 import { InventoryModal } from './components/InventoryModal';
 import { MainMenu } from './components/MainMenu';
@@ -155,6 +156,10 @@ export default function App() {
   const { dir, t } = useI18n();
 
   const [screenState, setScreenState] = useState<GameScreenState>('MENU');
+  const [benchmarkOpen, setBenchmarkOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('benchmark') === '1';
+  });
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [shopInitialTab, setShopInitialTab] = useState<ShopModalTab>('counter');
   const [recruitSurvivorId, setRecruitSurvivorId] = useState<string | null>(null);
@@ -629,6 +634,19 @@ export default function App() {
     ? hud.missions.characters?.find((c) => c.id === recruitSurvivorId) ?? null
     : null;
 
+  if (benchmarkOpen) {
+    return (
+      <main dir="ltr" className="relative w-full h-dvh overflow-hidden bg-[#0b0e13]">
+        <GraphicsBenchmarkView
+          onExit={() => {
+            soundEngine.playUiClick(460);
+            setBenchmarkOpen(false);
+          }}
+        />
+      </main>
+    );
+  }
+
   return (
     <main dir={dir} className="relative w-full h-dvh overflow-hidden bg-[#121822]">
       <GameCanvas
@@ -677,6 +695,10 @@ export default function App() {
           onOpenCredits={() => {
             soundEngine.playUiClick(500);
             setActiveModal('CREDITS');
+          }}
+          onOpenBenchmark={() => {
+            soundEngine.playUiClick(520);
+            setBenchmarkOpen(true);
           }}
           hasActiveModal={activeModal !== 'NONE'}
           isTouchMode={isTouchMode}

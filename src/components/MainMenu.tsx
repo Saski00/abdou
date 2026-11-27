@@ -14,6 +14,7 @@ interface MainMenuProps {
   onPlay: () => void;
   onOpenSettings: () => void;
   onOpenCredits: () => void;
+  onOpenBenchmark?: () => void;
   hasActiveModal: boolean;
   isTouchMode: boolean;
 }
@@ -26,6 +27,7 @@ export function MainMenu({
   onPlay,
   onOpenSettings,
   onOpenCredits,
+  onOpenBenchmark,
   hasActiveModal,
   isTouchMode,
 }: MainMenuProps) {
@@ -225,6 +227,16 @@ export function MainMenu({
               {t.mainMenu.credits}
             </button>
           </div>
+
+          {onOpenBenchmark && (
+            <button
+              type="button"
+              onClick={onOpenBenchmark}
+              className="h-10 px-5 rounded-lg bg-[#0f141d]/90 hover:bg-[#19202e] border border-stone-800 hover:border-stone-600 text-stone-400 hover:text-stone-200 font-medium text-xs tracking-wide transition-colors cursor-pointer text-start focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+            >
+              Graphics Benchmark
+            </button>
+          )}
         </nav>
       </div>
 

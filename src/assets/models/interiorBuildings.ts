@@ -5,7 +5,7 @@ import {
   FurnitureKind,
   SearchContainerKind,
 } from '../maps/buildingLayouts';
-import { MaterialPalette } from './proceduralModels';
+import { MaterialPalette, createFramedSignAssembly } from './proceduralModels';
 import { ResourceMaterialPalette } from './resourceModels';
 import { ProceduralTextureSet } from '../textures/proceduralTextures';
 import {
@@ -50,72 +50,72 @@ export function createInteriorMaterialPalette(
     metalness: 0.02,
   });
   const interiorWoodWall = new THREE.MeshStandardMaterial({
-    color: 0x5c4636,
+    color: 0x4a392c,
     map: textures.woodPlank,
     normalMap: textures.woodNormal,
     normalScale: new THREE.Vector2(0.65, 0.65),
     roughnessMap: textures.woodRoughness,
-    roughness: 0.88,
-    metalness: 0.03,
+    roughness: 0.9,
+    metalness: 0.02,
   });
   const wornTileFloor = new THREE.MeshStandardMaterial({
     map: textures.wornTile,
     normalMap: textures.wornTileNormal,
     normalScale: new THREE.Vector2(0.75, 0.75),
     roughnessMap: textures.wornTileRoughness,
-    roughness: 0.82,
-    metalness: 0.05,
+    roughness: 0.85,
+    metalness: 0.04,
   });
   const ceilingSlab = new THREE.MeshStandardMaterial({
-    color: 0x22262d,
+    color: 0x1e2228,
     normalMap: textures.concreteNormal,
     normalScale: new THREE.Vector2(0.35, 0.35),
     roughness: 0.95,
     metalness: 0.02,
   });
   const windowGlass = new THREE.MeshStandardMaterial({
-    color: 0x8fb3d4,
-    roughness: 0.14,
-    metalness: 0.22,
+    color: 0x6b8296,
+    roughness: 0.22,
+    metalness: 0.18,
     transparent: true,
-    opacity: 0.36,
+    opacity: 0.32,
     side: THREE.DoubleSide,
   });
   const lightShaft = new THREE.MeshBasicMaterial({
-    color: 0x9ec5e8,
+    color: 0x8ea3b5,
     transparent: true,
-    opacity: 0.08,
+    opacity: 0.06,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
   const fabricDusty = new THREE.MeshStandardMaterial({
-    color: 0x453d37,
-    roughness: 0.94,
+    color: 0x3b3530,
+    roughness: 0.95,
     metalness: 0.0,
     side: THREE.DoubleSide,
   });
   const rugWeathered = new THREE.MeshStandardMaterial({
-    color: 0x542c27,
-    roughness: 0.95,
+    color: 0x422420,
+    roughness: 0.96,
     metalness: 0.0,
   });
   const porcelain = new THREE.MeshStandardMaterial({
-    color: 0xc2c9d1,
-    roughness: 0.34,
-    metalness: 0.08,
+    color: 0x9ea5ad,
+    roughness: 0.48,
+    metalness: 0.05,
   });
   const brassHandle = new THREE.MeshStandardMaterial({
-    color: 0xc88d32,
-    roughness: 0.38,
-    metalness: 0.76,
+    color: 0x7d5f32,
+    roughness: 0.48,
+    metalness: 0.66,
   });
   const cabinetWood = new THREE.MeshStandardMaterial({
-    color: 0x5c4532,
+    color: 0x4b392a,
     map: textures.woodPlank,
     normalMap: textures.woodNormal,
     normalScale: new THREE.Vector2(0.45, 0.45),
-    roughness: 0.84,
-    metalness: 0.04,
+    roughness: 0.86,
+    metalness: 0.03,
   });
 
   const all = [
@@ -485,7 +485,7 @@ export function buildEnterableBuildingShell(
     housing.position.set(cfg.interiorLightOffset.x, ceilingH - 0.04, cfg.interiorLightOffset.z);
     const tube = new THREE.Mesh(
       new THREE.CylinderGeometry(0.032, 0.032, 1.32, 8),
-      mats.beaconCyan
+      intMats.porcelain
     );
     tube.rotation.z = Math.PI * 0.5;
     tube.position.set(cfg.interiorLightOffset.x, ceilingH - 0.1, cfg.interiorLightOffset.z);
@@ -542,17 +542,9 @@ export function buildEnterableBuildingShell(
     }
 
     // Beveled LAST SHOP Signboard & Rooftop Chimney + Vent Turbine
-    const signFrame = new THREE.Mesh(
-      createBeveledBoxGeometry(5.8, 1.3, 0.24, 0.03, 0.03),
-      mats.darkTrim
-    );
-    signFrame.position.set(0, ceilingH + 0.52, frontZ + 0.12);
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(5.52, 1.08, 0.14, 0.02, 0.02),
-      mats.shopSign
-    );
-    sign.position.set(0, ceilingH + 0.52, frontZ + 0.22);
-    group.add(signFrame, sign);
+    const sign = createFramedSignAssembly(5.8, 1.3, 0.24, mats.shopSign, mats.darkTrim);
+    sign.position.set(0, ceilingH + 0.68, frontZ + 0.22);
+    group.add(sign);
 
     const lanternHousing = new THREE.Mesh(
       new THREE.CylinderGeometry(0.22, 0.28, 0.14, 10),
@@ -597,10 +589,7 @@ export function buildEnterableBuildingShell(
     awning.castShadow = true;
     group.add(awning);
 
-    const fascia = new THREE.Mesh(
-      createBeveledBoxGeometry(w - 0.8, 0.92, 0.22, 0.03, 0.02),
-      mats.signValeStore
-    );
+    const fascia = createFramedSignAssembly(w - 0.8, 0.92, 0.22, mats.signValeStore, mats.darkTrim);
     fascia.position.set(0, ceilingH + 0.22, frontZ + 0.14);
     group.add(fascia);
 
@@ -614,16 +603,13 @@ export function buildEnterableBuildingShell(
     group.add(plank);
   } else if (exteriorStyle === 'storage') {
     const frontZ = d * 0.5;
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(4.2, 0.95, 0.2, 0.03, 0.02),
-      mats.signDepot04
-    );
+    const sign = createFramedSignAssembly(4.2, 0.95, 0.2, mats.signDepot04, mats.darkTrim);
     sign.position.set(0, ceilingH + 0.2, frontZ + 0.14);
     group.add(sign);
 
     const bayLamp = new THREE.Mesh(
       createBeveledBoxGeometry(0.92, 0.16, 0.16, 0.02, 0.02),
-      mats.beaconAmber
+      mats.lampBulbDead
     );
     bayLamp.position.set(0, 2.68, frontZ + 0.1);
     group.add(bayLamp);
@@ -690,7 +676,7 @@ export function buildEnterableBuildingShell(
 
     const dinerNeon = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.04, w + 0.42, 8),
-      mats.beaconAmber
+      mats.lampBulbDead
     );
     dinerNeon.rotation.z = Math.PI * 0.5;
     dinerNeon.position.set(0, 2.75, northZ - 1.42);
@@ -703,19 +689,15 @@ export function buildEnterableBuildingShell(
     dinerPorchBulb.position.set(0, 2.66, northZ - 0.48);
     group.add(dinerPorchBulb);
 
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(4.8, 0.96, 0.22, 0.03, 0.02),
-      mats.signStarlightDiner
-    );
+    const sign = createFramedSignAssembly(4.8, 0.96, 0.22, mats.signStarlightDiner, mats.darkTrim, true);
     sign.position.set(0, ceilingH + 0.28, northZ - 0.16);
+    sign.rotation.y = Math.PI;
     group.add(sign);
   } else if (exteriorStyle === 'garage') {
     const northZ = -d * 0.5;
-    const fascia = new THREE.Mesh(
-      createBeveledBoxGeometry(5.2, 0.98, 0.22, 0.03, 0.02),
-      mats.signRedlineAuto
-    );
+    const fascia = createFramedSignAssembly(5.2, 0.98, 0.22, mats.signRedlineAuto, mats.darkTrim, true);
     fascia.position.set(0, ceilingH + 0.22, northZ - 0.15);
+    fascia.rotation.y = Math.PI;
     group.add(fascia);
 
     // Ribbed corrugated steel roll-up shutter on west bay (actual 3D horizontal ribs)
@@ -757,11 +739,9 @@ export function buildEnterableBuildingShell(
       group.add(col);
     }
 
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(5.8, 1.0, 0.24, 0.03, 0.02),
-      mats.signPolicePrecinct
-    );
+    const sign = createFramedSignAssembly(5.8, 1.0, 0.24, mats.signPolicePrecinct, mats.darkTrim, true);
     sign.position.set(0, ceilingH + 0.22, northZ - 0.24);
+    sign.rotation.y = Math.PI;
     group.add(sign);
 
     const globe = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), mats.beaconBlue);
@@ -807,12 +787,12 @@ export function buildEnterableBuildingShell(
 
     const triageStrip = new THREE.Mesh(
       createBeveledBoxGeometry(5.46, 0.1, 0.1, 0.02, 0.02),
-      mats.beaconCyan
+      mats.lampMetal
     );
     triageStrip.position.set(0, 2.95, northZ - 1.65);
     group.add(triageStrip);
 
-    // 2. Facade Architectural Bays & Illuminated Red Cross Emblem
+    // 2. Facade Architectural Bays & Weathered Red Cross Emblem
     const bayPilasters: THREE.BufferGeometry[] = [];
     for (const bx of [-4.45, -1.78, 1.78, 4.45]) {
       const pil = createBeveledBoxGeometry(0.28, ceilingH, 0.24, 0.025, 0.02);
@@ -821,11 +801,9 @@ export function buildEnterableBuildingShell(
     }
     group.add(new THREE.Mesh(mergeParts(bayPilasters, true, 0.4), mats.concrete));
 
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(5.4, 1.02, 0.24, 0.03, 0.02),
-      mats.signFieldClinic
-    );
+    const sign = createFramedSignAssembly(5.4, 1.02, 0.24, mats.signFieldClinic, mats.darkTrim, true);
     sign.position.set(0, ceilingH + 0.24, northZ - 0.18);
+    sign.rotation.y = Math.PI;
     group.add(sign);
 
     const crossBack = new THREE.Mesh(
@@ -835,12 +813,12 @@ export function buildEnterableBuildingShell(
     crossBack.position.set(-4.2, 2.58, northZ - 0.14);
     const crossH = new THREE.Mesh(
       createBeveledBoxGeometry(0.85, 0.24, 0.14, 0.02, 0.02),
-      mats.beaconRed
+      mats.hydrantRed
     );
     crossH.position.set(-4.2, 2.58, northZ - 0.18);
     const crossV = new THREE.Mesh(
       createBeveledBoxGeometry(0.24, 0.85, 0.14, 0.02, 0.02),
-      mats.beaconRed
+      mats.hydrantRed
     );
     crossV.position.set(-4.2, 2.58, northZ - 0.18);
     group.add(crossBack, crossH, crossV);
@@ -867,7 +845,7 @@ export function buildEnterableBuildingShell(
     medChart.position.set(-1.6, 1.75, 0.08);
     const chartStripe = new THREE.Mesh(
       new THREE.BoxGeometry(1.1, 0.12, 0.07),
-      mats.beaconCyan
+      mats.tarpBlue
     );
     chartStripe.position.set(-1.6, 2.02, 0.09);
 
@@ -902,7 +880,7 @@ export function buildEnterableBuildingShell(
     o2Tank.castShadow = true;
     const o2Collar = new THREE.Mesh(
       new THREE.CylinderGeometry(0.115, 0.115, 0.18, 10),
-      mats.beaconCyan
+      mats.tarpBlue
     );
     o2Collar.position.set(-0.78, 0.72, 3.55);
 
@@ -920,7 +898,7 @@ export function buildEnterableBuildingShell(
     ivBase.position.set(-2.38, 0.03, 1.85);
     const ivBag = new THREE.Mesh(
       createBeveledBoxGeometry(0.14, 0.24, 0.07, 0.02, 0.02),
-      mats.beaconCyan
+      intMats.windowGlass
     );
     ivBag.position.set(-2.24, 1.62, 1.85);
 
@@ -931,7 +909,7 @@ export function buildEnterableBuildingShell(
     monitorScreen.position.set(-2.35, 1.02, 2.9);
     const monitorGlow = new THREE.Mesh(
       new THREE.BoxGeometry(0.24, 0.15, 0.03),
-      mats.beaconCyan
+      mats.glassDark
     );
     monitorGlow.position.set(-2.35, 1.04, 2.79);
 
@@ -986,10 +964,7 @@ export function buildEnterableBuildingShell(
     airlockBeacon.position.set(0, 2.9, southZ + 1.24);
     group.add(airlockBeacon);
 
-    const sign = new THREE.Mesh(
-      createBeveledBoxGeometry(5.8, 1.04, 0.24, 0.03, 0.02),
-      mats.signResearchLab
-    );
+    const sign = createFramedSignAssembly(5.8, 1.04, 0.24, mats.signResearchLab, mats.darkTrim);
     sign.position.set(0, ceilingH + 0.22, southZ + 0.16);
     group.add(sign);
 

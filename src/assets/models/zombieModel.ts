@@ -1,13 +1,23 @@
 import * as THREE from 'three';
 import { ZombieAIState, ZombieAnimState, ZombieGaitStyle } from '../../game/zombieAI';
 import {
+  CharacterDetailTextures,
   ZombieAnatomyGeometries,
   applyAnatomicalVertexAO,
+  createCharacterDetailTextures,
   createZombieAnatomyGeometries,
   damp,
   mergeCharacterParts,
 } from './characterGeometryKit';
 import { applyTriplanarUVs, createTubePathGeometry } from './proceduralGeometryKit';
+
+let cachedFpTextures: CharacterDetailTextures | null = null;
+function getFpTextures(): CharacterDetailTextures {
+  if (!cachedFpTextures) {
+    cachedFpTextures = createCharacterDetailTextures();
+  }
+  return cachedFpTextures;
+}
 
 export type ZombieSharedGeometries = ZombieAnatomyGeometries;
 
@@ -71,74 +81,74 @@ export function buildProceduralZombieModel(
 
   const skinColors =
     archetypeId === 'runner'
-      ? [0x6e755c, 0x626956, 0x767363]
+      ? [0x5d6452, 0x52594a, 0x646153]
       : archetypeId === 'brute'
-        ? [0x4c564f, 0x444c47, 0x555b52]
-        : [0x6b7767, 0x5f6b5d, 0x747b69, 0x586257];
+        ? [0x424a44, 0x3b423d, 0x4b5048]
+        : [0x5d6759, 0x525c50, 0x64695a, 0x4c544b];
   const coatColors =
     archetypeId === 'runner'
-      ? [0x3b2a22, 0x2c3226]
+      ? [0x2e211b, 0x242920]
       : archetypeId === 'brute'
-        ? [0x1c2129, 0x272226]
-        : [0x2a3038, 0x382d26, 0x25322e, 0x35313c];
-  const pantsColors = [0x1b2028, 0x232428, 0x1d2524];
+        ? [0x171b21, 0x201c1f]
+        : [0x21262d, 0x2c231e, 0x1e2825, 0x2a272f];
+  const pantsColors = [0x171b21, 0x1e1f22, 0x191f1e];
 
+  // Pale dead cataract eye colors — zero emissive glow
   const eyeColorHex =
-    archetypeId === 'runner' ? 0xdc6d45 : archetypeId === 'brute' ? 0xe09f3e : 0x9aa876;
-  const eyeEmissiveHex =
-    archetypeId === 'runner' ? 0xa33619 : archetypeId === 'brute' ? 0xb45309 : 0x68763d;
+    archetypeId === 'runner' ? 0x6b645c : archetypeId === 'brute' ? 0x5c5b55 : 0x73756a;
 
   const skinMat = new THREE.MeshStandardMaterial({
     color: skinColors[tintVariant % skinColors.length],
-    roughness: 0.87,
-    metalness: 0.03,
+    roughness: 0.88,
+    metalness: 0.02,
     vertexColors: true,
     bumpMap: geos.textures.undeadBump,
-    bumpScale: 0.008,
+    bumpScale: 0.009,
   });
   const coatMat = new THREE.MeshStandardMaterial({
     color: coatColors[tintVariant % coatColors.length],
-    roughness: 0.93,
-    metalness: 0.04,
+    roughness: 0.94,
+    metalness: 0.03,
     vertexColors: true,
     bumpMap: geos.textures.fabricBump,
     bumpScale: 0.009,
   });
   const pantsMat = new THREE.MeshStandardMaterial({
     color: pantsColors[tintVariant % pantsColors.length],
-    roughness: 0.93,
+    roughness: 0.94,
     metalness: 0.03,
     vertexColors: true,
     bumpMap: geos.textures.fabricBump,
     bumpScale: 0.007,
   });
   const woundMat = new THREE.MeshStandardMaterial({
-    color: 0x571d1d,
-    roughness: 0.46,
-    metalness: 0.08,
+    color: 0x381112,
+    roughness: 0.42,
+    metalness: 0.06,
     vertexColors: true,
   });
   const boneMat = new THREE.MeshStandardMaterial({
-    color: 0xb7aa96,
-    roughness: 0.68,
-    metalness: 0.04,
+    color: 0x968a76,
+    roughness: 0.72,
+    metalness: 0.03,
   });
   const socketMat = new THREE.MeshStandardMaterial({
-    color: 0x090b0c,
-    roughness: 0.96,
+    color: 0x050607,
+    roughness: 0.98,
     metalness: 0.0,
   });
   const hairMat = new THREE.MeshStandardMaterial({
-    color: tintVariant % 2 === 0 ? 0x1e1b18 : 0x362f2b,
-    roughness: 0.95,
+    color: tintVariant % 2 === 0 ? 0x1a1715 : 0x2e2824,
+    roughness: 0.96,
     metalness: 0.02,
     vertexColors: true,
   });
   const eyeMat = new THREE.MeshStandardMaterial({
     color: eyeColorHex,
-    emissive: eyeEmissiveHex,
-    emissiveIntensity: 0.45,
-    roughness: 0.35,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    roughness: 0.28,
+    metalness: 0.05,
   });
   const shadowMat = new THREE.MeshBasicMaterial({
     color: 0x05070a,
@@ -151,9 +161,9 @@ export function buildProceduralZombieModel(
   shadowMesh.position.y = 0.025;
   root.add(shadowMesh);
 
-  // Pelvis / Hip assembly at 0.84m so soles of boots sit cleanly on y = 0.0
+  // Pelvis / Hip assembly at 0.91m so boot soles sit cleanly on y = 0.0 (adult ~1.76m stature)
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.y = 0.84;
+  bodyPivot.position.y = 0.91;
   root.add(bodyPivot);
 
   const pelvisMesh = new THREE.Mesh(geos.pelvis, pantsMat);
@@ -174,7 +184,7 @@ export function buildProceduralZombieModel(
   leftLegPivot.add(leftThighMesh);
 
   const leftKneePivot = new THREE.Group();
-  leftKneePivot.position.set(0, -0.39, 0);
+  leftKneePivot.position.set(0, -0.42, 0);
   const leftShinMesh = new THREE.Mesh(shinGeo, pantsMat);
   leftShinMesh.castShadow = true;
   leftShinMesh.receiveShadow = true;
@@ -190,7 +200,7 @@ export function buildProceduralZombieModel(
   rightLegPivot.add(rightThighMesh);
 
   const rightKneePivot = new THREE.Group();
-  rightKneePivot.position.set(0, -0.39, 0);
+  rightKneePivot.position.set(0, -0.42, 0);
   const rightShinMesh = new THREE.Mesh(shinGeo, pantsMat);
   rightShinMesh.castShadow = true;
   rightShinMesh.receiveShadow = true;
@@ -235,9 +245,9 @@ export function buildProceduralZombieModel(
   spinePivot.add(ribWound);
 
   // Head assembly at top of spine
-  const headZOffset = archetypeId === 'runner' ? -0.085 : archetypeId === 'brute' ? -0.075 : -0.055;
+  const headZOffset = archetypeId === 'runner' ? -0.092 : archetypeId === 'brute' ? -0.080 : -0.062;
   const headPivot = new THREE.Group();
-  headPivot.position.set(0, 0.54, headZOffset);
+  headPivot.position.set(0, 0.56, headZOffset);
 
   const headGeo =
     archetypeId === 'brute'
@@ -255,34 +265,35 @@ export function buildProceduralZombieModel(
     headPivot.add(hairMesh);
   }
 
-  const eyeX = archetypeId === 'brute' ? 0.042 : 0.036;
-  const eyeZ = archetypeId === 'brute' ? -0.095 : -0.088;
+  const eyeX = archetypeId === 'brute' ? 0.040 : 0.034;
+  const eyeZ = archetypeId === 'brute' ? -0.090 : -0.084;
   const leftSocket = new THREE.Mesh(geos.eyeSocket, socketMat);
-  leftSocket.position.set(-eyeX, 0.142, eyeZ);
+  leftSocket.position.set(-eyeX, 0.136, eyeZ);
   const rightSocket = new THREE.Mesh(geos.eyeSocket, socketMat);
-  rightSocket.position.set(eyeX, 0.142, eyeZ);
+  rightSocket.position.set(eyeX, 0.136, eyeZ);
   headPivot.add(leftSocket, rightSocket);
 
+  // Dead cataract sclera recessed deep inside orbital hollow
   const leftEye = new THREE.Mesh(geos.eyeGlow, eyeMat);
-  leftEye.position.set(-eyeX, 0.142, eyeZ - 0.006);
+  leftEye.position.set(-eyeX, 0.136, eyeZ - 0.002);
   const rightEye = new THREE.Mesh(geos.eyeGlow, eyeMat);
-  rightEye.position.set(eyeX, 0.142, eyeZ - 0.006);
+  rightEye.position.set(eyeX, 0.136, eyeZ - 0.002);
   headPivot.add(leftEye, rightEye);
 
   const teeth = new THREE.Mesh(geos.jawTeeth, boneMat);
-  teeth.position.set(0, 0.062, eyeZ + 0.008);
+  teeth.position.set(0, 0.058, eyeZ + 0.004);
   headPivot.add(teeth);
   spinePivot.add(headPivot);
 
   // Articulated 2-segment Arms (Shoulder -> Upper Arm -> Elbow -> Clawed Forearm)
-  const shoulderX = archetypeId === 'brute' ? 0.255 : archetypeId === 'runner' ? 0.19 : 0.205;
-  const shoulderZ = archetypeId === 'runner' ? -0.065 : -0.04;
+  const shoulderX = archetypeId === 'brute' ? 0.255 : archetypeId === 'runner' ? 0.185 : 0.200;
+  const shoulderZ = archetypeId === 'runner' ? -0.068 : -0.042;
   const upperArmGeo = archetypeId === 'brute' ? geos.upperArmBrute : geos.upperArm;
   const forearmGeo = archetypeId === 'brute' ? geos.forearmBrute : geos.forearmClawed;
-  const elbowY = archetypeId === 'brute' ? -0.28 : -0.26;
+  const elbowY = archetypeId === 'brute' ? -0.29 : -0.27;
 
   const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-shoulderX, 0.45, shoulderZ);
+  leftArmPivot.position.set(-shoulderX, 0.47, shoulderZ);
   const leftUpperMesh = new THREE.Mesh(
     upperArmGeo,
     archetypeId === 'runner' ? skinMat : coatMat
@@ -302,7 +313,7 @@ export function buildProceduralZombieModel(
   spinePivot.add(leftArmPivot);
 
   const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(shoulderX, 0.45, shoulderZ);
+  rightArmPivot.position.set(shoulderX, 0.47, shoulderZ);
   const rightUpperMesh = new THREE.Mesh(
     upperArmGeo,
     archetypeId === 'runner' ? skinMat : coatMat
@@ -399,11 +410,11 @@ export function animateZombieRig(
   distSq = 0,
   extra?: ZombieAnimExtra
 ): void {
-  // Hit flash tint
+  // Subtle dark bruised hit reaction (no neon flash)
   if (hitFlashTimer > 0) {
     const t = hitFlashTimer / 0.18;
-    rig.skinMat.emissive.setRGB(0.65 * t, 0.08 * t, 0.08 * t);
-    rig.coatMat.emissive.setRGB(0.55 * t, 0.06 * t, 0.06 * t);
+    rig.skinMat.emissive.setRGB(0.24 * t, 0.03 * t, 0.03 * t);
+    rig.coatMat.emissive.setRGB(0.2 * t, 0.03 * t, 0.03 * t);
   } else {
     rig.skinMat.emissive.setRGB(0, 0, 0);
     rig.coatMat.emissive.setRGB(0, 0, 0);
@@ -430,6 +441,9 @@ export function animateZombieRig(
   );
   rig.animState.currentState = animState;
 
+  // Never emit glowing cartoon eyes
+  rig.eyeMat.emissiveIntensity = 0;
+
   if (animState === 'dead') {
     const fallT = Math.min(1, deathTimer / 0.56);
     const buckleT = Math.min(1, deathTimer / 0.28);
@@ -441,7 +455,7 @@ export function animateZombieRig(
     rig.leftLegPivot.rotation.x = -buckleEased * 0.45;
     rig.rightLegPivot.rotation.x = -buckleEased * 0.3;
 
-    rig.bodyPivot.position.y = 0.84 - eased * 0.7;
+    rig.bodyPivot.position.y = 0.91 - eased * 0.76;
     rig.bodyPivot.rotation.x = eased * (Math.PI * 0.48);
     rig.bodyPivot.rotation.z = eased * 0.16 * rig.asymmetrySign;
     rig.spinePivot.rotation.x = eased * 0.22;
@@ -453,7 +467,6 @@ export function animateZombieRig(
     rig.rightArmPivot.rotation.x = damp(rig.rightArmPivot.rotation.x, 0.15, 10, dt);
     rig.leftForearmPivot.rotation.x = damp(rig.leftForearmPivot.rotation.x, 0.48, 10, dt);
     rig.rightForearmPivot.rotation.x = damp(rig.rightForearmPivot.rotation.x, 0.35, 10, dt);
-    rig.eyeMat.emissiveIntensity = 0;
 
     if (deathTimer > 3.2) {
       const sinkT = Math.min(1, (deathTimer - 3.2) / 1.4);
@@ -463,18 +476,8 @@ export function animateZombieRig(
     return;
   }
 
-  rig.eyeMat.emissiveIntensity =
-    animState === 'chasing' ||
-    animState === 'attack_windup' ||
-    animState === 'attack_recovery' ||
-    animState === 'alert'
-      ? 0.95
-      : animState === 'searching' || animState === 'investigating'
-        ? 0.68
-        : 0.42;
-
   // Target joint pose computed once by state machine (single-writer output at bottom)
-  let tBodyY = 0.84;
+  let tBodyY = 0.91;
   let tBodyRx = 0.04;
   let tBodyRz = 0;
   let tSpineRx = isRunner ? 0.22 : isBrute ? 0.12 : 0.15;
@@ -502,7 +505,7 @@ export function animateZombieRig(
     const recoilCurve = Math.sin(Math.min(1, stunImpulse) * Math.PI * 0.5);
     const hitSign = extra?.hitDirectionSign ?? rig.asymmetrySign;
 
-    tBodyY = 0.84 - recoilCurve * 0.06;
+    tBodyY = 0.91 - recoilCurve * 0.06;
     tBodyRx = -0.22 * recoilCurve + 0.04;
     tBodyRz = hitSign * 0.12 * recoilCurve;
     tSpineRx = -0.18 * recoilCurve + 0.1;
@@ -528,7 +531,7 @@ export function animateZombieRig(
     if (ratio < 0.58) {
       const prep = ratio / 0.58;
       const e = prep * prep;
-      tBodyY = 0.84 - e * 0.03;
+      tBodyY = 0.91 - e * 0.03;
       tBodyRx = 0.05 - e * 0.12;
       tBodyRz = -0.08 * rig.asymmetrySign * e;
       tSpineRx = 0.12 - e * 0.22;
@@ -545,7 +548,7 @@ export function animateZombieRig(
     } else {
       const strike = (ratio - 0.58) / 0.42;
       const e = 1 - Math.pow(1 - strike, 2.2);
-      tBodyY = 0.81 - e * 0.05;
+      tBodyY = 0.88 - e * 0.05;
       tBodyRx = -0.07 + e * 0.38;
       tBodyRz = 0.1 * rig.asymmetrySign * e;
       tSpineRx = -0.1 + e * 0.46;
@@ -565,7 +568,7 @@ export function animateZombieRig(
     const recDuration = isBrute ? 0.46 : isRunner ? 0.3 : 0.38;
     const r = Math.max(0, Math.min(1, recoveryTimer / recDuration));
     const followT = Math.sin(r * Math.PI * 0.5);
-    tBodyY = 0.83 - followT * 0.04;
+    tBodyY = 0.90 - followT * 0.04;
     tBodyRx = 0.12 + followT * 0.18;
     tBodyRz = 0.09 * rig.asymmetrySign * followT;
     tSpineRx = 0.18 + followT * 0.22;
@@ -589,7 +592,7 @@ export function animateZombieRig(
     const neckTwitch =
       !isFarLod && gait === 'stiff' ? Math.sin(ph * 3.7) * 0.07 : 0;
 
-    tBodyY = 0.83 + breath;
+    tBodyY = 0.90 + breath;
     tBodyRx = isAlert ? 0.14 : gait === 'heavy' ? 0.06 : 0.03;
     tBodyRz = sway + turnLean * 0.5;
     tSpineRx = (isRunner ? 0.24 : isBrute ? 0.14 : 0.16) + (isAlert ? 0.14 : 0);
@@ -660,7 +663,7 @@ export function animateZombieRig(
     }
 
     const hipDip = Math.abs(s) * (isFast ? 0.036 : 0.024) * hipDropScale;
-    tBodyY = 0.84 - hipDip;
+    tBodyY = 0.91 - hipDip;
     tBodyRx = torsoFwd;
     tBodyRz = c * latRoll + turnLean;
     tSpineRx = spineHunch;
@@ -712,8 +715,8 @@ export function animateZombieRig(
 }
 
 /**
- * Helper to sculpt articulated first-person forearm + jacket sleeve + wristwatch + gloved hand
- * with fingers wrapping realistically around weapon grips (zero BoxGeometry!).
+ * Helper to sculpt articulated first-person forearm + weathered canvas sleeve + wristwatch + fingerless tactical glove
+ * with 4 distinct articulated curled fingers + exposed dirty fingertips.
  */
 function buildFirstPersonGlovedArm(opts: {
   side: 'right' | 'left';
@@ -721,93 +724,131 @@ function buildFirstPersonGlovedArm(opts: {
   disposables: { dispose: () => void }[];
 }): THREE.Group {
   const armGroup = new THREE.Group();
+  const fpTex = getFpTextures();
 
   const sleeveMat = new THREE.MeshStandardMaterial({
-    color: 0x37413c,
-    roughness: 0.9,
-    metalness: 0.05,
+    color: 0x282e2a,
+    roughness: 0.92,
+    metalness: 0.04,
     vertexColors: true,
+    bumpMap: fpTex.fabricBump,
+    bumpScale: 0.009,
   });
   const cuffMat = new THREE.MeshStandardMaterial({
-    color: 0x262d2a,
-    roughness: 0.88,
-    metalness: 0.06,
+    color: 0x1d211e,
+    roughness: 0.9,
+    metalness: 0.04,
     vertexColors: true,
+    bumpMap: fpTex.fabricBump,
+    bumpScale: 0.007,
   });
   const skinMat = new THREE.MeshStandardMaterial({
-    color: 0xc99676,
-    roughness: 0.82,
+    color: 0x856350,
+    roughness: 0.88,
     metalness: 0.02,
     vertexColors: true,
+    bumpMap: fpTex.skinBump,
+    bumpScale: 0.005,
   });
   const gloveMat = new THREE.MeshStandardMaterial({
-    color: 0x1b1e23,
-    roughness: 0.72,
-    metalness: 0.1,
+    color: 0x1b1a18,
+    roughness: 0.78,
+    metalness: 0.08,
     vertexColors: true,
+    bumpMap: fpTex.fabricBump,
+    bumpScale: 0.006,
   });
   const watchMat = new THREE.MeshStandardMaterial({
-    color: 0x475569,
-    roughness: 0.35,
-    metalness: 0.72,
+    color: 0x262c34,
+    roughness: 0.46,
+    metalness: 0.58,
   });
 
   opts.disposables.push(sleeveMat, cuffMat, skinMat, gloveMat, watchMat);
 
   // Sculpted forearm sleeve extending off-screen toward shoulder
-  const sleeveGeo = new THREE.CylinderGeometry(0.036, 0.054, 0.36, 12);
+  const sleeveGeo = new THREE.CylinderGeometry(0.036, 0.056, 0.37, 12);
   sleeveGeo.scale(1.06, 1, 0.94);
-  sleeveGeo.translate(0, -0.18, 0);
+  sleeveGeo.translate(0, -0.185, 0);
   applyTriplanarUVs(sleeveGeo, 3.0);
-  applyAnatomicalVertexAO(sleeveGeo, (_x, y) => (y > -0.05 ? 0.84 : 0.98));
+  applyAnatomicalVertexAO(sleeveGeo, (_x, y) => (y > -0.06 ? 0.78 : 0.96));
 
-  const cuffGeo = new THREE.TorusGeometry(0.036, 0.009, 7, 14);
+  const cuffGeo = new THREE.TorusGeometry(0.036, 0.0085, 7, 14);
   cuffGeo.rotateX(Math.PI * 0.5);
   cuffGeo.translate(0, -0.015, 0);
   applyTriplanarUVs(cuffGeo, 4.0);
-  applyAnatomicalVertexAO(cuffGeo, () => 0.85);
+  applyAnatomicalVertexAO(cuffGeo, () => 0.82);
 
-  const wristGeo = new THREE.CylinderGeometry(0.026, 0.031, 0.065, 10);
-  wristGeo.translate(0, 0.022, 0);
+  const wristGeo = new THREE.CylinderGeometry(0.025, 0.030, 0.062, 10);
+  wristGeo.translate(0, 0.02, 0);
   applyTriplanarUVs(wristGeo, 4.0);
-  applyAnatomicalVertexAO(wristGeo, () => 0.94);
+  applyAnatomicalVertexAO(wristGeo, () => 0.9);
 
-  // Tactile hand palm + curled knuckles + thumb (no raw BoxGeometry)
-  const palmGeo = new THREE.SphereGeometry(0.030, 10, 8);
-  palmGeo.scale(0.68, 1.18, 1.05);
-  palmGeo.translate(0, 0.065, 0);
+  // Fingerless leather glove wrap + reinforced knuckle ridge
+  const palmGeo = new THREE.SphereGeometry(0.029, 10, 8);
+  palmGeo.scale(0.66, 1.15, 1.05);
+  palmGeo.translate(0, 0.064, 0);
 
-  const fingersGeo = new THREE.CapsuleGeometry(0.019, 0.036, 4, 8);
-  fingersGeo.rotateX(Math.PI * 0.5);
-  fingersGeo.scale(0.85, 1.28, 0.78);
-  fingersGeo.translate(opts.side === 'right' ? -0.014 : 0.014, 0.072, -0.022);
+  const knuckleRidge = new THREE.CapsuleGeometry(0.0075, 0.044, 3, 6);
+  knuckleRidge.rotateX(Math.PI * 0.5);
+  knuckleRidge.translate(opts.side === 'right' ? 0.015 : -0.015, 0.079, -0.004);
 
-  const thumbGeo = new THREE.CapsuleGeometry(0.0085, 0.028, 3, 6);
-  thumbGeo.rotateX(-0.55);
-  thumbGeo.rotateZ(opts.side === 'right' ? 0.35 : -0.35);
-  thumbGeo.translate(opts.side === 'right' ? -0.018 : 0.018, 0.088, 0.014);
+  const gloveParts: THREE.BufferGeometry[] = [palmGeo, knuckleRidge];
+  const tipParts: THREE.BufferGeometry[] = [];
+  const fZ = [-0.022, -0.007, 0.008, 0.021];
+  const signX = opts.side === 'right' ? -1 : 1;
 
-  const handMerged = applyAnatomicalVertexAO(
-    mergeCharacterParts([palmGeo, fingersGeo, thumbGeo], true, 5.0),
-    (_x, y) => (y > 0.078 ? 0.9 : 0.98)
+  // 4 distinct articulated fingers: gloved proximal phalanx + bare dirty skin curled distal fingertip
+  for (let i = 0; i < 4; i++) {
+    const prox = new THREE.CapsuleGeometry(0.0064, 0.019, 3, 6);
+    prox.rotateZ(signX * 0.72);
+    prox.translate(signX * 0.0085, 0.088 - i * 0.001, fZ[i]);
+    gloveParts.push(prox);
+
+    const tip = new THREE.CapsuleGeometry(0.0055, 0.015, 3, 5);
+    tip.rotateZ(signX * 1.56);
+    tip.translate(signX * 0.0165, 0.079 - i * 0.0015, fZ[i]);
+    tipParts.push(tip);
+  }
+
+  const thumbBase = new THREE.CapsuleGeometry(0.0075, 0.018, 3, 6);
+  thumbBase.rotateX(-0.55);
+  thumbBase.rotateZ(-signX * 0.35);
+  thumbBase.translate(signX * 0.016, 0.074, 0.016);
+  gloveParts.push(thumbBase);
+
+  const thumbTip = new THREE.CapsuleGeometry(0.0066, 0.015, 3, 5);
+  thumbTip.rotateX(-0.82);
+  thumbTip.rotateZ(-signX * 0.12);
+  thumbTip.translate(signX * 0.02, 0.091, 0.011);
+  tipParts.push(thumbTip);
+
+  const gloveMerged = applyAnatomicalVertexAO(
+    mergeCharacterParts(gloveParts, true, 5.0),
+    (_x, y) => (y > 0.075 ? 0.88 : 0.96)
+  );
+  const tipsMerged = applyAnatomicalVertexAO(
+    mergeCharacterParts(tipParts, true, 5.0),
+    () => 0.9
   );
 
-  opts.disposables.push(sleeveGeo, cuffGeo, wristGeo, handMerged);
+  opts.disposables.push(sleeveGeo, cuffGeo, wristGeo, gloveMerged, tipsMerged);
 
   const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeveMat);
   const cuffMesh = new THREE.Mesh(cuffGeo, cuffMat);
   const wristMesh = new THREE.Mesh(wristGeo, skinMat);
-  const handMesh = new THREE.Mesh(handMerged, gloveMat);
+  const gloveMesh = new THREE.Mesh(gloveMerged, gloveMat);
+  const tipsMesh = new THREE.Mesh(tipsMerged, skinMat);
 
-  armGroup.add(sleeveMesh, cuffMesh, wristMesh, handMesh);
+  armGroup.add(sleeveMesh, cuffMesh, wristMesh, gloveMesh, tipsMesh);
 
   if (opts.side === 'left') {
-    const watchBandGeo = new THREE.TorusGeometry(0.028, 0.005, 5, 12);
+    const watchBandGeo = new THREE.TorusGeometry(0.027, 0.0048, 5, 12);
     watchBandGeo.rotateX(Math.PI * 0.5);
-    watchBandGeo.translate(0, 0.025, 0);
-    const watchFaceGeo = new THREE.CylinderGeometry(0.014, 0.014, 0.008, 10);
+    watchBandGeo.translate(0, 0.023, 0);
+    const watchFaceGeo = new THREE.CylinderGeometry(0.013, 0.013, 0.0075, 10);
     watchFaceGeo.rotateZ(Math.PI * 0.5);
-    watchFaceGeo.translate(-0.027, 0.025, 0);
+    watchFaceGeo.translate(-0.026, 0.023, 0);
     const watchMerged = mergeCharacterParts([watchBandGeo, watchFaceGeo], true, 6.0);
     opts.disposables.push(watchMerged);
     armGroup.add(new THREE.Mesh(watchMerged, watchMat));
@@ -815,7 +856,7 @@ function buildFirstPersonGlovedArm(opts: {
 
   // Position & orient arm naturally relative to weapon origin
   if (opts.pose === 'melee_grip') {
-    armGroup.position.set(0.022, -0.022, 0.026);
+    armGroup.position.set(0.018, -0.02, 0.022);
     armGroup.rotation.set(-0.98, 0.14, 0.32);
   } else if (opts.pose === 'pistol_grip') {
     armGroup.position.set(0.026, -0.095, 0.056);
@@ -833,7 +874,7 @@ function buildFirstPersonGlovedArm(opts: {
 }
 
 /**
- * First-person salvaged crowbar / steel pipe + articulated survivor hands & sleeves.
+ * First-person heavy forged crowbar / pry bar with grime-taped grip & articulated hands.
  */
 export function buildFirstPersonMeleePipe(): {
   group: THREE.Group;
@@ -842,21 +883,26 @@ export function buildFirstPersonMeleePipe(): {
 } {
   const group = new THREE.Group();
   const disposables: { dispose: () => void }[] = [];
+  const fpTex = getFpTextures();
 
   const steelMat = new THREE.MeshStandardMaterial({
-    color: 0x64748b,
-    roughness: 0.36,
-    metalness: 0.8,
+    color: 0x393f47,
+    roughness: 0.58,
+    metalness: 0.72,
+    bumpMap: fpTex.undeadBump,
+    bumpScale: 0.005,
   });
   const wrapMat = new THREE.MeshStandardMaterial({
-    color: 0x7c2d12,
-    roughness: 0.86,
-    metalness: 0.06,
+    color: 0x1d1b19,
+    roughness: 0.94,
+    metalness: 0.04,
+    bumpMap: fpTex.fabricBump,
+    bumpScale: 0.008,
   });
   const tipMat = new THREE.MeshStandardMaterial({
-    color: 0x8f2424,
-    roughness: 0.44,
-    metalness: 0.58,
+    color: 0x4b403d,
+    roughness: 0.62,
+    metalness: 0.52,
   });
   disposables.push(steelMat, wrapMat, tipMat);
 
@@ -870,28 +916,39 @@ export function buildFirstPersonMeleePipe(): {
       new THREE.Vector3(0.028, 0.425, -0.068),
       new THREE.Vector3(0.036, 0.39, -0.104),
     ],
-    0.0165,
+    0.0155,
     18,
-    9
+    8
   );
-  const gripGeo = new THREE.CylinderGeometry(0.0225, 0.021, 0.15, 12);
-  gripGeo.translate(0, 0.045, 0);
+
+  // Friction-tape wrapped grip with spiral ridge bands
+  const gripParts: THREE.BufferGeometry[] = [
+    new THREE.CylinderGeometry(0.021, 0.0195, 0.15, 10),
+  ];
+  gripParts[0].translate(0, 0.045, 0);
+  for (let r = 0; r < 6; r++) {
+    const ring = new THREE.TorusGeometry(0.0215, 0.0025, 5, 10);
+    ring.rotateX(Math.PI * 0.5 + 0.14);
+    ring.translate(0, -0.015 + r * 0.024, 0);
+    gripParts.push(ring);
+  }
+  const gripGeo = mergeCharacterParts(gripParts, true, 4.0);
 
   // Flattened split pry-tip via ExtrudeGeometry
   const tipShape = new THREE.Shape();
-  tipShape.moveTo(-0.016, 0);
-  tipShape.lineTo(0.016, 0);
-  tipShape.lineTo(0.018, 0.055);
-  tipShape.lineTo(0.006, 0.055);
-  tipShape.lineTo(0, 0.025);
-  tipShape.lineTo(-0.006, 0.055);
-  tipShape.lineTo(-0.018, 0.055);
+  tipShape.moveTo(-0.015, 0);
+  tipShape.lineTo(0.015, 0);
+  tipShape.lineTo(0.017, 0.052);
+  tipShape.lineTo(0.006, 0.052);
+  tipShape.lineTo(0, 0.024);
+  tipShape.lineTo(-0.006, 0.052);
+  tipShape.lineTo(-0.017, 0.052);
   tipShape.closePath();
   const tipGeo = new THREE.ExtrudeGeometry(tipShape, {
-    depth: 0.01,
+    depth: 0.009,
     bevelEnabled: true,
-    bevelThickness: 0.003,
-    bevelSize: 0.003,
+    bevelThickness: 0.0025,
+    bevelSize: 0.0025,
     bevelSegments: 1,
   });
   tipGeo.rotateX(-Math.PI * 0.72);
@@ -927,7 +984,7 @@ export function buildFirstPersonMeleePipe(): {
 }
 
 /**
- * First-person salvaged combat knife + articulated survivor hands & sleeves.
+ * First-person parkerized combat knife + articulated survivor hands & sleeves.
  */
 export function buildFirstPersonCombatBlade(): {
   group: THREE.Group;
@@ -936,32 +993,45 @@ export function buildFirstPersonCombatBlade(): {
 } {
   const group = new THREE.Group();
   const disposables: { dispose: () => void }[] = [];
+  const fpTex = getFpTextures();
 
   const bladeMat = new THREE.MeshStandardMaterial({
-    color: 0xa1b0c2,
-    roughness: 0.22,
-    metalness: 0.88,
+    color: 0x5b636d,
+    roughness: 0.36,
+    metalness: 0.78,
   });
   const spineMat = new THREE.MeshStandardMaterial({
-    color: 0x2c3645,
-    roughness: 0.45,
-    metalness: 0.65,
+    color: 0x20252d,
+    roughness: 0.55,
+    metalness: 0.6,
   });
   const gripMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    roughness: 0.88,
-    metalness: 0.08,
+    color: 0x18191c,
+    roughness: 0.92,
+    metalness: 0.05,
+    bumpMap: fpTex.fabricBump,
+    bumpScale: 0.008,
   });
   const guardMat = new THREE.MeshStandardMaterial({
-    color: 0x475569,
-    roughness: 0.4,
-    metalness: 0.78,
+    color: 0x323842,
+    roughness: 0.48,
+    metalness: 0.72,
   });
   disposables.push(bladeMat, spineMat, gripMat, guardMat);
 
-  const handleGeo = new THREE.CylinderGeometry(0.0155, 0.018, 0.135, 10);
-  handleGeo.scale(0.86, 1, 1.15);
-  handleGeo.translate(0, 0.032, 0);
+  const gripParts: THREE.BufferGeometry[] = [
+    new THREE.CylinderGeometry(0.0155, 0.018, 0.135, 10),
+  ];
+  gripParts[0].scale(0.86, 1, 1.15);
+  gripParts[0].translate(0, 0.032, 0);
+  for (let r = 0; r < 5; r++) {
+    const ring = new THREE.TorusGeometry(0.0165, 0.0022, 5, 10);
+    ring.rotateX(Math.PI * 0.5);
+    ring.scale(0.88, 1.15, 1);
+    ring.translate(0, -0.015 + r * 0.023, 0);
+    gripParts.push(ring);
+  }
+  const handleGeo = mergeCharacterParts(gripParts, true, 4.0);
 
   // Sculpted curved crossguard via Capsule
   const guardGeo = new THREE.CapsuleGeometry(0.0085, 0.044, 3, 6);
@@ -1020,8 +1090,8 @@ export function buildFirstPersonCombatBlade(): {
 }
 
 /**
- * First-person salvaged 9mm service pistol with two-handed tactical grip,
- * beveled machined slide, blowback slideMesh, and pooled muzzle flash.
+ * First-person parkerized 9mm service pistol with two-handed tactical grip,
+ * beveled machined slide, blowback slideMesh, and muted steel sights (zero glowing arcade sight).
  */
 export function buildFirstPersonServicePistol(): {
   group: THREE.Group;
@@ -1034,25 +1104,26 @@ export function buildFirstPersonServicePistol(): {
   const disposables: { dispose: () => void }[] = [];
 
   const slideMat = new THREE.MeshStandardMaterial({
-    color: 0x243040,
-    roughness: 0.34,
-    metalness: 0.84,
+    color: 0x1d232b,
+    roughness: 0.42,
+    metalness: 0.82,
   });
   const frameMat = new THREE.MeshStandardMaterial({
-    color: 0x111827,
-    roughness: 0.78,
-    metalness: 0.16,
+    color: 0x111418,
+    roughness: 0.82,
+    metalness: 0.14,
   });
   const sightMat = new THREE.MeshStandardMaterial({
-    color: 0xfbbf24,
-    emissive: 0xd97706,
-    emissiveIntensity: 0.65,
-    roughness: 0.28,
+    color: 0x767e87,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    roughness: 0.45,
+    metalness: 0.4,
   });
   const flashMat = new THREE.MeshBasicMaterial({
-    color: 0xfde68a,
+    color: 0xe2b872,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.85,
     depthWrite: false,
   });
   disposables.push(slideMat, frameMat, sightMat, flashMat);
@@ -1105,8 +1176,8 @@ export function buildFirstPersonServicePistol(): {
   guardGeo.rotateZ(-Math.PI * 0.45);
   guardGeo.translate(0, -0.006, -0.032);
 
-  const sightGeo = new THREE.CapsuleGeometry(0.0028, 0.006, 2, 5);
-  sightGeo.translate(0, 0.059, -0.148);
+  const sightGeo = new THREE.CapsuleGeometry(0.0024, 0.005, 2, 5);
+  sightGeo.translate(0, 0.058, -0.148);
 
   // Star-shaped 3D muzzle flash
   const cone1 = new THREE.ConeGeometry(0.032, 0.095, 5);
